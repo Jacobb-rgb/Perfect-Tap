@@ -13,7 +13,7 @@ return function(T, Loader)
 			MachineInventory = {},
 			PlacedMachines = {},
 			Golems = { Owned = {} },
-			Upgrades = { Bellows = 0, Elevator = false },
+			Upgrades = { Bellows = 0, Floors = {} },
 			MachineUpgrades = {},
 			Gear = { Boots = 0 },
 			Train = { CapacityLevel = 0, SpeedLevel = 0 },
@@ -100,6 +100,24 @@ return function(T, Loader)
 		end
 		table.insert(data.PlacedMachines, { Id = DropperConfig.Laser.Id })
 		T.eq(LevelService.step(data, 0), 0, "droppers give no XP")
+	end)
+
+	T.test("Levels: every elevator floor bought counts as an upgrade level", function()
+		local data = save()
+		LevelService.step(data, 0)
+		local xp = LevelConfig.ById.Upgrades.Xp
+		data.Upgrades.Floors.SunkenPalace = true
+		T.eq(LevelService.step(data, 0), xp, "one floor bought: one upgrade level")
+		data.Upgrades.Floors.StormglassRift = true
+		data.Upgrades.Floors.HeartstoneCore = true
+		T.eq(LevelService.step(data, 0), 2 * xp, "two more")
+		T.eq(LevelService.step(data, 0), 0, "nothing twice")
+		T.eq(LevelConfig.counters({ Upgrades = { Bellows = 2, Floors = "junk" } }).Upgrades, 2, "a junk set counts nothing")
+		-- a rebirth empties the set: buying the floors again pays again
+		data.Upgrades.Floors = {}
+		T.eq(LevelService.step(data, 0), 0, "the set-back doesn't take")
+		data.Upgrades.Floors.SunkenPalace = true
+		T.eq(LevelService.step(data, 0), xp, "bought again: paid again")
 	end)
 
 	T.test("Levels: a rebirth set-back counts again from there, the level stays", function()

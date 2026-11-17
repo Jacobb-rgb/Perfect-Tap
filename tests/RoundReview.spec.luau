@@ -94,14 +94,19 @@ return function(T, Loader)
 				T.truthy(pairLeft >= HudBubble.ThumbZone * width - 1e-6, `{where}: the bottom pair from {pairLeft} of {width}`)
 				refs.Gui:Destroy()
 			end
-			-- a PC keeps the offers and the tall block of tiles (owner 2026-10-28; nine tiles two a row
-			-- since 2026-11-07: "na kazdy radek jenom 2")
+			-- a PC keeps the offers and the block of tiles (owner 2026-10-28; two a row since 2026-11-07:
+			-- "na kazdy radek jenom 2"; eight tiles since 2026-11-11, his pick A: two a row, four rows)
 			local pc = HudBubble.buildGame(1, 1280, false, false, 720 - 58) :: any
 			T.truthy(pc.Gui:FindFirstChild("Offers"), "PC: the offers")
 			T.eq(pc.Menu:GetAttribute("Columns"), 2, "PC: two a row")
 			local big = HudBubble.buildGame(1.25, 1920, false, false, 1080 - 58) :: any
 			T.eq(big.Menu:GetAttribute("Columns"), 2, "1920 x 1080: two a row")
 			T.truthy(big.Menu.Position.Y.Offset > HudBubble.MenuTop, "1920 x 1080: lower, like the reel's, where there is room")
+			local tall = HudBubble.buildGame(1.25, 1920, false, false, 1200 - 58) :: any
+			T.eq(tall.Menu:GetAttribute("Columns"), 2, "1920 x 1200: two a row")
+			pc.Gui:Destroy()
+			big.Gui:Destroy()
+			tall.Gui:Destroy()
 		end)
 	end)
 
@@ -148,7 +153,7 @@ return function(T, Loader)
 
 	T.test("RoundReview: the PC TRAIN chip under the tiles as wide as them, clear of the Server Luck line and the floaters", function()
 		inRound(function()
-			for _, size in { { 1280, 720, 58 }, { 1366, 768, 58 }, { 1280, 800, 36 }, { 1920, 1080, 58 } } do
+			for _, size in { { 1280, 720, 58 }, { 1366, 768, 58 }, { 1280, 800, 36 }, { 1920, 1080, 58 }, { 1920, 1200, 58 } } do
 				local scale = HudBubble.scaleFor(Vector2.new(size[1], size[2]))
 				local width, height = size[1] / scale, (size[2] - size[3]) / scale
 				local refs = HudBubble.buildGame(scale, size[1], false, false, size[2] - size[3]) :: any
@@ -161,8 +166,9 @@ return function(T, Loader)
 				TrainView.useHud(nil)
 				T.eq(chip.X, refs.Menu.Size.X.Offset, where .. ": as wide as the tiles")
 				T.eq(chip.Y, HudBubble.StackChipHeight, where .. ": the HUD knows the stacked chip's height")
-				-- (nine tiles two a row since the owner's left menu, 2026-11-07)
-				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": a tall block, two a row")
+				-- (two a row since the owner's left menu, 2026-11-07; eight tiles, two a row and four rows
+				-- since 2026-11-11, his pick A)
+				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": the block, two a row")
 				local chipRect = { chipLeft, chipTop, chipLeft + chip.X, chipTop + chip.Y }
 				local function rectOf(object: any): { number }
 					local x = width * object.Position.X.Scale + object.Position.X.Offset - object.AnchorPoint.X * object.Size.X.Offset
@@ -237,23 +243,25 @@ return function(T, Loader)
 				{ "TV 1920 x 1080", 1920 / 1.25, (1080 - 58) / 1.25, true, 1.25 },
 				{ "PC 1280 x 720", 1280, 684, false, 1 },
 			}
-			local k = StoreView.CardsWidth / StoreView.BannerWidth
 			for _, screen in screens do
-				local refs = StoreView.build()
+				local _, fit = StoreView.windowSize(screen[2], screen[3])
+				local refs = StoreView.build(StoreView.metricsFor(screen[4], fit))
 				StoreView.setEdition(refs, edition)
 				StoreView.layout(refs, screen[2], screen[3], screen[4])
 				local banner = refs.Banner :: any
 				local where = screen[1]
 				local height = banner.Frame.Size.Y.Offset
+				local width = banner.Frame.Size.X.Offset
 				local boxes = {}
-				for count, button in banner.Buys do
-					local w, h = button.Size.X.Offset, button.Size.Y.Offset
-					local x, y = button.Position.X.Offset - w / 2, button.Position.Y.Offset - h / 2
+				for count, face in banner.Buys do
+					local holder = face.Parent :: any
+					local w, h = holder.Size.X.Offset, holder.Size.Y.Offset
+					local x, y = holder.Position.X.Offset, holder.Position.Y.Offset
 					table.insert(boxes, { x, y, x + w, y + h })
-					T.truthy(y + h <= height, `{where}: x{count} inside the banner`)
+					T.truthy(y + h <= height and x + w <= width, `{where}: x{count} inside the banner`)
 					if screen[4] and screen[5] <= 0.75 then
-						T.truthy(h * k * refs.Fit * screen[5] >= 44 - 1e-6, `{where}: x{count} {h * k * refs.Fit * screen[5]} pt tall`)
-						T.truthy(w * k * refs.Fit * screen[5] >= 44, `{where}: x{count} wide enough`)
+						T.truthy(h * refs.Fit * screen[5] >= 44 - 1e-6, `{where}: x{count} {h * refs.Fit * screen[5]} pt tall`)
+						T.truthy(w * refs.Fit * screen[5] >= 44, `{where}: x{count} wide enough`)
 					end
 				end
 				-- every golem's chance % (the tile's bottom-right label) clear of every button
@@ -266,9 +274,13 @@ return function(T, Loader)
 						T.falsy(overlap(rect, box), `{where}: {id}'s chance shows`)
 					end
 				end
-				-- the list leaves the banner its whole (shrunk) height
-				local section = banner.Frame.Parent :: any
-				T.truthy(section.Size.Y.Offset >= banner.Frame.Position.Y.Offset + height * k - 1, `{where}: the section holds the banner`)
+				-- the page leaves the banner its whole height (it scrolls on a phone)
+				local page = banner.Frame.Parent :: any
+				T.truthy(page.Size.Y.Offset >= banner.Frame.Position.Y.Offset + height - 1, `{where}: the page holds the banner`)
+				T.truthy(
+					refs.Scroller.CanvasSize.Y.Offset >= page.Size.Y.Offset,
+					`{where}: the page can be scrolled to its end ({refs.Scroller.CanvasSize.Y.Offset})`
+				)
 			end
 		end)
 	end)

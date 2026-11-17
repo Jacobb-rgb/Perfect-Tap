@@ -231,6 +231,17 @@
 	golem stats (V13_RAISED_KINDS). A trash icon set while CoalChomper was
 	Common would otherwise delete the 1 % Epic it is now. The player can set
 	it again; later loads leave it.
+
+	Version 17 (owner 2026-11-15: floors bought one by one in the elevator,
+	ElevatorService): Upgrades.Floors = { [floor Id] = true }, the floors
+	bought. Every load: a missing or junk set becomes {}; short string ids
+	with true stay (a newer build's floors too), anything else goes. A save
+	that bought the old one-time elevator (Upgrades.Elevator == true) paid
+	for every floor: it owns every floor with a price (MineFloors.priceOf
+	> 0), and the old Upgrades.Elevator field goes (true, false or junk).
+	That step consumes its own trigger, so it runs on every load without a
+	version gate (idempotent); the bump keeps an older server, which would
+	read the elevator as not bought, from loading the save.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -247,13 +258,14 @@ local LevelConfig = require(Shared.Config.LevelConfig)
 local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
+local MineFloors = require(Shared.Config.MineFloors)
 local TrainConfig = require(Shared.Config.TrainConfig)
 local OreData = require(Shared.Config.OreData)
 local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 16 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once; 14: Night Shift's crate (no step: a new field, so an older server refuses the save; data.NightShift is repaired below on every load); 15: the one belt's level (no step: MachineUpgrades.Conveyor.Speed is a new value a save can name, so an older server, where a bought level would run at 1x, refuses the save); 16: the Ore Feeder (no step: a new machine id, its queue and its Capacity level are names a save can hold, so an older server refuses the save)
+Migrations.Latest = 17 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once; 14: Night Shift's crate (no step: a new field, so an older server refuses the save; data.NightShift is repaired below on every load); 15: the one belt's level (no step: MachineUpgrades.Conveyor.Speed is a new value a save can name, so an older server, where a bought level would run at 1x, refuses the save); 16: the Ore Feeder (no step: a new machine id, its queue and its Capacity level are names a save can hold, so an older server refuses the save); 17: floors bought one by one (Upgrades.Floors; an old bought Upgrades.Elevator owns every floor with a price, on every load, see run())
 
 export type Report = { Moved: number, Dropped: number }
 
@@ -1455,11 +1467,33 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		if bought ~= nil then
 			report.Dropped += 1
 		end
-		bought = table.clone(DataTemplate.Upgrades)
+		-- (a deep copy: the template's Floors set is never shared with a save)
+		bought = deepCopy(DataTemplate.Upgrades)
 		data.Upgrades = bought
 	end
 	local automation = bought.PenAutomation
 	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
+
+	-- Version 17: the elevator floors bought, a set of short string ids (a newer build's too)
+	local floors = subTable(bought, "Floors", report)
+	for _, id in keysOf(floors) do
+		if not idLike(id) or floors[id] ~= true then
+			floors[id] = nil
+			report.Dropped += 1
+		end
+	end
+	-- the old one-time elevator paid for every floor: each floor with a price is bought (every
+	-- load, no version gate: the old field goes here, so it happens once)
+	if bought.Elevator ~= nil then
+		if bought.Elevator == true then
+			for _, floor in MineFloors.List do
+				if MineFloors.priceOf(floor.Index) > 0 then
+					floors[floor.Id] = true
+				end
+			end
+		end
+		bought.Elevator = nil
+	end
 
 	-- steps 6-7 (after the blaster level is clean: it opens the enchant slots); they fold
 	-- an old CarryLevel into Gear.Backpack (the v9 refund below pays what it really cost)

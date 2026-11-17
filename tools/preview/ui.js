@@ -303,9 +303,21 @@ function styleElement(el, node, w, h) {
       const img = document.createElement("img");
       // (the owner's whole-tile pictures live in the repo: tools/preview/tile_art)
       img.src = node.icon.startsWith("tile_") ? `/tile_art/${node.icon}.png` : `/scenes/icons/${node.icon}.png`;
-      img.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;";
+      // (attribute Cover: the picture fills the label, cut at its sides, like ScaleType Crop)
+      img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:${node.cover ? "cover" : "contain"};border-radius:inherit;`;
       img.style.opacity = String(1 - (node.it || 0));
-      el.appendChild(img);
+      if (node.crop) {
+        // only a share of the picture shows (ImageRectSize, ShopFx.studs): the whole one drawn
+        // bigger from the top-left, cut by a box of the label's size
+        const box = document.createElement("div");
+        box.style.cssText = "position:absolute;inset:0;overflow:hidden;";
+        img.style.cssText = `position:absolute;left:0;top:0;width:${100 / node.crop[0]}%;height:${100 / node.crop[1]}%;object-fit:fill;`;
+        img.style.opacity = String(1 - (node.it || 0));
+        box.appendChild(img);
+        el.appendChild(box);
+      } else {
+        el.appendChild(img);
+      }
     }
   } else if (node.vp) {
     liveViewport(el, node.vp, w, h);

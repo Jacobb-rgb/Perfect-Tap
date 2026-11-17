@@ -1,67 +1,233 @@
 --[[
-	The Robux STORE window (owner 2026-10-20, from his store photos) over the
-	lobby (scene "store" for tools/lune/export_scene.luau: the world, shots in
-	tools/preview/store_shots.json). Drawn with the game's own code
-	(StoreView, HudBubble). UI overlays (build/preview/<name>.json):
-	  ui_store_pc          PC: the first cards (the pass, coins, luck)
-	  ui_store_pc_more     PC: scrolled on (capsules, the blaster, passes)
-	  ui_store_pc_stars    PC: the end of the row, the five STAR blasters (3 rebirths)
-	  ui_store_pc_odds     PC: the odds panel before a Royal Capsule x5 buy
-	  ui_store_phone       667 x 375 pt phone
-	  ui_store_pc_starter  PC: FEATURED with the Starter Pack card
-	  ui_store_pc_money    PC: MONEY with the 2x Money pass
-	  ui_starter_popup_pc  PC: the Starter Pack popup (first hour of play)
+	The Robux STORE window (shop v3, owner 2026-11-11: the "WOW" concept)
+	over the lobby (scene "store": the world, shots in
+	tools/preview/store_shots.json) or an empty sky (scene "store_quick").
+	Drawn with the game's own code (StoreView, HudBubble). UI overlays
+	(build/preview/<name>.json), "today" = 2026-11-11 12:00 UTC (the
+	Dragonforge edition ends Nov 30: 19d 11h left):
+	  ui_store_pc            PC: FEATURED (the limited edition, the pass, the Starter Pack)
+	  ui_store_pc_golems     PC: GOLEMS (the Royal Egg's golems and odds, x1 .. x10)
+	  ui_store_pc_blasters   PC: BLASTERS (LV 4, three rebirths: two STAR blasters locked)
+	  ui_store_pc_passes     PC: PASSES (Two More Podiums owned)
+	  ui_store_pc_boosts     PC: BOOSTS (Server Luck, spins, luck, the Mythic enchants)
+	  ui_store_pc_cash       PC: CASH (the coins at $1.84K/s)
+	  ui_store_pc_odds       PC: the odds panel before a Royal Egg x5 buy
+	  ui_store_pc_golems_3d / ui_store_pc_3d / ui_store_pc_passes_3d  PC: GOLEMS / FEATURED /
+	                         PASSES as Studio shows them before the drawn stickers are uploaded
+	                         (IconAssets.StickerSheets: the live 3D models)
+	  ui_store_pc_bare       PC: FEATURED as Studio showed it before the effects picture was
+	                         uploaded (IconAssets.ShopFx: no rays, no studs, plain gradients; the
+	                         golems live 3D)
+	  ui_store_pc_bare_boosts / _bare_cash  BOOSTS / CASH before that upload
+	  ui_store_phone         667 x 375 pt phone: FEATURED (44 pt buttons, the page scrolls)
+	  ui_store_phone_golems  the phone: GOLEMS (and _blasters, _passes, _boosts; _cash scrolled down)
+	  ui_store_phone_odds    the phone: the odds panel
+	  ui_store_phone_small_limited  568 x 320 pt: FEATURED
+	  ui_store_hud_pc / ui_store_hud_phone / ui_store_hud_phone_busy  the HUD without the window
+	  ui_starter_popup_pc    the Starter Pack popup (first hour of play)
+	The old names (ui_store_pc_more, _stars, _limited, _starter, _money) stay as
+	aliases of the matching tabs.
 ]]
 
+local process = require("@lune/process")
 local UiExport = require("./uiexport")
 
 local Preview = {}
 
-function Preview.build(Loader: any): { [string]: any }
+Preview.Now = 1794398400 -- 2026-11-11 12:00 UTC
+Preview.Income = 1840 -- the player's podium income ($1.84K/s, the concept's)
+
+-- The game HUD as the controllers fill it (the left tiles claimed), for the shop renders.
+function Preview.hud(Loader: any, uiScale: number): any
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
-	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
-	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
-	local StoreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoreConfig")
 	local HudBubble = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudBubble")
 	local HudView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.HudView")
+	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
+	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
+	local refs = HudBubble.buildGame(if uiScale > 1.4 then 0.62 else 1.25)
+	-- the BASE / LOBBY / VAULT tabs (TeleportController fills the top bar in the game)
+	TeleportView.build(refs.TopBar, if uiScale > 1.4 then 0.62 else 1.25, 1600 / uiScale)
+	refs.Gui.Scale.Scale = uiScale
+	refs.Coins.Text = Format.money(4.82e6)
+	refs.Income.Text = Format.perSecond(Preview.Income)
+	HudView.setBackpack(refs, 0, 5)
+	refs.Toasts:ClearAllChildren()
+	-- the left tiles as the controllers claim them in the game (SideMenuController, BuildView)
+	HudBubble.claimTile(refs.Menu, "Build")
+	for _, entry in SideMenuView.sorted() do
+		local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
+		if entry.Group == "Main" then
+			HudBubble.claimTile(refs.Menu, entry.Id, spec)
+		else
+			HudBubble.addMore(refs.Menu, entry.Id, spec)
+		end
+	end
+	return refs
+end
+
+--[[
+	An egg pack's pile is one 3D view of three eggs: the preview draws its
+	parts (PreviewLive), not one egg's picture, and every Royal egg so for
+	the same look. LIVE=1 draws every built 3D view so, with the game's
+	viewport light (no special meshes). Again after a page is built later.
+]]
+function Preview.liveEggs(refs: any)
+	local live = process.env.LIVE == "1"
+	for _, d in refs.Gui:GetDescendants() do
+		local egg = d:GetAttribute("Copies") == 3 or d:GetAttribute("Icon") == "capsule_Royal"
+		if egg or (live and d:IsA("ImageLabel") and d:FindFirstChild("View")) then
+			local view = d:FindFirstChild("View")
+			if view and view:IsA("ViewportFrame") and #view:GetChildren() > 0 then
+				d:SetAttribute("Icon", nil)
+				view:SetAttribute("PreviewLive", true)
+			end
+		end
+	end
+end
+
+-- The shop window as StoreController fills it for a player at LV 4 with three rebirths, tab `tab` open.
+function Preview.store(Loader: any, uiScale: number, w: number, h: number, tab: string?, compact: boolean?): any
+	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	local StoreConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StoreConfig")
+	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+	local StoreView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoreView")
+	local _, fit = StoreView.windowSize(w, h)
+	local refs = StoreView.build(StoreView.metricsFor(compact, fit))
+	refs.Gui.Scale.Scale = uiScale
+	refs.Gui.Enabled = true
+	StoreView.layout(refs, w, h, compact)
+	local blaster = StoreConfig.ById.Blaster
+	StoreView.setCard(refs, "Blaster", StoreConfig.blasterKey(blaster, 4) or blaster.Keys[1], "Buy")
+	StoreView.setBig(refs, "Blaster", "LV 4 > LV 5")
+	StoreView.setCard(refs, "Podiums", "Podiums", "Owned")
+	for id, note in
+		{
+			StarComet = "Kept forever, every rebirth",
+			StarNebula = "Kept forever, every rebirth",
+			StarPulsar = "Kept forever, every rebirth",
+		}
+	do
+		StoreView.setCard(refs, id, id, "Buy")
+		StoreView.setNote(refs, id, note)
+	end
+	StoreView.setCard(refs, "StarSupernova", "StarSupernova", "Locked")
+	StoreView.setCard(refs, "StarSingularity", "StarSingularity", "Locked")
+	StoreView.setCoins(refs, Preview.Income)
+	local current = LimitedGolems.current(Preview.Now)
+	if current then
+		StoreView.setEdition(refs, current)
+		StoreView.setTimer(refs, current.EndsAt - Preview.Now)
+		local odds = {}
+		for _, line in CapsuleConfig.odds(current.CapsuleId, false) do
+			odds[line.Golem] = line.Chance
+		end
+		StoreView.setBannerOdds(refs, odds, false)
+	end
+	local royal = {}
+	for _, line in CapsuleConfig.odds("Royal", false) do
+		royal[line.Golem] = line.Chance
+	end
+	StoreView.setRoyalOdds(refs, royal, false)
+	StoreView.selectTab(refs, tab or "Featured")
+	Preview.liveEggs(refs)
+	return refs
+end
+
+function Preview.build(Loader: any): { [string]: any }
+	local roblox = require("@lune/roblox") :: any
+	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
+	local GolemConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GolemConfig")
+	local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
 	local StoreView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StoreView")
 
 	local scale = 1.25 -- 900 px tall render / 720 design height
 	local phoneScale = 0.62 * 900 / 375
 
-	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local function hud(uiScale: number): any
-		local refs = HudBubble.buildGame(if uiScale > 1.4 then 0.62 else 1.25)
-		-- the BASE / LOBBY / VAULT tabs (TeleportController fills the top bar in the game)
-		TeleportView.build(refs.TopBar, if uiScale > 1.4 then 0.62 else 1.25, 1600 / uiScale)
-		refs.Gui.Scale.Scale = uiScale
-		refs.Coins.Text = Format.money(4.82e6)
-		refs.Income.Text = Format.perSecond(1840)
-		HudView.setBackpack(refs, 0, 5)
-		refs.Toasts:ClearAllChildren()
-		return refs
+		return Preview.hud(Loader, uiScale)
+	end
+	local function store(uiScale: number, w: number, h: number, tab: string?, compact: boolean?): any
+		return Preview.store(Loader, uiScale, w, h, tab, compact)
 	end
 
-	local function store(uiScale: number, w: number, h: number, section: string?, compact: boolean?): any
-		local refs = StoreView.build()
-		refs.Gui.Scale.Scale = uiScale
-		refs.Gui.Enabled = true
-		StoreView.layout(refs, w, h, compact)
-		StoreView.setCoins(refs, 1840)
-		local blaster = StoreConfig.ById.Blaster
-		StoreView.setCard(refs, "Blaster", StoreConfig.blasterKey(blaster, 4) or blaster.Keys[1], "Buy")
-		StoreView.setBig(refs, "Blaster", "LV 5")
-		StoreView.setCard(refs, "Podiums", "Podiums", "Owned")
-		if section then
-			refs.Scroller.CanvasPosition = (require("@lune/roblox") :: any).Vector2.new(0, StoreView.sectionTop(refs, section))
-		end
-		return refs
+	local exports: { [string]: any } = {}
+	local pcW, pcH = 1600 / scale, (900 - 36) / scale
+	local function pc(tab: string?): any
+		return UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, tab).Gui })
+	end
+	exports.ui_store_pc = pc("Featured")
+	exports.ui_store_pc_golems = pc("Golems")
+	exports.ui_store_pc_blasters = pc("Blasters")
+	exports.ui_store_pc_passes = pc("Passes")
+	exports.ui_store_pc_boosts = pc("Boosts")
+	exports.ui_store_pc_cash = pc("Cash")
+	-- (the old names: the tabs that hold what they showed)
+	exports.ui_store_pc_limited = exports.ui_store_pc
+	exports.ui_store_pc_starter = exports.ui_store_pc
+	exports.ui_store_pc_more = exports.ui_store_pc_golems
+	exports.ui_store_pc_stars = exports.ui_store_pc_blasters
+	exports.ui_store_pc_money = exports.ui_store_pc_cash
+
+	-- the odds panel before a Royal Egg x5 buy (StoreController's lines)
+	local lines = { "Royal Egg x5: each golem is one of (odds):" }
+	for _, line in CapsuleConfig.odds("Royal", false) do
+		local golem = GolemConfig.ById[line.Golem]
+		table.insert(lines, `   {if golem then golem.Name else line.Golem}:  {StoreView.percent(line.Chance)}`)
+	end
+	local odds = store(scale, pcW, pcH, "Golems")
+	StoreView.showDetail(odds, { Title = "Royal Egg x5", Lines = lines, Robux = 229, Paint = "Pink" })
+	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
+
+	-- before the effects picture is uploaded (what Studio shows now): plain gradients, the icon
+	-- sheet's bolt and sparkle (the icon sheet itself is uploaded)
+	-- before the drawn stickers are uploaded (what Studio shows until then): their live 3D models
+	local stickersBefore: { { Preview: boolean, Id: number } } = {}
+	for i, sheet in IconAssets.StickerSheets do
+		stickersBefore[i] = { Preview = sheet.Preview, Id = sheet.Id }
+		sheet.Preview = false
+		sheet.Id = 0
+	end
+	exports.ui_store_pc_golems_3d = pc("Golems")
+	exports.ui_store_pc_3d = pc("Featured")
+	exports.ui_store_pc_passes_3d = pc("Passes")
+	local before, beforeId = IconAssets.ShopFx.Preview, IconAssets.ShopFx.Id
+	IconAssets.ShopFx.Preview = false
+	IconAssets.ShopFx.Id = 0
+	exports.ui_store_pc_bare = pc("Featured")
+	exports.ui_store_pc_bare_boosts = pc("Boosts")
+	exports.ui_store_pc_bare_cash = pc("Cash")
+	IconAssets.ShopFx.Preview = before
+	IconAssets.ShopFx.Id = beforeId
+	for i, sheet in IconAssets.StickerSheets do
+		sheet.Preview = stickersBefore[i].Preview
+		sheet.Id = stickersBefore[i].Id
 	end
 
-	-- the TRAIN and boost chips over the HUD (TrainController / BoostController place them)
+	-- phones: the 44 pt sizes, the page scrolls
+	local phoneW, phoneH = 1600 / phoneScale, (900 - 58) / phoneScale
+	exports.ui_store_phone = UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, "Featured", true).Gui })
+	exports.ui_store_phone_golems = UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, "Golems", true).Gui })
+	for _, tab in { "Blasters", "Passes", "Boosts" } do
+		exports["ui_store_phone_" .. string.lower(tab)] =
+			UiExport.export({ hud(phoneScale).Gui, store(phoneScale, phoneW, phoneH, tab, true).Gui })
+	end
+	do
+		local scrolled = store(phoneScale, phoneW, phoneH, "Cash", true)
+		scrolled.Scroller.CanvasPosition = roblox.Vector2.new(0, 160)
+		exports.ui_store_phone_cash = UiExport.export({ hud(phoneScale).Gui, scrolled.Gui })
+	end
+	local phoneOdds = store(phoneScale, phoneW, phoneH, "Golems", true)
+	StoreView.showDetail(phoneOdds, { Title = "Royal Egg x5", Lines = lines, Robux = 229, Paint = "Pink" })
+	exports.ui_store_phone_odds = UiExport.export({ hud(phoneScale).Gui, phoneOdds.Gui })
+	do
+		local small = 0.62 * 900 / 320
+		local w, h = 1600 / small, (900 - 163) / small
+		exports.ui_store_phone_small_limited = UiExport.export({ hud(small).Gui, store(small, w, h, "Featured", true).Gui })
+	end
+
+	-- the HUD alone (the Shop button and the offers it opens the window from)
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
-	local NOW = 1.7e9
 	local function chips(renderScale: number, compact: boolean, designW: number, designH: number, hudGui: any): { any }
 		-- the light HUD puts the chip under its tiles (HudController does this in the game)
 		TrainView.HudChipTop = hudGui:GetAttribute("ChipTop")
@@ -70,95 +236,19 @@ function Preview.build(Loader: any): { [string]: any }
 		train.Gui.Scale.Scale = renderScale
 		TrainView.layout(train, compact, designW, designH)
 		train.ChipKey.Visible = not compact
-		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
+		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), 1.7e9, nil))
 		train.Gui.Enabled = false
 		train.Chip.Enabled = true
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
 		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
-		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
-		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
+		local state = { Boosts = { TripleLuckyUntil = 1.7e9 + 222, HexaLuckyUntil = 1.7e9 + 3900 } }
+		BoostView.setChips(boost, BoostView.chips(state, 1.7e9), false)
 		boost.Gui.Enabled = true
 		return { train.Chip, boost.Gui }
 	end
-
-	local exports: { [string]: any } = {}
-	local pcW, pcH = 1600 / scale, (900 - 36) / scale
-	exports.ui_store_pc = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH).Gui })
-	exports.ui_store_pc_more = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Luck").Gui })
-	exports.ui_store_pc_passes = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Passes").Gui })
-	-- the end of the row: the STAR blasters for a player with 3 rebirths
-	local stars = store(scale, pcW, pcH, "Blasters")
-	StoreView.setCard(stars, "StarComet", "StarComet", "Owned")
-	StoreView.setNote(stars, "StarComet", "In your hands")
-	StoreView.setCard(stars, "StarNebula", "StarNebula", "Owned")
-	StoreView.setNote(stars, "StarNebula", "Equip it in the STAR FORGE")
-	StoreView.setCard(stars, "StarPulsar", "StarPulsar", "Buy")
-	StoreView.setNote(stars, "StarPulsar", "Kept forever, every rebirth")
-	StoreView.setCard(stars, "StarSupernova", "StarSupernova", "Locked")
-	StoreView.setCard(stars, "StarSingularity", "StarSingularity", "Locked")
-	exports.ui_store_pc_stars = UiExport.export({ hud(scale).Gui, stars.Gui })
-	-- the limited edition banner (FEATURED): the game's own edition, 9 days before its end
-	local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
-	local function edition(): any
-		local now = LimitedGolems.Current.EndsAt - (29 * 86400 + 21 * 3600 + 15 * 60)
-		return LimitedGolems.current(now)
-	end
-	local limited = store(scale, pcW, pcH)
-	StoreView.setEdition(limited, edition())
-	StoreView.setTimer(limited, 29 * 86400 + 21 * 3600 + 15 * 60)
-	do -- (the tiles as StoreController sets them: the capsule's odds now)
-		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
-		local odds = {}
-		for _, line in CapsuleConfig.odds("Dragonforge", false) do
-			odds[line.Golem] = line.Chance
-		end
-		StoreView.setBannerOdds(limited, odds, false)
-	end
-	exports.ui_store_pc_limited = UiExport.export({ hud(scale).Gui, limited.Gui })
-	-- the limited banner on a 568 x 320 phone (review 2026-10-28: its 44 pt buy buttons under the
-	-- golems' chance %: the odds stay visible), scrolled to FEATURED
-	do
-		local small = 0.62 * 900 / 320
-		local w, h = 1600 / small, (900 - 163) / small
-		local phoneLimited = store(small, w, h, nil, true)
-		StoreView.setEdition(phoneLimited, edition())
-		StoreView.setTimer(phoneLimited, 29 * 86400 + 21 * 3600 + 15 * 60)
-		local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
-		local odds = {}
-		for _, line in CapsuleConfig.odds("Dragonforge", false) do
-			odds[line.Golem] = line.Chance
-		end
-		StoreView.setBannerOdds(phoneLimited, odds, false)
-		StoreView.layout(phoneLimited, w, h, true)
-		phoneLimited.Scroller.CanvasPosition = (require("@lune/roblox") :: any).Vector2.new(
-			0,
-			StoreView.sectionTop(phoneLimited, "Featured")
-		)
-		exports.ui_store_phone_small_limited = UiExport.export({ hud(small).Gui, phoneLimited.Gui })
-	end
-	local odds = store(scale, pcW, pcH, "Eggs")
-	local lines = { "Royal Capsule x5: 5 golems, each one of:" }
-	for _, line in CapsuleConfig.odds("Royal", false) do
-		local golem = GolemConfig.ById[line.Golem]
-		table.insert(lines, string.format("   %s  %.2f%%", if golem then golem.Name else line.Golem, line.Chance * 100))
-	end
-	StoreView.showDetail(odds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Paint = "Pink" })
-	exports.ui_store_pc_odds = UiExport.export({ hud(scale).Gui, odds.Gui })
-	-- the HUD with a train (review #16: the Shop pill clear of the TRAIN chip) and Server Luck on
-	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 	local function hudWithChips(uiScale: number, compact: boolean, w: number, h: number): { any }
 		local refs = hud(uiScale)
-		-- the left tiles as the controllers claim them in the game (SideMenuController, BuildView)
-		HudBubble.claimTile(refs.Menu, "Build")
-		for _, entry in SideMenuView.sorted() do
-			local spec = { Label = entry.Label, IconName = entry.IconName, Order = entry.Order }
-			if entry.Group == "Main" then
-				HudBubble.claimTile(refs.Menu, entry.Id, spec)
-			else
-				HudBubble.addMore(refs.Menu, entry.Id, spec)
-			end
-		end
 		local luck = refs.Gui:FindFirstChild("ServerLuck")
 		if luck then
 			-- (as StoreController writes it: phones drop "thanks name")
@@ -172,15 +262,15 @@ function Preview.build(Loader: any): { [string]: any }
 		return list
 	end
 	exports.ui_store_hud_pc = UiExport.export(hudWithChips(scale, false, pcW, pcH))
-	-- a 667 x 375 phone with the tutorial bubble and the FREE SPIN chip (review: the pill clear of both)
+	exports.ui_store_hud_phone = UiExport.export(hudWithChips(phoneScale, true, phoneW, phoneH))
 	do
 		local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
 		local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
 		local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
-		local list = hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale)
+		local list = hudWithChips(phoneScale, true, phoneW, phoneH)
 		local tutorial = TutorialView.build()
 		tutorial.Gui.Scale.Scale = phoneScale
-		TutorialView.apply(tutorial, TutorialView.layout(0.62, (require("@lune/roblox") :: any).Vector2.new(667, 375), true, false, nil))
+		TutorialView.apply(tutorial, TutorialView.layout(0.62, roblox.Vector2.new(667, 375), true, false, nil))
 		local step = TutorialConfig.get(2)
 		TutorialView.setStep(tutorial, 2, step, if step.Hint then step.Hint.Touch else nil)
 		tutorial.Bubble.Visible = true
@@ -191,20 +281,6 @@ function Preview.build(Loader: any): { [string]: any }
 		table.insert(list, spin.Gui)
 		exports.ui_store_hud_phone_busy = UiExport.export(list)
 	end
-	exports.ui_store_hud_phone = UiExport.export(hudWithChips(phoneScale, true, 1600 / phoneScale, (900 - 58) / phoneScale))
-	-- the odds panel on a phone (compact sizes)
-	local phoneOdds = store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, "Eggs", true)
-	StoreView.showDetail(phoneOdds, { Title = "Royal Capsule x5", Lines = lines, Robux = 229, Paint = "Pink" })
-	exports.ui_store_phone_odds = UiExport.export({ hud(phoneScale).Gui, phoneOdds.Gui })
-	exports.ui_store_phone = UiExport.export({
-		hud(phoneScale).Gui,
-		store(phoneScale, 1600 / phoneScale, (900 - 58) / phoneScale, nil, true).Gui,
-	})
-	-- the 2x Money pass and the Starter Pack (2026-10-21): the FEATURED row with
-	-- the Starter Pack, the MONEY section with 2x Money, and the first-hour popup
-	exports.ui_store_pc_starter = UiExport.export({ hud(scale).Gui, store(scale, pcW, pcH, "Featured").Gui })
-	local money = store(scale, pcW, pcH, "Money")
-	exports.ui_store_pc_money = UiExport.export({ hud(scale).Gui, money.Gui })
 	local StarterPackView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.StarterPackView")
 	local popup = StarterPackView.build()
 	popup.Gui.Scale.Scale = scale

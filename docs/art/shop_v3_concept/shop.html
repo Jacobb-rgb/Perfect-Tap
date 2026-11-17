@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Fredoka"; src: url("FONTDIR/FredokaOne-Regular.ttf"); }
+@font-face { font-family: "MontBlack"; src: url("FONTDIR/Montserrat-Black.ttf"); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1600px; height: 900px; overflow: hidden; background: #1a1240; font-family: "Fredoka", sans-serif; }
+#stage { position: relative; width: 1600px; height: 900px; overflow: hidden; }
+#bg { position: absolute; inset: -30px; background: url("BG") center/cover; filter: blur(7px) brightness(0.72) saturate(1.35); }
+#tint { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, rgba(90,60,200,0.15), rgba(20,10,60,0.55)); }
+
+/* outlined text (Roblox: UIStroke on the label + an offset shadow copy) */
+.o2 { color: #fff; text-shadow: 0 0 0 #000, -2px -2px 0 var(--sc,#1b1640), 2px -2px 0 var(--sc,#1b1640), -2px 2px 0 var(--sc,#1b1640), 2px 2px 0 var(--sc,#1b1640), 0 -2px 0 var(--sc,#1b1640), 0 2px 0 var(--sc,#1b1640), -2px 0 0 var(--sc,#1b1640), 2px 0 0 var(--sc,#1b1640), 0 4px 0 var(--sc,#1b1640); }
+.o3 { color: #fff; text-shadow: -3px -3px 0 var(--sc,#1b1640), 3px -3px 0 var(--sc,#1b1640), -3px 3px 0 var(--sc,#1b1640), 3px 3px 0 var(--sc,#1b1640), 0 -3px 0 var(--sc,#1b1640), 0 3px 0 var(--sc,#1b1640), -3px 0 0 var(--sc,#1b1640), 3px 0 0 var(--sc,#1b1640), 0 6px 0 var(--sc,#1b1640); }
+.grad { position: relative; display: inline-block; }
+.grad > .fill { position: absolute; left: 0; top: 0; background: var(--g); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; white-space: nowrap; }
+
+/* left HUD (the game's tiles, as they are now) */
+#hud { position: absolute; left: 14px; top: 116px; width: 268px; display: grid; grid-template-columns: repeat(3, 84px); gap: 8px; }
+#hud img { width: 84px; height: 84px; display: block; }
+#train { position: absolute; left: 12px; top: 400px; width: 270px; height: 98px; border-radius: 10px; background: linear-gradient(#2f3a52, #232b3e); border: 3px solid #4f86d9; padding: 8px 10px; }
+#train .t { font-size: 20px; }
+#train .bar { margin-top: 4px; height: 10px; border-radius: 5px; background: #12161f; overflow: hidden; }
+#train .bar i { display: block; width: 62%; height: 100%; background: linear-gradient(#ffc04a, #f08a1a); }
+#train .send { margin-top: 8px; height: 34px; border-radius: 8px; background: linear-gradient(#7cf04a, #2fb51d); border: 3px solid #1d7a12; text-align: center; font-size: 20px; line-height: 28px; }
+#money { position: absolute; left: 18px; top: 790px; }
+#money .m { font-size: 52px; --sc: #0d3b06; }
+#money .m .fill { --g: linear-gradient(#b6ff6a, #38c41c); }
+#money .i { font-size: 22px; margin-top: 2px; }
+
+/* bottom slots */
+#slots { position: absolute; left: 800px; transform: translateX(-50%); top: 812px; display: flex; gap: 8px; }
+#slots .s { height: 74px; border-radius: 10px; background: linear-gradient(#3a4458, #262d3d); border: 3px solid #5a6680; display: flex; align-items: center; justify-content: center; }
+#slots img { width: 62px; height: 62px; }
+
+/* the window */
+#win { position: absolute; left: 300px; top: 14px; width: 1282px; height: 786px; border-radius: 30px; padding: 4px;
+  background: linear-gradient(135deg, #57d4ff, #7a5cff 45%, #c04dff 70%, #4fb8ff);
+  box-shadow: 0 0 0 3px #120c38, 0 0 34px 6px rgba(110,120,255,0.75), 0 14px 0 #0c0828; }
+#wininner { position: absolute; inset: 4px; border-radius: 26px; overflow: hidden;
+  background: linear-gradient(170deg, #3b2f9c 0%, #261d74 40%, #1c145a 100%); }
+#wininner::before { content: ""; position: absolute; inset: 0; opacity: 0.08;
+  background: repeating-linear-gradient(45deg, #fff 0 2px, transparent 2px 22px); }
+#head { position: absolute; left: 0; right: 0; top: 0; height: 104px; }
+#cart { position: absolute; left: -6px; top: -14px; width: 132px; height: 132px; filter: drop-shadow(0 0 10px rgba(90,200,255,0.9)) drop-shadow(0 5px 0 #0c0828); }
+#title { position: absolute; left: 122px; top: 6px; font-size: 76px; --sc: #10205a; }
+#title .fill { --g: linear-gradient(#ffffff 30%, #9fe3ff 62%, #49a8ff); }
+#tabs { position: absolute; left: 316px; top: 22px; display: flex; gap: 8px; }
+.tab { position: relative; height: 60px; padding-right: 12px; white-space: nowrap; border-radius: 16px; border: 3px solid #120c38; display: flex; align-items: center; padding-left: 46px; font-size: 20px; box-shadow: 0 5px 0 #0c0828, inset 0 3px 0 rgba(255,255,255,0.45); }
+.tab img { position: absolute; left: 2px; top: 6px; width: 44px; height: 44px; }
+.tab.off { filter: saturate(0.55) brightness(0.8); }
+.tab.on { transform: translateY(-3px) scale(1.04); z-index: 2; border-color: #fff; box-shadow: 0 0 0 3px #120c38, 0 0 18px 4px rgba(255,255,255,0.55), 0 6px 0 #0c0828, inset 0 3px 0 rgba(255,255,255,0.55); }
+#close { position: absolute; right: 18px; top: 20px; width: 66px; height: 64px; border-radius: 16px; background: linear-gradient(#ff6a6a, #e0262f); border: 3px solid #120c38; box-shadow: 0 5px 0 #0c0828, inset 0 3px 0 rgba(255,255,255,0.45); text-align: center; font-size: 50px; line-height: 56px; --sc: #5a0a10; }
+#body { position: absolute; left: 18px; right: 18px; top: 108px; bottom: 18px; border-radius: 20px;
+  background: linear-gradient(#1a1350, #140e3f); box-shadow: inset 0 0 0 3px rgba(120,140,255,0.35), inset 0 6px 18px rgba(0,0,0,0.45); padding: 16px 18px; }
+
+/* section heading */
+.h { text-align: center; font-size: 40px; --sc: #3a1a00; margin-bottom: 8px; height: 50px; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.h img { width: 46px; height: 46px; }
+.h .fill { --g: linear-gradient(#fff6b0 20%, #ffd23a 55%, #ff9a1a); }
+.sub { text-align: center; font-size: 20px; color: #d8dcff; margin-top: -6px; margin-bottom: 10px; }
+
+/* cards */
+.row { display: flex; gap: 14px; }
+.card { position: relative; flex: 1; border-radius: 20px; border: 4px solid #120c38; overflow: visible;
+  background: var(--bg); box-shadow: 0 6px 0 #0c0828, inset 0 0 0 3px var(--rim, rgba(255,255,255,0.5)); }
+.card::before { content: ""; position: absolute; inset: 0; border-radius: 16px; opacity: 0.22;
+  background: repeating-conic-gradient(from 0deg at 50% 52%, #fff 0 7deg, transparent 7deg 22deg); }
+.card::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%; border-radius: 16px 16px 0 0; background: linear-gradient(rgba(255,255,255,0.28), rgba(255,255,255,0)); }
+.card > * { position: relative; z-index: 1; }
+.card .nm { text-align: center; font-size: 28px; margin-top: 10px; line-height: 1.05; }
+.card .ds { text-align: center; font-size: 17px; margin-top: 3px; line-height: 1.15; padding: 0 10px; }
+.card .pic { display: block; margin: 0 auto; object-fit: contain; filter: drop-shadow(0 6px 4px rgba(0,0,0,0.35)); }
+.card .big { position: absolute; z-index: 2; font-size: 30px; }
+.price { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 12px; height: 54px; border-radius: 14px;
+  background: linear-gradient(#9dff5a, #3dcc22 55%, #26a614); border: 3px solid #0e4a06;
+  box-shadow: 0 5px 0 #0b3804, inset 0 3px 0 rgba(255,255,255,0.55); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 32px; --sc: #0b3a05; }
+.price img { width: 34px; height: 34px; }
+.price.red { background: linear-gradient(#ff8a7a, #f0383a 55%, #c41c26); border-color: #5a0a10; box-shadow: 0 5px 0 #40060b, inset 0 3px 0 rgba(255,255,255,0.55); --sc: #4a060c; }
+.price.gold { background: linear-gradient(#fff07a, #ffc21a 55%, #f08a0a); border-color: #6a3a00; box-shadow: 0 5px 0 #4a2800, inset 0 3px 0 rgba(255,255,255,0.6); --sc: #5a2c00; }
+.price.owned { background: linear-gradient(#c8ccd8, #8a90a6); border-color: #2a2e3c; box-shadow: 0 5px 0 #1a1d26; --sc: #22252f; }
+.price.small { font-size: 24px; height: 44px; }
+.price.small img { width: 26px; height: 26px; }
+.rib { position: absolute; z-index: 4; left: 8px; top: -18px; transform: rotate(-6deg); white-space: nowrap; font-size: 18px; padding: 1px 12px; border-radius: 10px;
+  background: linear-gradient(#ff7f9e, #e0145a); border: 3px solid #5a0626; box-shadow: 0 3px 0 #5a0626, inset 0 2px 0 rgba(255,255,255,0.5); --sc: #5a0626; }
+.rib.gold { background: linear-gradient(#fff07a, #ffb21a); border-color: #6a3a00; box-shadow: 0 3px 0 #6a3a00, inset 0 2px 0 rgba(255,255,255,0.6); --sc: #6a3a00; }
+.rib.blue { background: linear-gradient(#7fe0ff, #2a8cff); border-color: #0a2a6a; box-shadow: 0 3px 0 #0a2a6a, inset 0 2px 0 rgba(255,255,255,0.5); --sc: #0a2a6a; }
+.ribc { position: absolute; z-index: 3; width: 170px; text-align: center; font-size: 17px; padding: 4px 0; right: -40px; top: 22px; transform: rotate(35deg);
+  background: linear-gradient(#ff5f86, #e0145a); border-top: 3px solid #5a0626; border-bottom: 3px solid #5a0626; --sc: #5a0626; }
+.ribc.gold { background: linear-gradient(#fff07a, #ffb21a); border-color: #6a3a00; --sc: #6a3a00; }
+.pow { text-align: center; font-size: 23px; margin-top: 2px; --sc: #3a1a00; color: #fff3a0 !important; }
+.pic.gun { object-fit: cover; width: 300px; height: 132px; }
+.badge { position: absolute; z-index: 3; right: 12px; top: 12px; border-radius: 12px; padding: 2px 10px; font-size: 18px; background: rgba(10,8,40,0.55); border: 2px solid rgba(255,255,255,0.6); }
+.lock { position: absolute; z-index: 3; left: 12px; right: 12px; bottom: 74px; text-align: center; font-size: 17px; border-radius: 10px; padding: 3px 0; background: rgba(10,8,40,0.6); color: #ffe48a; }
+
+/* paints */
+.p-blue   { --bg: linear-gradient(#7fd2ff, #2f8cff 55%, #1d5fd6); }
+.p-green  { --bg: linear-gradient(#a6ff6a, #3fd02a 55%, #1e9a18); }
+.p-purple { --bg: linear-gradient(#e29cff, #a64dff 55%, #6f22d6); }
+.p-pink   { --bg: linear-gradient(#ffa6d6, #ff4fa3 55%, #d01f74); }
+.p-orange { --bg: linear-gradient(#ffd27a, #ff9a2a 55%, #e0620a); }
+.p-gold   { --bg: linear-gradient(#fff2a0, #ffcf2a 55%, #f0960a); }
+.p-red    { --bg: linear-gradient(#ff9a8a, #ff4a4a 55%, #c41c2a); }
+.p-teal   { --bg: linear-gradient(#8affea, #20d6b8 55%, #0f9a88); }
+.p-navy   { --bg: linear-gradient(#7a8cff, #3a46c8 55%, #1f2580); }
+.p-dark   { --bg: linear-gradient(#6a4ab8, #3a2480 55%, #1e1250); }
+.p-rainbow { --bg: linear-gradient(135deg, #ff6a8a, #ffb84a 25%, #ffe94a 40%, #5ff07a 55%, #4ac8ff 72%, #a86aff 90%); }
+
+/* the Dragonforge banner */
+#banner { position: relative; height: 404px; border-radius: 20px; border: 4px solid #120c38; overflow: hidden;
+  background: radial-gradient(ellipse at 80% 30%, #ff8a2a 0%, #d0301a 25%, #6a1050 55%, #2a0a40 100%);
+  box-shadow: 0 6px 0 #0c0828, inset 0 0 0 3px rgba(255,190,90,0.6); }
+#banner::before { content: ""; position: absolute; inset: 0; opacity: 0.16;
+  background: repeating-conic-gradient(from 0deg at 80% 25%, #ffd27a 0 6deg, transparent 6deg 18deg); }
+#banner > * { position: absolute; z-index: 1; }
+#banner .new { left: 18px; top: 16px; transform: rotate(-8deg); font-size: 30px; padding: 2px 14px; border-radius: 12px; background: linear-gradient(#fff, #ffe0e8); color: #e0145a; border: 3px solid #5a0626; box-shadow: 0 4px 0 #5a0626; }
+#banner .le { left: 130px; top: 14px; font-size: 26px; --sc: #4a0a00; }
+#banner .le .fill { --g: linear-gradient(#fff6b0, #ffc21a); }
+#banner .df { left: 126px; top: 46px; font-size: 70px; --sc: #3a0600; transform: rotate(-3deg); }
+#banner .df .fill { --g: linear-gradient(#fff6b0 15%, #ffcf2a 45%, #ff7a1a 80%); }
+#banner .tag { left: 150px; top: 130px; font-size: 22px; }
+#banner .timer { right: 18px; top: 14px; text-align: right; font-size: 26px; }
+#banner .timer small { display: block; font-size: 22px; color: #ffe0a0; }
+#banner .hero { right: 210px; top: -4px; width: 190px; height: 190px; filter: drop-shadow(0 0 18px rgba(255,160,40,0.9)); }
+#banner .egg { right: 345px; top: 50px; width: 118px; height: 118px; filter: drop-shadow(0 0 14px rgba(255,120,40,0.9)); }
+#gtiles { left: 14px; right: 14px; top: 176px; display: flex; gap: 10px; }
+.gt { position: relative; flex: 1; height: 140px; border-radius: 16px; border: 3px solid #120c38; overflow: hidden; background: var(--bg); box-shadow: 0 4px 0 #0c0828, inset 0 0 0 3px rgba(255,255,255,0.5); }
+.gt img { position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 118px; height: 118px; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.35)); }
+.gt .pc { position: absolute; right: 8px; bottom: 2px; font-size: 32px; }
+.gt .rn { position: absolute; left: 8px; top: 4px; font-size: 15px; }
+#bbuy { left: 14px; right: 14px; bottom: 14px; display: flex; gap: 12px; height: 62px; }
+#bbuy .price { position: relative; left: auto; right: auto; bottom: auto; flex: 1; height: 62px; flex-direction: column; gap: 0; line-height: 1; }
+#bbuy .price .c { font-size: 18px; }
+#bbuy .price .r { display: flex; align-items: center; gap: 6px; font-size: 30px; }
+
+.wide { position: relative; border-radius: 20px; border: 4px solid #120c38; overflow: hidden; box-shadow: 0 6px 0 #0c0828, inset 0 0 0 3px rgba(255,255,255,0.5); background: var(--bg); }
+.wide::before { content: ""; position: absolute; inset: 0; opacity: 0.18; background: repeating-conic-gradient(from 0deg at 18% 50%, #fff 0 7deg, transparent 7deg 22deg); }
+.wide > * { position: absolute; z-index: 1; }
+.lines { font-size: 19px; line-height: 1.32; text-align: right; }
+
+/* right column offers (the game's, as now) */
+#offers { position: absolute; right: -400px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div><div id="tint"></div>
+  <div id="hud"></div>
+  <div id="train"><div class="t o2">TRAIN 5/8</div><div class="bar"><i></i></div><div class="send o2">SEND</div></div>
+  <div id="money"><div class="m o3 grad"><span>$4.82M</span><span class="fill">$4.82M</span></div><div class="i o2">+$1.84K/s</div></div>
+  <div id="win"><div id="wininner">
+    <div id="head">
+      <img id="cart" src="ICONS/cart.png">
+      <div id="title" class="o3 grad"><span>Shop</span><span class="fill">Shop</span></div>
+      <div id="tabs"></div>
+      <div id="close" class="o3">X</div>
+    </div>
+    <div id="body"></div>
+  </div></div>
+</div>
+<script>
+const I = (n) => `ICONS/${n}.png`;
+const T = (n) => `TILES/${n}.png`;
+const R = `<img src="${I("robux")}">`;
+const page = new URLSearchParams(location.search).get("page") || "featured";
+
+function g(text, cls, extra) { // gradient outlined text
+  return `<span class="grad ${cls || ""}" ${extra || ""}><span>${text}</span><span class="fill">${text}</span></span>`;
+}
+function price(robux, cls) { return `<div class="price o2 ${cls || ""}">${R}${robux.toLocaleString("en-US")}</div>`; }
+
+// left tiles (the hybrid menu that is in the game)
+document.getElementById("hud").innerHTML = ["shop", "rebirth", "golems", "inventory", "hoverboard", "build", "elevator", "trade", "more"].map((n) => `<img src="${T("tile_" + n)}">`).join("");
+
+const TABS = [
+  ["featured", "Featured", "star_token", "linear-gradient(#fff07a, #ffc21a 55%, #f08a0a)"],
+  ["golems", "Golems", "capsule_Royal", "linear-gradient(#e29cff, #a64dff 55%, #6f22d6)"],
+  ["blasters", "Blasters", "star_Supernova", "linear-gradient(#ff9a8a, #ff4a4a 55%, #c41c2a)"],
+  ["passes", "Passes", "pass_crown", "linear-gradient(#ffd27a, #ff9a2a 55%, #e0620a)"],
+  ["boosts", "Boosts", "clover", "linear-gradient(#8affea, #20d6b8 55%, #0f9a88)"],
+  ["cash", "Cash", "cash_stack", "linear-gradient(#a6ff6a, #3fd02a 55%, #1e9a18)"],
+];
+document.getElementById("tabs").innerHTML = TABS.map(([id, word, icon, bg]) =>
+  `<div class="tab o2 ${id === page ? "on" : "off"}" style="background:${bg}"><img src="${I(icon)}">${word}</div>`).join("");
+
+const RARITY = { Uncommon: "p-green", Rare: "p-blue", Epic: "p-purple", Legendary: "p-gold", Mythic: "p-red" };
+const body = document.getElementById("body");
+
+function heading(text, icon) {
+  return `<div class="h o3"><img src="${I(icon)}">${g(text)}<img src="${I(icon)}"></div>`;
+}
+
+if (page === "featured") {
+  const golems = [["CinderWhelp", "Rare", 34], ["EmberHatchling", "Rare", 28], ["ScaleKnight", "Epic", 20], ["Flamewing", "Epic", 12], ["MagmaWyvern", "Legendary", 5], ["DragonKing", "Mythic", 1]];
+  const buys = [[50, 3499, "red", "BEST VALUE"], [10, 799, ""], [3, 249, ""], [1, 99, ""]];
+  body.innerHTML = `
+  <div id="banner">
+    <div class="new">NEW!</div>
+    ${g("LIMITED EDITION GOLEMS", "le o2")}
+    ${g("DRAGONFORGE", "df o3")}
+    <div class="tag o2">Golems forged in dragon fire!</div>
+    <img class="egg" src="${I("capsule_Dragonforge")}">
+    <img class="hero" src="${I("golem_DragonKing")}">
+    <div class="timer o2">ENDS NOV 30<small class="o2">19d 4h left</small></div>
+    <div id="gtiles">${golems.map(([k, r, p]) => `<div class="gt ${RARITY[r]}"><img src="${I("golem_" + k)}"><div class="rn o2">${r}</div><div class="pc o3">${p}%</div></div>`).join("")}</div>
+    <div id="bbuy">${buys.map(([n, rb, cls]) => `<div class="price o2 ${cls}"><span class="c">${n} Golem${n > 1 ? "s" : ""}</span><span class="r">${R}${rb.toLocaleString("en-US")}</span></div>`).join("")}</div>
+  </div>
+  <div class="row" style="margin-top:16px;height:222px">
+    <div class="wide p-purple" style="flex:2">
+      <img src="${I("pass_crown")}" style="left:14px;top:20px;width:170px;height:170px;filter:drop-shadow(0 0 14px rgba(255,220,90,0.9))">
+      ${g("Forgemaster's Pass", "o3", 'style="left:196px;top:12px;font-size:42px;--sc:#2a0a5a;--g:linear-gradient(#fff,#ffe07a)"')}
+      <div class="lines o2" style="left:200px;top:66px;text-align:left;font-size:19px">+ Podiums 4 and 5<br>+ 50% offline income for 12 h<br>+ Double backpack space<br>+ Glimmer Grotto, extra machine slots</div>
+      <div class="price o2" style="left:auto;right:16px;width:200px;bottom:16px">${R}560</div>
+      <div class="ribc gold o2">BEST VALUE!</div>
+    </div>
+    <div class="card p-teal" style="flex:1">
+      <div class="rib o2">LIMITED!</div>
+      <div class="nm o3">Starter Pack</div>
+      <div class="ds o2">Rare golem + coins + podium skin</div>
+      <img class="pic" src="${I("golem_GildedPorter")}" style="width:118px;height:118px;margin-top:-4px">
+      ${price(99, "small")}
+    </div>
+  </div>`;
+}
+
+if (page === "golems") {
+  const royal = [["SilverSquire", "Silver Squire", "Uncommon", 48], ["RoseKnight", "Rose Knight", "Rare", 30], ["MoonstoneOracle", "Moonstone Oracle", "Epic", 16], ["StormTitan", "Storm Titan", "Legendary", 5], ["CelestialSovereign", "Celestial Sovereign", "Mythic", 1]];
+  const eggs = [[1, 49, ""], [3, 139, ""], [5, 229, "POPULAR!"], [10, 429, "BEST VALUE!"]];
+  body.innerHTML = `
+  ${heading("Royal Egg", "capsule_Royal")}
+  <div class="sub">Five royal golems inside, up to a Mythic. Chances below.</div>
+  <div class="row" style="height:268px">
+    ${royal.map(([k, n, r, p]) => `<div class="card ${RARITY[r]}">
+      <div class="nm o3" style="font-size:24px">${n}</div>
+      <div class="ds o2">${r}</div>
+      <img class="pic" src="${I("golem_" + k)}" style="width:150px;height:150px;margin-top:2px">
+      <div class="badge o2" style="top:auto;bottom:10px;right:50%;transform:translateX(50%);font-size:26px">${p}%</div>
+    </div>`).join("")}
+  </div>
+  <div class="row" style="height:236px;margin-top:16px">
+    ${eggs.map(([n, rb, rib]) => `<div class="card ${n >= 5 ? "p-pink" : "p-purple"}">
+      ${rib ? `<div class="rib ${n === 10 ? "gold" : ""} o2">${rib}</div>` : ""}
+      <div class="nm o3">Royal Egg</div>
+      <div style="position:relative;height:118px;margin-top:2px">
+        ${Array.from({ length: Math.min(n, 3) }, (_, i) => `<img src="${I("capsule_Royal")}" style="position:absolute;left:calc(50% - 60px + ${(i - (Math.min(n, 3) - 1) / 2) * 52}px);top:${i === 1 ? 0 : 10}px;width:${i === 1 ? 120 : 104}px;height:${i === 1 ? 120 : 104}px;filter:drop-shadow(0 5px 3px rgba(0,0,0,0.35));z-index:${i === 1 ? 2 : 1}">`).join("")}
+      </div>
+      <div class="big o3" style="right:14px;top:50px">x${n}</div>
+      ${price(rb)}
+    </div>`).join("")}
+  </div>`;
+}
+
+if (page === "blasters") {
+  const stars = [["Comet", "Comet Launcher", 1.2, 1, 75, "p-blue"], ["Nebula", "Nebula Twin", 1.35, 2, 125, "p-purple"], ["Pulsar", "Pulsar Rifle", 1.5, 3, 199, "p-teal"], ["Supernova", "Supernova Gatling", 1.65, 5, 299, "p-orange"], ["Singularity", "Singularity Rail", 1.8, 8, 449, "p-dark"]];
+  const card = (inner, cls) => `<div class="card ${cls}">${inner}</div>`;
+  const next = card(`
+      <div class="rib blue o2">NEXT LV!</div>
+      <div class="nm o3">Next Blaster</div>
+      <div class="ds o2">One level up, right now</div>
+      <div class="pow o2">LV 4 &rarr; LV 5</div>
+      <img class="pic" src="${I("blaster")}" style="width:150px;height:132px">
+      ${price(99)}`, "p-red");
+  const starCards = stars.map(([id, n, mult, reb, rb, cls], i) => card(`
+      ${i === 4 ? `<div class="rib gold o2">STRONGEST!</div>` : ""}
+      <div class="nm o3">${n}</div>
+      <div class="ds o2">STAR blaster, yours forever</div>
+      <div class="pow o2">x${mult} power</div>
+      <img class="pic gun" src="${I("star_" + id)}">
+      ${reb > 3 ? `<div class="lock o2">Opens at rebirth ${reb}</div>` : ""}
+      ${reb > 3 ? `<div class="price o2 owned">${R}${rb}</div>` : price(rb)}`, cls));
+  body.innerHTML = `
+  ${heading("Blasters", "star_token")}
+  <div class="row" style="height:286px">${[next, starCards[0], starCards[1]].join("")}</div>
+  <div class="row" style="height:286px;margin-top:16px">${starCards.slice(2).join("")}</div>`;
+}
+
+if (page === "passes") {
+  const passes = [["Podiums", "Two More Podiums", "Podiums 4 and 5 on your base", "podium", 100, "p-orange", ""], ["Night", "Night Shift", "Podiums earn 50% while you are away, 12 h", "moon", 99, "p-navy", ""], ["Money", "2x Money", "Income and sales x2, forever", "cash_safe", 199, "p-green", "POPULAR!"], ["Train", "Express Train", "Your ore train twice as fast", "train", 199, "p-red", ""], ["Board", "Custom Hoverboard", "Speed 48 + rainbow trail", "board_TerraForgeCustom", 49, "p-rainbow", ""]];
+  body.innerHTML = `
+  ${heading("Passes", "pass_crown")}
+  <div class="row" style="height:340px">
+    ${passes.map(([id, n, d, icon, rb, cls, rib], i) => `<div class="card ${cls}">
+      ${rib ? `<div class="rib o2">${rib}</div>` : ""}
+      <div class="nm o3" style="font-size:26px">${n}</div>
+      <div class="ds o2" style="height:40px">${d}</div>
+      <img class="pic" src="${I(icon)}" style="width:160px;height:160px;margin-top:4px">
+      ${i === 0 ? `<div class="price o2 owned">OWNED</div>` : price(rb)}
+    </div>`).join("")}
+  </div>
+  <div class="wide p-purple" style="height:160px;margin-top:18px">
+    <img src="${I("pass_crown")}" style="left:20px;top:8px;width:140px;height:140px;filter:drop-shadow(0 0 14px rgba(255,220,90,0.9))">
+    ${g("Forgemaster's Pass", "o3", 'style="left:176px;top:16px;font-size:44px;--sc:#2a0a5a;--g:linear-gradient(#fff,#ffe07a)"')}
+    <div class="o2" style="left:180px;top:76px;font-size:21px;line-height:1.3">Podiums 4 + 5, offline income, double backpack,<br>the Glimmer Grotto and extra machine slots</div>
+    <div class="price gold o2" style="left:auto;right:24px;width:220px;bottom:auto;top:50px">${R}560</div>
+    <div class="ribc o2">BEST VALUE!</div>
+  </div>`;
+}
+
+if (page === "boosts") {
+  const two = (a, b) => `<div style="position:absolute;z-index:2;left:14px;right:14px;bottom:12px;display:flex;gap:10px">
+      <div class="price o2 small" style="position:relative;left:auto;right:auto;bottom:auto;flex:1;flex-direction:column;height:58px;gap:0;line-height:1"><span style="font-size:16px">${a[0]}</span><span style="display:flex;align-items:center;gap:4px">${R}${a[1]}</span></div>
+      <div class="price o2 small" style="position:relative;left:auto;right:auto;bottom:auto;flex:1;flex-direction:column;height:58px;gap:0;line-height:1"><span style="font-size:16px">${b[0]}</span><span style="display:flex;align-items:center;gap:4px">${R}${b[1]}</span></div></div>`;
+  const cards = [
+    ["Server Luck", "x2 ore luck for EVERYONE here", "luck_server", "x2", "p-teal", price(49), "FOR ALL!"],
+    ["Triple Lucky", "Rarer golems from eggs", "clover", "x3", "p-green", two(["15 min", 39], ["1 hour", 129]), ""],
+    ["Hexa Lucky", "Rarer ores while you mine", "rainbow", "x2.5", "p-blue", two(["15 min", 39], ["1 hour", 129]), ""],
+    ["Wheel Spins", "Spin & Win, odds on the wheel", "wheel", "", "p-pink", `<div style="position:absolute;z-index:2;left:10px;right:10px;bottom:12px;display:flex;gap:6px">${[[1, 25], [5, 99], [10, 179]].map(([n, rb]) => `<div class="price o2 small" style="position:relative;left:auto;right:auto;bottom:auto;flex:1;flex-direction:column;height:58px;gap:0;line-height:1"><span style="font-size:16px">${n} spin${n > 1 ? "s" : ""}</span><span style="display:flex;align-items:center;gap:3px;font-size:22px">${R}${rb}</span></div>`).join("")}</div>`, ""],
+    ["Heartfire", "Mythic enchant for your blaster", "enchant_Heartfire", "", "p-red", price(20), ""],
+    ["Starbreaker", "+75% ore luck, forever", "enchant_Starbreaker", "", "p-dark", price(20), "MYTHIC!"],
+  ];
+  const html = cards.map(([n, d, icon, big, cls, buy, rib]) => `<div class="card ${cls}">
+      ${rib ? `<div class="rib gold o2">${rib}</div>` : ""}
+      <div class="nm o3">${n}</div>
+      <div class="ds o2">${d}</div>
+      <img class="pic" src="${I(icon)}" style="width:140px;height:140px;margin-top:2px">
+      ${big ? `<div class="big o3" style="right:18px;top:92px;font-size:40px">${big}</div>` : ""}
+      ${buy}
+    </div>`);
+  body.innerHTML = `
+  ${heading("Boosts", "clover")}
+  <div class="row" style="height:288px">${html.slice(0, 3).join("")}</div>
+  <div class="row" style="height:288px;margin-top:14px">${html.slice(3).join("")}</div>`;
+}
+
+if (page === "cash") {
+  const packs = [["Handful", "$552K", "5 min of income", "cash_bundle", 19, ""], ["Pouch", "$1.66M", "15 min of income", "cash_pile", 49, ""], ["Stack", "$4.42M", "40 min of income", "cash_stack", 99, "POPULAR!"], ["Sack", "$13.2M", "2 hours of income", "cash_sack", 249, ""], ["Chest", "$33.1M", "5 hours of income", "cash_safe", 499, "BEST VALUE!"]];
+  body.innerHTML = `
+  ${heading("Cash", "cash_stack")}
+  <div class="sub">Grows with your income. Bought cash stays after a rebirth.</div>
+  <div class="row" style="height:380px">
+    ${packs.map(([n, amt, d, icon, rb, rib], i) => `<div class="card p-green">
+      ${rib ? `<div class="rib ${i === 4 ? "gold" : ""} o2">${rib}</div>` : ""}
+      <div style="text-align:center;margin-top:14px">${g(amt, "o3", 'style="font-size:40px;--sc:#0d3b06;--g:linear-gradient(#fff,#e8ffb0)"')}</div>
+      <div class="ds o2">${n} of Cash<br>${d}</div>
+      <img class="pic" src="${I(icon)}" style="width:${150 + i * 10}px;height:${150 + i * 10}px;margin-top:${10 - i * 4}px">
+      ${price(rb)}
+    </div>`).join("")}
+  </div>
+  <div class="wide p-gold" style="height:120px;margin-top:18px">
+    <img src="${I("cash_safe")}" style="left:18px;top:6px;width:108px;height:108px">
+    ${g("2x Money", "o3", 'style="left:140px;top:14px;font-size:44px;--sc:#5a2c00;--g:linear-gradient(#fff,#fff2a0)"')}
+    <div class="o2" style="left:144px;top:70px;font-size:21px">Double your income and sales, forever</div>
+    <div class="price o2" style="left:auto;right:24px;width:210px;bottom:auto;top:30px">${R}199</div>
+  </div>`;
+}
+</script>
+</body>
+</html>

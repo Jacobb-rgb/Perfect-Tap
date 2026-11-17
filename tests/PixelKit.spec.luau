@@ -27,34 +27,40 @@ return function(T, Loader)
 		end
 	end
 
-	T.test("Pixel shop: every button in a pass card is the card or its wired Price tag", function()
+	-- (shop v3, 2026-11-11: the same window in both looks) no dead buttons in a card
+	T.test("Shop: every button in a card is its face or one of its price buttons", function()
 		for _, look in { "Pixel", "Round" } do
 			inLook(look, function()
 				local refs = StoreView.build()
-				local items = 0
 				for _, card in refs.Cards do
-					if card.Spec.Look == "Item" then
-						items += 1
-						for _, d in card.Button:GetDescendants() do
-							if d:IsA("GuiButton") then
-								T.truthy(d == card.Price, card.Spec.Id .. ": " .. d:GetFullName() .. " is the wired Price")
+					-- (Lune hands out a new wrapper per lookup: compare, never key a table by an instance)
+					local function wired(d: Instance): boolean
+						if d == card.Button then
+							return true
+						end
+						for _, face in card.Buys do
+							if face == d then
+								return true
 							end
 						end
-						-- (the pixel look's second tilted tag is a picture; the round look has one price)
-						local mirror = card.Button:FindFirstChild("PriceMirror")
-						if look == "Pixel" then
-							T.truthy(mirror ~= nil and not mirror:IsA("GuiButton"), card.Spec.Id .. " mirror is a picture")
-						else
-							T.eq(mirror, nil, card.Spec.Id .. ": one price")
+						return false
+					end
+					for _, d in card.Holder:GetDescendants() do
+						if d:IsA("GuiButton") then
+							T.truthy(wired(d), card.Spec.Id .. ": " .. d:GetFullName() .. " is wired")
 						end
 					end
+					-- (a game pass's card only: nothing else can be owned)
+					local owned = card.Owned
+					if owned then
+						T.falsy(owned:IsA("GuiButton"), card.Spec.Id .. ": OWNED is a tag, not a button")
+					end
 				end
-				T.truthy(items >= 6, "the pass cards")
 			end)
 		end
 	end)
 
-	T.test("Pixel shop: a price keeps its size when the shop refreshes it", function()
+	T.test("Shop: a price keeps its size when the shop refreshes it", function()
 		local refs = StoreView.build()
 		for id, card in refs.Cards do
 			local amount = card.PriceAmount
@@ -65,44 +71,21 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("Round shop: one list, two Gamepass cards a row, three Buy Cash cards, a short row centred", function()
-		inLook("Round", function()
-			local refs = StoreView.build()
-			T.falsy((refs.Group:FindFirstChild("Tabs") :: any).Visible, "no tab column")
-			T.eq(StoreView.sections()[1].Id, "Passes", "Gamepass first")
-			T.eq(StoreView.sectionTitle(StoreView.sections()[2]), "Buy Cash")
-			local half = (StoreView.CardsWidth - StoreView.Gap) / 2
-			for _, card in refs.Cards do
-				if card.Spec.Look == "Item" and card.State ~= "Hidden" then
-					T.near(card.Button.Size.X.Offset, math.floor(half), 1, card.Spec.Id .. ": two a row")
-				end
-			end
-			local third = math.floor((StoreView.CardsWidth - 2 * StoreView.Gap) / 3)
-			T.near(refs.Cards.CoinsSmall.Button.Size.X.Offset, third, 1, "three cash cards a row")
-			-- a hidden pass leaves five: the last one alone in its row, centred
-			StoreView.setCard(refs, "Podiums", refs.Cards.Podiums.Key, "Hidden")
-			local star = refs.Cards.Starbreaker
-			local x = star.Button.Position.X.Offset
-			T.near(x + star.Button.Size.X.Offset / 2, StoreView.CardsWidth / 2, 2, "Starbreaker centred")
-		end)
-	end)
-
-	T.test("Pixel shop: pass cards are never wider than three a row (a short row is centred)", function()
-		PopTheme.setLook("Pixel")
+	T.test("Shop: a row's cards share its width by their span, a hidden one closes the row", function()
 		local refs = StoreView.build()
-		PopTheme.setLook(DEFAULT_LOOK)
-		local third = (StoreView.CardsWidth - 2 * StoreView.Gap) / 3
-		for _, card in refs.Cards do
-			if card.Spec.Look == "Item" and card.State ~= "Hidden" then
-				T.le(card.Button.Size.X.Offset, math.ceil(third), card.Spec.Id .. " width")
-			end
+		local passes = { "Podiums", "NightShift", "DoubleMoney", "Train", "CustomBoard" }
+		local w = refs.Cards.Podiums.Holder.Size.X.Offset
+		for _, id in passes do
+			T.near(refs.Cards[id].Holder.Size.X.Offset, w, 1, id .. ": five equal pass cards")
 		end
-		local star = refs.Cards.Starbreaker
-		if star and star.State ~= "Hidden" then
-			local x = star.Button.Position.X.Offset
-			T.near(x + star.Button.Size.X.Offset / 2, StoreView.CardsWidth / 2, 2, "Starbreaker centred")
-		end
-		T.eq(StoreConfig.ById.Train.Tag, "FAST TRAIN", "the train tag says what it does")
+		T.near(5 * w + 4 * StoreView.Gap, StoreView.ContentWidth, 5, "the row fills the page")
+		-- the Forgemaster's Pass is 1.75 wide next to the Starter Pack; alone it takes the row
+		local pass = refs.Cards.BigPass.Holder.Size.X.Offset
+		local starter = refs.Cards.StarterPack.Holder.Size.X.Offset
+		T.near(pass / starter, 1.75, 0.02, "1.75 : 1")
+		StoreView.setCard(refs, "StarterPack", "StarterPack", "Hidden")
+		T.near(refs.Cards.BigPass.Holder.Size.X.Offset, StoreView.ContentWidth, 1, "the pass alone takes the row")
+		T.eq(StoreConfig.ById.Train.Short, "Your ore train twice as fast", "the train line says what it does")
 		T.truthy(MonetizationConfig.Products.TrainExpress ~= nil)
 	end)
 
@@ -231,9 +214,9 @@ return function(T, Loader)
 			for _, entry in HudBubble.gameMenu() do
 				table.insert(ids, entry.Id)
 			end
-			-- (the owner's picture tiles, 2026-11-07: nine on the left, Index / Settings / Daily / Spin /
-			-- Boosts behind More)
-			T.eq(table.concat(ids, ","), "Store,Rebirth,Golems,Backpack,Ride,Build,Elevator,Trade,More", "the menu's order")
+			-- (the owner's picture tiles, 2026-11-07: Index / Settings / Daily / Spin / Boosts behind More;
+			-- 2026-11-11: eight on the left, the Inventory is the GOLD button at the bottom)
+			T.eq(table.concat(ids, ","), "Store,Rebirth,Golems,Ride,Build,Elevator,Trade,More", "the menu's order")
 			for _, spec in { { 1280, 720, false }, { 1920, 1080, true }, { 1024, 768, false } } do
 				local screen = Vector2.new(spec[1], spec[2])
 				local scale = HudBubble.scaleFor(screen)

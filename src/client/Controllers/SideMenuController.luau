@@ -401,8 +401,9 @@ local function buildLight(view: SideMenuView.Refs)
 			tiles[entry.Id] = face
 		end
 	end
-	-- the round look: what isn't there yet says so (owner 2026-11-07: "coming soon"); touch screens keep the room
-	if PopTheme.round() and HudBubble.showsSoon(HudBubble.isTouch()) then
+	-- the round look: what isn't there yet says so (owner 2026-11-07: "coming soon"); touch screens too
+	-- since the Inventory tile went to the bottom (2026-11-11: their block four a row, no hole)
+	if PopTheme.round() then
 		for _, id in HudBubble.RoundSoon do
 			local face = HudBubble.claimTile(hud.Menu, id)
 			HudBubble.setSticker(face, "Soon!")

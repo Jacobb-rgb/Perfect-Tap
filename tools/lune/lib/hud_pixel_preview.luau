@@ -8,14 +8,18 @@
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
 	  ui_hud_pixel_narrow   568 x 320 pt phone (the narrow top bar)
 	  ui_hud_round_studio   a 995 x 485 pt mouse window (the tall block of tiles,
-	                        owner 2026-10-28; his logged window: ui_hud_studio_*)
+	                        owner 2026-10-28; his logged window: ui_hud_studio_*;
+	                        his 1402 x 683 window of 2026-11-11: ui_hud_owner_now)
 	  ui_hud_round_pc720    1280 x 720 PC; ui_hud_round_tablet 1024 x 768 (touch);
-	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv
+	                        ui_hud_round_phone640 / _phone568 (touch), ui_hud_round_tv;
+	                        _pc1080 / _pc768 (a mouse), _phone844 (touch, the
+	                        touch buttons' stand-ins)
 	The round look (PopTheme.Look, the default since 2026-10-27): the tiles
-	are claimed as the controllers do (his picture tiles, 2026-11-07: Inventory
-	by BackpackController, the side menu's Store / Rebirth / Golems / Elevator,
-	Build, Ride, Trade; behind More Index, Settings, Daily, Boosts and Spin
-	with its FREE! sticker by WheelController's badge, on More too).
+	are claimed as the controllers do (his picture tiles, 2026-11-07: the side
+	menu's Store / Rebirth / Golems / Elevator, Build, Ride, Trade; behind More
+	Index, Settings, Daily, Boosts and Spin with its FREE! sticker by
+	WheelController's badge, on More too; since 2026-11-11 no Inventory tile:
+	the green Inventory button at the bottom, two a row and four rows).
 	  ui_hud_corner_*       the boost corner on phones under a 58 px top bar
 	  ui_blaster_slot_*     the BLASTER slot + the backpack button centred
 	                        (owner 2026-10-28): pc (1280 x 720), pc_tv
@@ -40,7 +44,14 @@ function Preview.build(Loader: any): { [string]: any }
 	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
 	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
+	local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
+	local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
+	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
 	local NOW = 1.7e9
+	-- (owner 2026-11-11: the shots show what is over the bottom pair in the game: the level bar, and on
+	-- request the backpack's load and the tutorial card)
+	type Extra = { Load: { number }?, Tutorial: number? }
+	local extra: Extra = {}
 
 	-- `renderScale` px per design unit, `uiScale` the game's scale (0.62 phones), `screen` in pt
 	local function hud(
@@ -78,21 +89,20 @@ function Preview.build(Loader: any): { [string]: any }
 			end
 		end
 		if round then
-			if HudBubble.showsSoon(touch) then
-				for _, id in HudBubble.RoundSoon do
-					HudBubble.setSticker(HudBubble.claimTile(refs.Menu, id), "Soon!")
-				end
+			for _, id in HudBubble.RoundSoon do
+				HudBubble.setSticker(HudBubble.claimTile(refs.Menu, id), "Soon!")
 			end
-			-- (BackpackController: the Inventory tile; the Spin tile below, as WheelController claims it;
-			-- HoverboardController: the Ride tile with its H key on a keyboard)
-			HudBubble.claimTile(refs.Menu, "Backpack")
+			-- (no Inventory tile since 2026-11-11: the green Inventory button at the bottom; the Spin tile
+			-- below, as WheelController claims it; HoverboardController: the Ride tile with its H key on a
+			-- keyboard)
 			local ride = HoverboardView.rideTile(refs.Menu)
 			if ride then
 				HoverboardView.setRiding(ride, false, if touch then "" else "H", nil)
 			end
 		end
 		-- the backpack button as HudController fills it (12 of 30) with the PC key hint
-		HudView.setBackpack(refs, 12, 30)
+		local load = extra.Load or { 12, 30 }
+		HudView.setBackpack(refs, load[1], load[2])
 		HudView.setBackpackKey(refs, if compact then nil else "Q", nil)
 		-- the BLASTER slot as BlasterSlotController fills it: "1" with a keyboard, the gold ring in hand
 		HudView.setBlasterKey(refs, if compact then nil else "1")
@@ -111,6 +121,30 @@ function Preview.build(Loader: any): { [string]: any }
 		train.Gui.Enabled = false
 		train.Chip.Enabled = true
 		table.insert(list, train.Chip)
+		-- the tutorial card's place (TutorialController), for the boost corner as BoostController keeps it
+		local tutorialTop: number?, tutorialRect: any = nil, nil
+		local tutorialLayout = if extra.Tutorial then TutorialView.layout(uiScale, screen, touch, input == "TV", nil) else nil
+		if tutorialLayout then
+			local top = tutorialLayout.Position.Y - tutorialLayout.AnchorPoint.Y * tutorialLayout.Height
+			if tutorialLayout.AnchorPoint.Y == 1 then
+				tutorialTop = screen.Y / uiScale - top
+			else
+				local left = tutorialLayout.Position.X - tutorialLayout.AnchorPoint.X * tutorialLayout.Width
+				tutorialRect = { Left = left, Top = top, Bottom = top + tutorialLayout.Height }
+			end
+		end
+		-- (BoostController: the row keeps off the round look's offers at the right edge)
+		local offersRect: any = nil
+		local offers = refs.Gui:FindFirstChild("Offers") :: any
+		if offers and offers.Visible then
+			local w, h = screen.X / uiScale, screen.Y / uiScale
+			local top = h * offers.Position.Y.Scale + offers.Position.Y.Offset - offers.AnchorPoint.Y * offers.Size.Y.Offset
+			offersRect = {
+				Left = w * offers.Position.X.Scale + offers.Position.X.Offset - offers.AnchorPoint.X * offers.Size.X.Offset,
+				Top = top,
+				Bottom = top + offers.Size.Y.Offset,
+			}
+		end
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
 		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
@@ -136,6 +170,10 @@ function Preview.build(Loader: any): { [string]: any }
 					Touch = touch,
 					Count = boosts,
 					Pill = rect,
+					-- (BoostController: the row stands on the mouse tutorial card, keeps off the touch one)
+					TutorialTop = tutorialTop,
+					Bubble = tutorialRect,
+					Avoid = offersRect,
 				})
 			)
 		end
@@ -179,6 +217,27 @@ function Preview.build(Loader: any): { [string]: any }
 		if openMore then
 			HudBubble.toggleMore(refs.Menu, true)
 		end
+		if PopTheme.round() then
+			-- the level bar over the bottom pair (LevelController shows it with the HUD)
+			local level = LevelView.build()
+			level.Gui.Scale.Scale = renderScale
+			LevelView.hideMoment(level)
+			LevelView.setBar(level, 4, 180 / 205, 180, 205)
+			level.Gui.Enabled = true
+			table.insert(list, level.Gui)
+		end
+		local step = extra.Tutorial
+		if step then
+			-- the tutorial card where TutorialController puts it (mouse: bottom right; touch: top right)
+			local tut = TutorialView.build()
+			tut.Gui.Scale.Scale = renderScale
+			TutorialView.apply(tut, tutorialLayout or TutorialView.layout(uiScale, screen, touch, input == "TV", nil))
+			local info = TutorialConfig.get(step)
+			TutorialView.setStep(tut, step, info, if info.Hint then info.Hint[if touch then "Touch" else "Mouse"] else nil)
+			tut.Bubble.Visible = true
+			tut.Gui.Enabled = true
+			table.insert(list, tut.Gui)
+		end
 		return list
 	end
 
@@ -202,6 +261,15 @@ function Preview.build(Loader: any): { [string]: any }
 	end
 	exports.ui_hud_round_tv =
 		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "TV"))
+	-- (owner 2026-11-11, the left tiles "a bit bigger") the common screens: a 1920 x 1080 and a
+	-- 1366 x 768 PC with a mouse, an 844 x 390 touch phone under its 58 pt top bar with the touch
+	-- buttons' stand-ins
+	exports.ui_hud_round_pc1080 =
+		UiExport.export(hud(900 / 1080 * 1.25, 1.25, roblox.Vector2.new(1920, 1080 - 58 * 1080 / 900), 1, false, false, "Mouse"))
+	local laptop = HudBubble.scaleFor(roblox.Vector2.new(1366, 768))
+	exports.ui_hud_round_pc768 =
+		UiExport.export(hud(laptop * 900 / 768, laptop, roblox.Vector2.new(1366, 768 - 58 * 768 / 900), 1, false, false, "Mouse"))
+	exports.ui_hud_round_phone844 = UiExport.export(hud(0.62 * 900 / 390, 0.62, roblox.Vector2.new(844, 390 - 58), 1, true, false, "Touch"))
 	TrainView.useHud(nil)
 	-- the owner's Studio window from his log (2026-11-07): 1402 x 490 points on a mouse, 1402 x 368 with
 	-- a taller Output panel, drawn 1990 px wide: as the game shows it (his top row and tile images are
@@ -217,6 +285,23 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_studio_game = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	exports.ui_hud_studio_game_more = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse", true))
 	exports.ui_hud_studio_short = UiExport.export(hud(short * pixels, short, roblox.Vector2.new(1402, 368 - 41), 1, false, false, "Mouse"))
+	-- his window on 2026-11-11 (his screenshot: a 1990 x 970 px viewport, 1402 x 683 pt, not Compact),
+	-- where he picked B: the block three a row at RoundBigMax
+	local nowScale = HudBubble.scaleFor(roblox.Vector2.new(1402, 683))
+	exports.ui_hud_owner_now =
+		UiExport.export(hud(nowScale * pixels, nowScale, roblox.Vector2.new(1402, 683 - 41), 1, false, false, "Mouse"))
+	-- (owner 2026-11-11, the GOLD hotbar) a full backpack in his window, and the tutorial card over a
+	-- 1280 x 720 PC and an 844 x 390 touch phone
+	extra = { Load = { 30, 30 } }
+	exports.ui_hud_inv_full =
+		UiExport.export(hud(nowScale * pixels, nowScale, roblox.Vector2.new(1402, 683 - 41), 1, false, false, "Mouse"))
+	extra = { Tutorial = 1 }
+	exports.ui_hud_inv_tutorial_pc =
+		UiExport.export(hud(900 / 720, 1, roblox.Vector2.new(1280, 720 - 58 * 720 / 900), 1, false, false, "Mouse"))
+	extra = { Tutorial = 3 }
+	exports.ui_hud_inv_tutorial_phone =
+		UiExport.export(hud(0.62 * 900 / 390, 0.62, roblox.Vector2.new(844, 390 - 58), 1, true, false, "Touch"))
+	extra = {}
 	IconAssets.Previewing = previewing
 	exports.ui_hud_studio_all_icons = UiExport.export(hud(real * pixels, real, window, 1, false, false, "Mouse"))
 	-- the boost corner on phones under a real 58 px top bar (review 2026-10-28): one and two boosts

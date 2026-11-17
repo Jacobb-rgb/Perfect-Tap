@@ -339,8 +339,11 @@ return function(T, Loader)
 					HudBubble.toggleMore(menu, true)
 					Loader.press(spin)
 					T.falsy((flyout :: any).Visible, "a press on Spin shuts the flyout")
-					-- no tile for what has no picture or no place (the owner, 2026-11-07)
-					for _, id in { "Collection", "Boards", "Hoverboards", "Emotes", "Wheel", "Codex", "Settings", "Quests", "Shop" } do
+					-- no tile for what has no picture or no place (the owner, 2026-11-07); no Inventory tile since
+					-- 2026-11-11 ("so we don't have two inventories": the GOLD button at the bottom)
+					for _, id in
+						{ "Collection", "Boards", "Hoverboards", "Emotes", "Wheel", "Codex", "Settings", "Quests", "Shop", "Backpack" }
+					do
 						local holder = menu:FindFirstChild(id) :: any
 						T.falsy(holder and holder.Visible, id .. ": not on the left")
 					end
@@ -356,14 +359,17 @@ return function(T, Loader)
 		end)
 	end)
 
-	T.test("TileWiring: phones keep More and drop the coming-soon Trade; the touch rows stay at 44 pt", function()
+	-- (owner 2026-11-11: with the Inventory at the bottom, a phone's block is four a row with no hole:
+	-- Trade's "Soon!" tile stands there too, as on a PC)
+	T.test("TileWiring: phones keep More and Trade, four a row; the touch rows stay at 44 pt", function()
 		inRound(function()
 			asClient(Vector2.new(844, 390), true, function(w)
 				local ok, err = pcall(function()
 					local hud = startMenu(w)
 					local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
 					local trade = hud.Menu:FindFirstChild("Trade") :: any
-					T.falsy(trade and trade.Visible, "no Trade tile on a phone")
+					T.truthy(trade and trade.Visible, "the Trade tile on a phone too")
+					T.truthy(trade.Face:FindFirstChild("Sticker"), "with its Soon! sticker")
 					local more = hud.Menu:FindFirstChild("More") :: any
 					T.truthy(more and more.Visible, "More on a phone")
 					Loader.press(more.Face)
@@ -375,7 +381,7 @@ return function(T, Loader)
 				end
 			end)
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
-			for _, phone in { { 844, 390, 6 }, { 667, 375, 4 }, { 568, 320, 4 } } do
+			for _, phone in { { 844, 390, 4 }, { 667, 375, 4 }, { 568, 320, 4 } } do
 				local scale = HudBubble.scaleFor(Vector2.new(phone[1], phone[2]))
 				local layout = HudBubble.layout(scale, phone[1], true, false, phone[2] - 36)
 				T.eq(layout.Columns, phone[3], `{phone[1]} x {phone[2]}: {phone[3]} a row at the top`)
@@ -486,11 +492,22 @@ return function(T, Loader)
 
 	-- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
 	-- dlazdice") the TRAIN chip under the tiles in every mouse window; his small Studio window
-	-- keeps the big tiles three a row, a PC two a row
+	-- keeps the big tiles; since 2026-11-11 (eight tiles, his pick A) two a row on every PC
 	T.test("TileWiring: the TRAIN chip is under the tiles in every mouse window; his window keeps them big", function()
 		inRound(function()
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
-			for _, case in { { 1402, 490, 3 }, { 995, 485 }, { 1402, 368 }, { 1280, 720, 2 }, { 1280, 600, 2 }, { 1920, 1080, 2 } } do
+			for _, case in
+				{
+					{ 1402, 683, 2 }, -- his window on 2026-11-11
+					{ 1402, 490, 2 },
+					{ 995, 485, 2 },
+					{ 1402, 368 },
+					{ 1280, 720, 2 },
+					{ 1280, 600, 2 },
+					{ 1920, 1080, 2 },
+					{ 1920, 1200, 2 },
+				}
+			do
 				local where = `{case[1]} x {case[2]}`
 				local scale = HudBubble.scaleFor(Vector2.new(case[1], case[2]))
 				local layout = HudBubble.layout(scale, case[1], false, false, case[2] - 58)
@@ -512,6 +529,57 @@ return function(T, Loader)
 				+ HudBubble.StackGap
 				+ HudBubble.stackChipHeight(his)
 			T.truthy(bottom <= HudBubble.roundFloor(his, height) + 1e-6, `1402 x 490: the chip ends at {bottom}, above the floaters`)
+		end)
+	end)
+
+	-- (owner 2026-11-11, the left tiles "a bit bigger" like other creators'; then in his Studio window,
+	-- 1402 x 683 pt: 116-unit tiles were "terribly big, a lot smaller", pick B's 78 units; then, the
+	-- Inventory tile gone, his pick A: "no hole", two a row and four rows) the block two a row at
+	-- RoundBigMax on every PC and a TV, RoundMouseTile in his small Compact window; never past the top
+	-- row's left end, the TRAIN chip under them above the floaters, a TV's title-safe band; phones and
+	-- tablets four a row (44 pt, out of the thumbstick's zone)
+	T.test("TileWiring: his pick A: two a row at 78 units on every PC and a TV, 80 in his small window; touch four a row", function()
+		inRound(function()
+			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
+			-- { width, height, touch, TV, a row, the tile (design units) }
+			local cases = {
+				{ 1402, 683, false, false, 2, 78 }, -- his window, where he picked A
+				{ 1920, 1080, false, false, 2, 78 },
+				{ 1600, 900, false, false, 2, 78 },
+				{ 1366, 768, false, false, 2, 78 },
+				{ 1280, 720, false, false, 2, 78 },
+				{ 1920, 1200, false, false, 2, 78 },
+				{ 1402, 490, false, false, 2, 80 }, -- his window with the Output open (Compact)
+				{ 995, 485, false, false, 2, 79 }, -- (two a row a unit smaller than three: still two, RoundFullShare)
+				{ 1920, 1080, false, true, 2, 78 }, -- a TV
+				{ 844, 390, true, false, 4, 72 }, -- a phone: four a row (was six, 71)
+				{ 1024, 768, true, false, 4, 58 }, -- a tablet: four a row (was five, 49)
+			}
+			for _, case in cases do
+				local touch, tv = case[3] == true, case[4] == true
+				local kind = if touch then " (touch)" elseif tv then " (TV)" else ""
+				local where = `{case[1]} x {case[2]}{kind}`
+				local scale = HudBubble.scaleFor(Vector2.new(case[1], case[2]))
+				local height = (case[2] - 58) / scale
+				local layout = HudBubble.layout(scale, case[1], touch, tv, case[2] - 58)
+				T.eq(layout.Columns, case[5], `{where}: {case[5]} a row`)
+				T.eq(layout.Tile, case[6], `{where}: {case[6]} units`)
+				if touch then
+					T.truthy(layout.Tile * scale >= 44 - 0.5, `{where}: 44 pt tiles`)
+				else
+					-- left of the top row; the stacked chip under them as wide as them, above the floaters
+					local m = HudBubble.menuMetrics(layout, HudBubble.roundCount(layout))
+					local right = m.Origin.X.Offset + m.Width
+					T.truthy(right <= layout.Width / 2 - HudBubble.topBarSize(layout).X / 2, `{where}: left of the top row ({right})`)
+					T.eq(layout.Chip, "Under", where .. ": the chip under them")
+					T.eq(HudBubble.chipWidth(layout), m.Width, where .. ": as wide as them")
+					local bottom = HudBubble.chipTop(layout) + HudBubble.stackChipHeight(layout)
+					T.truthy(bottom <= HudBubble.roundFloor(layout, height) + 1e-6, `{where}: above the floaters ({bottom})`)
+					if tv then
+						T.truthy(m.Origin.X.Offset >= layout.Width * HudBubble.TenFootSafe, where .. ": out of the title-safe band")
+					end
+				end
+			end
 		end)
 	end)
 

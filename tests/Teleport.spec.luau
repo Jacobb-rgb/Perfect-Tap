@@ -324,4 +324,47 @@ return function(T, Loader)
 		T.truthy(refs.Buttons.Base:FindFirstChild("Label").Visible, "names on a big screen")
 		T.eq((refs.Buttons.Base:FindFirstChild("Label") :: any).TextSize, TeleportView.LabelText, "the big name again")
 	end)
+
+	withWorld("Teleport: no teleport while the elevator's travel cinematic plays (Riding)", function(w)
+		local ElevatorService = Loader.requirePath("ServerScriptService.Server.Services.ElevatorService")
+		local riding = true
+		local saved = rawget(TeleportService, "isRiding")
+		rawset(TeleportService, "isRiding", function(p: any)
+			return p == w.player and riding
+		end)
+		local ok, err = pcall(function()
+			local before = w.at()
+			local reply = w.go("Base")
+			T.truthy(reply and reply.Ok == false, "refused")
+			T.eq(reply.Reason, "Riding")
+			T.truthy(TeleportConfig.Reasons.Riding ~= nil, "the toast has words")
+			T.eq((w.at() - before).Magnitude, 0, "nobody moved")
+			riding = false
+			local again = w.go("Base")
+			T.truthy(again and again.Ok, "once the elevator arrived")
+		end)
+		rawset(TeleportService, "isRiding", saved)
+		if not ok then
+			error(err, 0)
+		end
+		-- a ride that starts during the stream wait wins too: the teleport is refused after it
+		riding = false
+		rawset(TeleportService, "isRiding", function(p: any)
+			return p == w.player and riding
+		end)
+		w.player.RequestStreamAroundAsync = function()
+			riding = true -- (Go was accepted while this teleport waited for the area)
+		end
+		TeleportService._test.reset() -- (past the cooldown of the teleport just above)
+		local before = w.at()
+		local late = w.go("Lobby")
+		w.player.RequestStreamAroundAsync = nil
+		rawset(TeleportService, "isRiding", saved)
+		T.truthy(late and late.Ok == false, "refused after the wait")
+		T.eq(late.Reason, "Riding")
+		T.eq((w.at() - before).Magnitude, 0, "nobody moved")
+		-- the real check asks the elevator (nobody rides here)
+		T.falsy(TeleportService.isRiding(w.player), "not riding")
+		T.falsy(ElevatorService.isRiding(w.player), "the elevator agrees")
+	end)
 end

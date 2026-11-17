@@ -105,7 +105,10 @@ return function(T, Loader)
 			end
 			local small = MineFloors.rockHealth(floor.Index, "Small")
 			T.truthy(small < MineFloors.rockHealth(floor.Index, "Big"), floor.Id .. " big rocks are harder")
-			T.truthy(MineFloors.rockHealth(floor.Index, "Big") < MineFloors.rockHealth(floor.Index, "Crystal"), floor.Id .. " crystals are a bit harder")
+			T.truthy(
+				MineFloors.rockHealth(floor.Index, "Big") < MineFloors.rockHealth(floor.Index, "Crystal"),
+				floor.Id .. " crystals are a bit harder"
+			)
 			T.truthy(small > lastSmall, floor.Id .. " rocks are harder than the floor above")
 			lastSmall = small
 		end
@@ -113,7 +116,40 @@ return function(T, Loader)
 		T.eq(MineFloors.OreCount.Big, 4, "big rock ores")
 		T.eq(MineFloors.OreCount.Crystal, 3, "crystal ores")
 		T.truthy(math.abs(MineFloors.SpawnChance.Crystal - 0.1) < 1e-9, "crystals spawn 10 %")
-		T.truthy(MineFloors.Elevator.Price > 0, "elevator has a coin price")
+	end)
+
+	T.test("mine floors: floors 1-3 are free, every elevator-only floor has its own coin ticket", function()
+		-- the price of the old one-time elevator (until 2026-11-15): 2/3 of blaster 7, 2 significant digits
+		local raw = BlasterData.coins(7) * 2 / 3
+		local step = 10 ^ math.max(0, math.floor(math.log10(raw)) - 1)
+		local oldElevator = math.floor(raw / step + 0.5) * step
+		for _, floor in MineFloors.List do
+			local price = MineFloors.priceOf(floor.Index)
+			if floor.ViaElevator then
+				T.truthy(price > 0, floor.Id .. " (elevator only) has a ticket")
+				-- half of "2/3 of the blaster that opens it, 2 significant digits" (owner 2026-11-16: half price)
+				local share = price / BlasterData.coins(floor.MinBlaster)
+				T.truthy(math.abs(share - 1 / 3) < 0.03, `{floor.Id} costs about 1/3 of blaster {floor.MinBlaster} ({share})`)
+				local twice = price * 2
+				local digits = 10 ^ (math.floor(math.log10(twice)) - 1)
+				T.eq(twice % digits, 0, floor.Id .. ": half of a 2-significant-digit price")
+			else
+				T.eq(price, 0, floor.Id .. " (walk there) needs no ticket")
+			end
+		end
+		T.eq(MineFloors.priceOf(1), 0, "floor 1 free")
+		T.eq(MineFloors.priceOf(2), 0, "floor 2 free")
+		T.eq(MineFloors.priceOf(3), 0, "floor 3 free")
+		T.eq(MineFloors.priceOf(4), oldElevator / 2, "floor 4 costs half of what the whole elevator did")
+		T.eq(MineFloors.priceOf(4), 43.5e6, "the owner's half prices: floor 4")
+		T.eq(MineFloors.priceOf(5), 750e6, "the owner's half prices: floor 5")
+		T.eq(MineFloors.priceOf(6), 10.5e9, "the owner's half prices: floor 6")
+		T.lt(MineFloors.priceOf(4), MineFloors.priceOf(5), "deeper floors cost more")
+		T.lt(MineFloors.priceOf(5), MineFloors.priceOf(6), "deeper floors cost more")
+		-- an index that is no floor costs nothing (nothing to buy)
+		for _, bad in { 0, -1, #MineFloors.List + 1, MineFloors.ComingSoon.Index, 2.5, 0 / 0, math.huge } :: { number } do
+			T.eq(MineFloors.priceOf(bad), 0, "no floor at " .. tostring(bad))
+		end
 	end)
 
 	T.test("rock builder: every kind on every floor builds within its budget", function()

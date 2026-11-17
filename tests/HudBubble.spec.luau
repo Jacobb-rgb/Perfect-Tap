@@ -243,7 +243,8 @@ return function(T, Loader)
 	end)
 
 	-- review 2026-11-07: in a small mouse window the lowest offer sat on the tutorial card's SKIP and
-	-- took its click; there the offers stay away. Without their icon sheets they show live models.
+	-- took its click; there the offers stay away. They show the shop's stickers (owner 2026-11-11),
+	-- without that sheet their live models.
 	T.test("HudBubble: the offers show a picture and keep off the tutorial card's buttons", function()
 		local roblox = require("@lune/roblox") :: any
 		local Vector2 = roblox.Vector2
@@ -272,9 +273,13 @@ return function(T, Loader)
 				T.eq(clear, size[4], "shown or kept away at " .. at)
 				for _, offer in HudBubble.Offers do
 					local button = (offers:FindFirstChild(offer.Card) :: any):FindFirstChild("Offer") :: any
-					local picture = button:FindFirstChild("Picture") :: any
-					T.truthy(picture, offer.Card .. ": a picture at " .. at)
-					T.truthy(#(picture:FindFirstChild("View") :: any):GetChildren() > 0, offer.Card .. ": a live model")
+					if IconAssets.shopShows(offer.Sheet) then
+						T.truthy(button.Image ~= "", offer.Card .. ": its sticker at " .. at)
+					else
+						local picture = button:FindFirstChild("Picture") :: any
+						T.truthy(picture, offer.Card .. ": a picture at " .. at)
+						T.truthy(#(picture:FindFirstChild("View") :: any):GetChildren() > 0, offer.Card .. ": a live model")
+					end
 				end
 				-- when they show, the lowest button really is above SKIP and GOT IT
 				if clear then

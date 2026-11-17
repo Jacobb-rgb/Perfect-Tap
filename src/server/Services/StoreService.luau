@@ -8,11 +8,12 @@
 	MarketplaceService's prompt via BoostService.promptPurchase). Key must be
 	a product the Store sells (StoreConfig.sells), else "Unknown".
 	By the product's Grant:
-	  Capsule, Boost  bought through their own services' requests by the
-	                  client (CapsuleAction "Open" / BoostAction "BuyRobux"),
-	                  so the odds the player saw are the odds they get
-	                  (CapsuleService remembers Triple Lucky at "Prompted")
-	                  and "Full" follows the boost cap: answered "Unknown" here
+	  Capsule, Boost, WheelSpins  bought through their own services' requests
+	                  by the client (CapsuleAction "Open" / BoostAction
+	                  "BuyRobux" / WheelAction "Buy"), so the odds the player
+	                  saw are the odds they get (CapsuleService remembers
+	                  Triple Lucky at "Prompted") and "Full" follows the boost
+	                  cap and the wheel's spins: answered "Unknown" here
 	  Enchant         the Mythic's game pass: EnchantService.buy validates
 	                  (owned tier, policy) and answers "Robux" for a valid buy
 	  BlasterLevel    "Full" unless the band holds the player's next level
@@ -108,8 +109,8 @@ function StoreService.buy(player: Player, key: string)
 		return
 	end
 	local grant = product.Grant
-	if grant == "Capsule" or grant == "Boost" then
-		answer(player, key, "Unknown") -- (the client asks CapsuleService / BoostService)
+	if grant == "Capsule" or grant == "Boost" or grant == "WheelSpins" then
+		answer(player, key, "Unknown") -- (the client asks CapsuleService / BoostService / WheelService)
 		return
 	end
 	if grant == "Enchant" then

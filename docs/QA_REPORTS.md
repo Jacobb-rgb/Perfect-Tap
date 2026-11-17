@@ -962,6 +962,171 @@ What to test in Studio:
 6. SETTINGS Reduce motion on: the cape only lifts a little when running, no sparkles.
 7. Phone emulator and a gamepad: nothing to press; FPS unchanged with 3 caped players near.
 
+## Shop v3 "WOW" (owner 2026-11-11, branch ui/shop-v3)
+- UI/StoreView: the concept docs/art/shop_v3_concept/shop_wow.html in the game: a studded header band with the
+  basket over its corner, a big outlined SHOP, six tabs (Featured, Golems, Blasters, Passes, Boosts, Cash; the
+  open one bigger, white rim, glow) and a red X; each tab its own page and colour world (UI/ShopFx.Themes) with
+  rays, flashing bolts and sparkles behind thick-outlined cards (dark lip, gloss, rays behind the picture, 3D
+  price buttons with the Robux mark), the STRONGEST STAR blaster and the Mythic enchants with a running rainbow rim.
+- Real data only: prices, odds (Dragonforge and Royal tiles: the odds a buy rolls now, Triple Lucky included),
+  the edition's real end ("ENDS NOV 30 · 19d 11h left"), coin amounts and the Starter Pack's coins at the player's
+  income, STAR rebirth locks, the blaster's levels. "BEST VALUE!" only where the price per item is the lowest
+  (StoreView.bestValue); the concept's POPULAR / "x10 = 2 FREE!" / "FOR EVERYONE!" / placeholder Starter Pack
+  contents are gone.
+- Every paid random buy (eggs, Dragonforge, wheel spins, Triple / Hexa Lucky 15 min and 1 h, Server Luck,
+  Starbreaker) opens the odds panel first; the Forgemaster's Pass shows the Grotto odds. Wheel spins buy through
+  WheelAction "Buy" (WheelService: its Full rules); StoreService answers "Unknown" for them like capsules and boosts.
+- No uploads needed: 3D models in ViewportFrames, a drawn wheel and x2 badge; the sticker icons (one sheet,
+  NAHRAJ_DO_ROBLOXU/ikony_obchod, IconAssets.Shop, uploaded 2026-11-11) replace the models where it has one.
+- Smooth pass (owner 2026-11-11 in Studio: "laggy"; must be clean and smooth, with cool animations):
+  - No per-frame Lua any more: every motion is a TweenService tween (UI/ShopFx.play: one endless tween per
+    mark; the old 30 Hz Heartbeat stepper is gone). The window's own loops run while it is open, the open tab's
+    (its page and its bob) while that tab shows; a tab change stops the old tab's, a close cancels them all.
+    Reduce motion or Config/AnimConfig.PixelFx off: nothing plays (ShopFx.quiet).
+  - Effects are images: one white sprite picture tinted per tab (NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,
+    tools/preview/shop_effects_sheet.mjs, IconAssets.ShopFx, Id 0 until uploaded): the sunburst, a glow, a
+    sparkle, dots, a flame, a patch of 12 x 12 studs, three bolts. Before the upload: plain gradients, no rays or
+    studs, the icon sheet's bolt and sparkle (never the old wedges, segments or stud frames).
+  - Pages are built lazily: the open tab's at once, each other on its first visit (StoreView.selectTab, the
+    controller wires it: StoreView.takeBuilt); its 3D models one a frame after (StoreView.SpreadModels) so a
+    first visit never stalls. Instances at the first open: 6,674 -> about 1,450 (every tab visited: about 4,770).
+  - 3D: static (nothing turns); an egg pack's three eggs are one view (Golems 16 -> 10 views); the shop frames
+    its models like the previews' pictures (StoreView.ModelFill, Pop.show framed them smaller).
+  - Motion: it opens with a pop from 0.82 (Back out), the dim fading in and a burst of rays behind it; it
+    closes shrinking to 0.86 as the dim fades. A tab: the header and body fade to its colours, the page slides
+    in, its cards pop in one after another. Hover 1.04 / press 0.94 on every card, tab, price button and the X
+    (mouse and gamepad selection). Ambient: card rays turn slowly, the buy buttons' shine sweeps every 3 s, bolts
+    flash now and then, sparkles twinkle, a tab's hero floats, BEST VALUE buttons breathe, the open tab bobs, the
+    Mythic rims run. A phone has no ambient bolts round the window or frame sparkles. About 30 tweens a tab.
+- Tests: tests/Store.spec.luau, tests/ShopFx.spec.luau (+ PixelKit, RoundReview, UIMotion). Pictures:
+  obrazky/obchod_ve_hre_2026-11-11 and obrazky/obchod_plynuly_2026-11-11 (tools/lune/lib/store_preview.luau,
+  scene store_quick; the motion: tools/lune/export_shop_motion.luau).
+What to test in Studio:
+1. Open the shop (the Shop button, the side menu, an offer on the right): FEATURED shows the Dragonforge banner with
+   its end date, the Forgemaster's Pass and the Starter Pack (first hour of play only). Click every tab: its page and
+   colours change, nothing overlaps, the open tab bobs.
+2. Buy flow on each tab: a pass prompts at once (Coming soon while its id is 0); an egg, a Dragonforge button, a
+   wheel spin, Triple / Hexa Lucky, Server Luck and Starbreaker show the odds panel first, BACK returns, BUY prompts.
+3. Owned passes show OWNED; a STAR blaster before its rebirth shows the lock, "Opens at rebirth N" and a grey price.
+4. Phone emulator (iPhone SE and a 667 x 375 phone): the tabs fit, every button is big enough to tap, the pages
+   scroll, the odds panel fits.
+5. Gamepad only: the selection starts on the open page, LB / RB switch tabs, A buys, B closes the odds panel and
+   then the shop; the selection never leaves the window.
+6. SETTINGS Reduce motion on: nothing in the shop moves. Watch FPS on a low-end phone emulator with the shop open
+   (MicroProfiler: no Lua work per frame from the shop), and switch every tab once: no hitch on a first visit.
+7. A player where paid random items are restricted: the Golems tab is gone, no eggs, spins, luck or banner.
+8. Smooth pass: open and close a few times (pop, burst, shrink), switch tabs (colours fade, cards pop in), hover
+   and press cards with the mouse and move the gamepad selection (1.04 / 0.94). Before obchod_efekty.png is
+   uploaded the shop has no rays or studs (plain gradients); after the upload (send its id) they show.
+
+## Shop motion v2 (owner 2026-11-12 "improve the animations, add more things", branch ui/shop-anim-v2)
+- Still TweenService only (ShopFx marks -> ShopFx.loopsUnder / play / stop; no Heartbeat, RenderStepped or
+  while-wait in the shop), Reduce motion or PixelFx off: all static at rest. New marks: Idle (every golem and
+  egg picture bobs and rocks, one tween each, each a little slower than the one before), Float + Swing (the
+  dragon king rocks as it floats), Float + Wobble (the Royal Egg and the Dragonforge shard wobble now and then,
+  Elastic), Glow (their glows and the Royal Egg's Epic breathe), Wiggle (every sticker, the x2 badges, the egg
+  counts x3 / x5 / x10, the Dragon King chip, the open tab's icon), Sheen (a gloss band over each card, the
+  page's cards one after another in a fixed order), Glint (a gold band across the SHOP title every 4.5 s), Rise
+  (theme particles: embers over the Dragonforge, gold sparkles round the Royal Egg, sparks off the next blaster,
+  coins down the Cash gaps; at most 8 a page). Only the Legendary and Mythic tiles' rays turn now (two sparkles
+  each); MYTHIC runs a rainbow.
+- One-shots: the header cascades in as the window opens (the title drops in, the basket and the tabs pop in
+  left to right, the X spins in: over by 0.3 s); the picked tab's icon pops; a hovered or gamepad-selected card
+  also rises 5 units and its light edge and glow brighten (a touch only presses); a purchase the shop asked for
+  that Roblox's prompt reports bought: its card (or the banner's button) flashes and pops 1.12 -> 1 and 12 stars
+  (coins for a coin pack) fly out over the window, cleared after 0.8 s.
+- A phone or tablet (StoreView Refs.Lean) skips the ambient marks: particles, card gloss, the small pictures'
+  idling (Dragonforge tiles, egg cards, the Starter Pack's golem), the counts' wiggle, the rare tiles' sparkles.
+  A TV keeps them (compact sizes, not lean).
+- Loops per tab, window + page, before -> after. PC: Featured 35 -> 60, Golems 34 -> 68, Blasters 32 -> 51,
+  Passes 28 -> 37, Boosts 37 -> 48, Cash 29 -> 46. Phone: 25 -> 28, 24 -> 32, 22 -> 24, 18 -> 20, 27 -> 31,
+  19 -> 21. First open 1,446 -> 1,461 instances (tests/ShopFx.spec.luau holds these budgets).
+- Dropped: a tilt on hovered cards (Roblox ignores ClipsDescendants under a turned frame: the card's rays would
+  spill out); pulsing every odds % label (too busy next to the rocking golems: the Dragon King chip wiggles).
+What to test in Studio:
+1. Open the shop a few times: the title drops in, the tabs pop in one after another, the X spins in; nothing
+   ends up out of place (also after a quick close and reopen).
+2. GOLEMS: the five golems rock and bob out of step, the egg wobbles now and then over its breathing glow,
+   Legendary / Mythic rays turn with two sparkles, MYTHIC's rainbow runs, gold sparkles rise round the egg, a
+   gloss band runs over the four egg cards one after another. FEATURED: embers rise over the dragon king, the
+   shard wobbles. BLASTERS: sparks off the gun. CASH: coins drift down between the packs.
+3. Mouse over a card: it grows, rises and its edge lights up; move the gamepad selection: the same; on a phone a
+   tap only squashes it.
+4. Buy something cheap in a test server (or Studio's test purchase): its card flashes, pops and throws stars;
+   the stars vanish after a moment.
+5. Phone emulator: no particles or card gloss, the window stays smooth (MicroProfiler: no Lua per frame).
+   SETTINGS Reduce motion on: nothing moves, nothing half way (no particle stuck on screen).
+
+## One Inventory at the bottom, the GOLD hotbar, stickers on the right (owner 2026-11-11, branch ui/hud-inventory)
+- The right side wears the shop's sticker icons (IconAssets.Shop, the same picture the shop shows for the same
+  product): Starter Pack the gift, 2x Money the cash with the x2 badge on its top-left corner (the price keeps the
+  top-right), Triple Lucky the gold clover; the running boosts' corner tiles Triple Lucky the gold clover, Hexa
+  Lucky the rainbow clover (BoostView.Stickers). Without the sheet (Id 0) the old pictures stay.
+- No Inventory tile on the left ("so we don't have two inventories"): eight tiles, a full block with no hole (his
+  pick A: two a row and four rows at 78 units on a PC and a TV, 80 in his small Studio window; four a row on
+  touch screens, where Trade's Soon! tile now stands too). HudBubble.fullRows / columnOrder / pickColumns.
+- The bottom pair in his GOLD pick (obrazky/hud_inventar_2026-11-11/06_spodni_lista_GOLD_batoh_vys.jpg): the
+  Inventory button (210 x 64; phones 240 x 76) in a dark outline, a blue and a gold rim, a green striped face with
+  a gloss and a lip; the sticker backpack a touch above the middle, the count in gold letters, a bar of the load
+  (red with FULL and a red count while full), the white Q keycap, a gold star, two sparkles, a soft gold glow and a
+  dark slab under it; the BLASTER slot in gold with the same stripes. Motion (tweens only, none with Reduce
+  motion): the gleam sweeps across (PixelFx), the bar's stripes drift (HudController, Motion.onReducedChanged),
+  the backpack and the count bounce when ore comes in.
+- Tests: tests/HudInventory.spec.luau (+ TileWiring, RoundReview, PixelKit, HudBubble, BlasterSlot,
+  BackpackClient). Pictures: obrazky/hud_inventar_2026-11-11/navrh_*.jpg (scene hud_quick).
+What to test in Studio:
+1. The right side: the gift, the cash with x2 and the gold clover with their R$ tags; a click opens the shop at
+   that card. Buy Triple Lucky (or start one in Studio): the corner tile shows the gold clover and its time.
+2. The left block: Shop, Rebirth / Golems, Hoverboard / Build, Elevator / Trade, More, the TRAIN chip under it;
+   no Inventory tile; More opens its flyout beside the block.
+3. The Inventory button: a click, Q, a gamepad's R1 and A on it (the UI selection) open the inventory window;
+   pick up ore: the count goes up with a small bounce and the bar fills; a full backpack shows FULL, a red count
+   and a red bar. The tutorial card (bottom right on a PC) and the level bar never cover it.
+4. Phone emulator (iPhone SE, 844 x 390): four tiles a row, Trade there too; the bottom pair clear of the
+   thumbstick, FIRE, Grab and Jump; the Q cap hidden on touch.
+5. SETTINGS Reduce motion on: the bar's stripes stop, no bounce, no gleam. A TV (1080p, console emulator): the
+   pair inside the safe area.
+
+## The ELEVATOR window, floors bought with coins (owner 2026-11-15 "ELEVATOR UI (FINAL COINS VERSION)", branch ui/elevator-v2)
+- His two pictures as the game's window (UI/ElevatorWindow, ElevatorController's window half): a dark navy window in
+  the shop's look; the header (the elevator icon with doors and up/down arrows, ELEVATOR, "Choose your destination
+  and travel deeper into the mine.", the red X); the status line (YOUR BLASTER Lv. N, a bar of N of the top level
+  BlasterData.MaxLevel with the percent and "Upgrade your blaster to unlock deeper floors.", the coins with the
+  gold coin and a green + that opens the Robux Shop's coins); six floor cards, 3 x 2 on a PC (2 columns that scroll
+  on phones, 72-unit buttons); the COMING SOON banner with a big ?, NEXT UPDATE and a clock.
+- Every card: its picture edge to edge (the owner's upload IconAssets.ElevatorArt, vytah_patra.png, cut per floor;
+  uploaded 2026-11-16 as 103680480493166; the painted backdrop stays under it while Roblox checks it), the number on a shield in the floor's colour, the name on two lines, the rarity
+  chips of its ores (real data), and one button: YOU ARE HERE (gold frame, halo, CURRENT LOCATION tag), TRAVEL and
+  an arrow (the floor's colour), PURCHASE <price> with a basket and the gold coin (gold/orange; without the coins
+  darker with NOT ENOUGH COINS over it), LOCKED (dark, a big lock, BLASTER LV. N REQUIRED). Coins only: no gem, no
+  Robux anywhere on it (a spec walks the window).
+- Real data: the floors, names, ore rarities and blaster gates are the game's (3/5/7/8/9; his picture's LV 12 does
+  not exist: the top blaster is 10, so the game's gates stay). Floors you can walk to (1-3) cost nothing; the
+  elevator-only floors cost about 1/3 of their gate's blaster in coins (MineFloors.priceOf; the owner halved the
+  first 2/3 prices on 2026-11-16): 4 Sunken Palace $43.5M (half the old one-time elevator), 5 Stormglass Rift
+  $750M, 6 Heartstone Core $10.5B. Bought floors go on a rebirth like the elevator did; a save that owned the
+  elevator owns all three (save v17).
+- Motion (TweenService only; none with Reduce motion): it opens (dim, 0.94 -> 1, the header drops in, the X spins
+  in, the cards pop in one after another), a hovered card rises with its edge and button brighter and its picture
+  panning, a purchase flashes gold with coins flying out, the coin popping and the coins counting down (the card
+  turns to TRAVEL; it never rides by itself), a locked card shakes with its lock flashing and the requirement lit,
+  TRAVEL lights its card and dims the others until the ride starts, and it closes (shrink, veil, dim). Loops: the
+  buttons' shine, the gold halo, the title's glint, the ? floating, the clock's wiggle.
+- The travel cinematic is another chat's (anim/elevator-travel): while it plays, TRAVEL and PURCHASE wait.
+- Tests: tests/ElevatorWindow.spec.luau (states, words, coins only, status, pictures, both layouts, the motion's end
+  states, the loops), tests/ElevatorView.spec.luau (the shared bits), the server's in tests/ElevatorService.spec.luau.
+  Pictures: obrazky/vytah_okno_2026-11-15 (elevator_ui scene: elevator_pc, _poor, _new, _bare, _phone, _phone_end;
+  video tools/lune/export_elevator_motion.luau).
+What to test in Studio:
+1. Walk to an elevator stop, E: the window opens with its animation; your floor says YOU ARE HERE with the gold frame.
+2. With blaster 7+ and enough coins: PURCHASE on the Sunken Palace: the coins count down, the card turns to TRAVEL
+   with a gold flash; you stay where you are. TRAVEL then rides there.
+3. Too few coins: the button is darker with NOT ENOUGH COINS; pressing it shakes the card and says how many coins
+   are missing. A locked floor shakes and names the blaster it needs.
+4. The + opens the Robux Shop at the coins. Gamepad: A on the cards' buttons, B closes; the selection stays inside.
+5. Phone emulator (667 x 375): two columns, the list scrolls to COMING SOON, the buttons easy to tap.
+6. An old save that had bought the elevator: floors 4-6 show TRAVEL (no purchase again).
+
 ## Professional quality pass (owner 2026-11-15, branch fx/pro-polish on art/meshy-models)
 Owner's Studio screenshots (the egg opening, the quarry, every mine floor, the station): grey and white
 models, everything overexposed, eggs that look pixelated, lag. What changed:
@@ -1008,7 +1173,7 @@ Neon glow, no particles. The models themselves (parts, Sphere meshes, Neon) were
 What changed:
 - UI/HatchWorld: the eggs and golems are real models in the world right in front of the camera, small (the eggs
   at 0.08 of their size, a golem at most 0.25). The stage stands in a band worked out every frame: never nearer
-  than 0.8 studs nor 1.7 times the camera's near clipping plane (up to half a stud on some devices), never
+  than 0.55 studs nor 1.6 times the camera's near clipping plane (HatchWorld.DepthLeast / NearMargin) (up to half a stud on some devices), never
   further than 55 % of the way to the player (the camera's least zoom is 4 studs, but its popper pulls it in
   close in a tunnel or against a wall: the stage comes in with it) nor 4 studs; what a pose would put outside it
   is drawn that much smaller or bigger at its edge, on the same ray, so the screen shows exactly the same.
@@ -1038,14 +1203,23 @@ What changed:
   player's own and the world back into focus. Easing comes from TweenService itself (TweenService:GetValue in
   the game, the same curves worked out for the specs: Util/Ease).
 - Camera: only the view (FieldOfView) changes: it eases to the stage's 40 degrees as a chain begins (Sine InOut
-  0.7 s) and back out after it (0.55 s; under Auto after 0.6 s, so it stays in between eggs); the player keeps
+  0.7 s) and back out after it (0.55 s; under Auto after 1.4 s, so it stays in between eggs); the player keeps
   the camera and its controls. Reduce motion keeps the player's view.
 - Clean-up: the stage leaves the world when the chain ends, its holder empty, the particles cleared, the focus,
   the view and the HUD back; a stuck opening's frame is unbound by the watch's clean-up.
-Studio self-test: HRA_K_TESTOVANI/TerraForge_TEST_vajicka_3D_AUTOTEST_2026-11-15.rbxl (make_test_place.luau
-... eggtest) plays 1, 3 and 10 eggs, a Legendary, a Mythic, a pack of 20 and Auto by itself after Play and prints
+- The opening's polish under it (2026-11-15, landed with the stage): a smooth sway (no wave faster than the main
+  one), an anticipation beat (the egg draws in, then springs into the burst), the golems fade into the player at
+  the end of the flight, the charge hum climbs to the burst, smoother crown streams on the premium eggs.
+- The camera shake at a Legendary / Mythic burst is still main's (22 samples a second): the smooth jolt the owner
+  saw on fx/pro-polish (31722182, CameraShake.Speed 10) also changes rock breaks, machines and cleaning and waits
+  for his yes.
+- Another camera feature started while the view eases home after a chain (building, an elevator ride, cleaning,
+  the Vault's crate) saves the player's own view: CapsuleController.settleView() (review 2026-11-16).
+Studio self-test: a place made from the landed build (lune run tools/lune/make_test_place.luau
+build/TerraForge.rbxl <out.rbxl> eggtest; the 2026-11-15 TerraForge_TEST_vajicka_3D[_AUTOTEST] places were built on
+the Meshy branch) plays 1, 3 and 10 eggs, a Legendary, a Mythic, a pack of 20 and Auto by itself after Play and prints
 "[EGG TEST] PASS / FAIL" for each (nothing left on the stage, view / focus / HUD back, the stage in front of the
-camera, frame times) and "[EGG TEST] DONE ...". The plain test place is TerraForge_TEST_vajicka_3D_2026-11-15.rbxl.
+camera, frame times) and "[EGG TEST] DONE ...". Hands off while it runs: a click skips, a buy starts another opening.
 What to test in Studio:
 1. Open eggs at the temple (1, 3, 10): edges clean, the shells smooth and lit, the cracks glowing for real; the
    golems sharp. Nothing of the world in front of the eggs; the world behind soft.
@@ -1058,8 +1232,11 @@ What to test in Studio:
    a quarter of their size; if they look too smooth, they can stand further when the camera is far).
 7. The glows behind the stage (sunburst, platforms, auras): soft but even, not blurred more over the sky than
    over the ground (the depth of field reads depth; see-through things may take the blur of what's behind).
+8. Open 1, 3 and 10 eggs: the rock is smooth, the egg draws in just before it bursts, the golems fade into you.
+9. Right as an opening ends, press B (build) or open the elevator: the view is the normal one, and stays so after.
 
-### Softer light: the egg opening and mine floors 3-6 (owner 2026-11-15 evening, branch fx/pro-polish)
+### Softer light: the egg opening and mine floors 3-6 (owner 2026-11-15 evening; tested on fx/pro-polish, landed
+without the Meshy floors from fx/egg-stage-light: owner 2026-11-16 "Ano, i světlo")
 Owner's Studio test of the 3D stage (his self-test run: 4 PASS, 3 FAIL, the three FAILs were the self-test's own
 fixed 12-stud limit: a golem flying to a player 14 studs away; two runs shorter than their timeline were clicks,
 which skip): "the egg opening is too bright and overexposed ... lower the Bloom and glow, fewer bright flashes
@@ -1073,9 +1250,8 @@ Causes found:
   in the world (Neon draws at about twice its colour). The flat overlay pieces made for the viewport (the
   orbiting rings and their sparks crossing the eggs, the shockwave rings, the puff, the platforms, the auras,
   the blobs, the sunburst, a 0.55-0.85 full-view flash) washed the eggs out; the 3D motes were fully additive.
-- Floors 3-6: each floor is lit by its diorama's 10-12 PointLights (Range 48) over pale painted tiles; floors
-  3-6 got 1.25-1.8x the light of floor 2 (light x exposure x the tiles' mean albedo: 0.91 / 0.71 / 0.79 / 1.03
-  against 0.57). The 2026-10-27 dimming of floors 3, 5, 6 (MineKit.dimLights) never ran on the dioramas.
+- Floors 3-6 (seen on the Meshy dioramas of art/meshy-models): their presets kept a higher exposure and a
+  bigger bloom than floors 1-2, and the picture sky's reflections drew white glints on the crystals.
 What changed:
 - CapsuleController.SoftBloom: while openings play, the opening's own BloomEffect (in the camera: the
   LightingController never tweens it) stands in for the zone's: it takes over at the zone's values (the zone's
@@ -1086,7 +1262,13 @@ What changed:
   white; the 3D sparks 0.65 as many; RevealKit.poseRing's optional Alpha (other reveals unchanged).
 - HatchWorld: key light 0.9 -> 0.68, rim 0.75 -> 0.55 (Mythic's lift gentler), motes 46 -> 30 a second,
   LightEmission 1 -> 0.45, at most 70 % opaque, nearer their colour; sparks start a soft white.
-- Floors 3-6 (Lagoon, Palace, Storm, Core): exposure 0.08-0.1 down, bloom 0.25-0.28 / Size 16 / Threshold 1.4,
+- Floors 3-6 (Lagoon, Palace, Storm, Core): the preset values the owner saw in his test place, where these
+  floors were the Meshy dioramas (fx/pro-polish), so about twice that branch's step here: exposure 0.3 / 0.45 / 0.3 /
+  0.25 -> 0.12 / 0.24 / 0.14 / 0.08, bloom 0.25-0.28 / Size 16 / Threshold 1.4, EnvironmentSpecularScale
+  1 -> 0.3 (white sky glints on the crystals), contrast +0.03. The dioramas' own lights (1.8 -> 1.4 ...) stay
+  with art/meshy-models. Floors 1-2, the Grotto and the town are unchanged (tests/LessGlow.spec.luau pins
+  floors 1-2).
+- With the Meshy floors (art/meshy-models): exposure 0.08-0.1 down from their 2026-11-15 values, bloom 0.25-0.28 / Size 16 / Threshold 1.4,
   EnvironmentSpecularScale 0.5 -> 0.3 (white sky glints on the crystals), contrast +0.03; diorama lights
   1.8 -> 1.4, 1.6 -> 1.5, 2.4 -> 2.0, 2.4 -> 1.7 (map v75): each at 1.09-1.18x floor 2's light. Floors 1-2,
   the Grotto and the town are unchanged (tests/LessGlow.spec.luau pins floors 1-2).

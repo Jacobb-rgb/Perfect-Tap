@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 16, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate; 15: the one belt's level; 16: the Ore Feeder)
+	Version = 17, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate; 15: the one belt's level; 16: the Ore Feeder; 17: floors bought one by one)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -33,9 +33,11 @@ local DataTemplate = {
 		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
 		-- (readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
-		-- the mine elevator (ElevatorService), bought once for MineFloors.Elevator.Price:
-		-- rides to every unlocked floor (floors 4-6 are reachable only this way)
-		Elevator = false,
+		-- the elevator floors bought (ElevatorService, owner 2026-11-15): { [floor Id] = true },
+		-- each for MineFloors.priceOf coins; floors 1-3 are free, floors 4-6 are reachable only by
+		-- elevator and only once bought (a rebirth empties it; the old one-time Upgrades.Elevator
+		-- became every priced floor: Migrations, Version 17)
+		Floors = {},
 	},
 	-- Tech shop machine upgrades, per machine type (MachineData Upgrades):
 	-- { [machineId] = { Speed = level?, Quality = level? } } (a missing level is 0)

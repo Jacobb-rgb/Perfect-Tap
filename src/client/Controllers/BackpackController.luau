@@ -32,8 +32,6 @@ local Workspace = game:GetService("Workspace")
 
 local BackpackView = require(script.Parent.Parent.UI.BackpackView)
 local HudView = require(script.Parent.Parent.UI.HudView)
-local HudBubble = require(script.Parent.Parent.UI.HudBubble)
-local PopTheme = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared").Config.PopTheme)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
 local BackpackState = require(script.Parent.Parent.Util.BackpackState)
@@ -246,10 +244,11 @@ end
 
 function BackpackController.start()
 	ContextActionService:BindAction(KEY_ACTION, onKey, false, BackpackController.Key, BackpackController.PadKey)
-	-- the HUD's backpack button (right of the blaster's hotbar slot): click, tap, a gamepad's A
+	-- the HUD's backpack button (right of the blaster's hotbar slot; the round look: the green
+	-- Inventory button, the left grid has no Inventory tile since 2026-11-11): click, tap, a gamepad's A
 	local hud = HudController.refs()
 	if hud then
-		local function press()
+		hud.Backpack.Activated:Connect(function()
 			if not isOpen and inCloseUp() then
 				return
 			end
@@ -257,13 +256,7 @@ function BackpackController.start()
 			if not isOpen then
 				Sfx.play("UIClick")
 			end
-		end
-		hud.Backpack.Activated:Connect(press)
-		-- the round look: the Inventory tile of the reel's left grid opens it too
-		local menu = hud.Menu
-		if PopTheme.round() and menu and menu:GetAttribute("Bubble") then
-			HudBubble.claimTile(menu, "Backpack").Activated:Connect(press)
-		end
+		end)
 	end
 	refreshKeyHint()
 	UserInputService.LastInputTypeChanged:Connect(function()

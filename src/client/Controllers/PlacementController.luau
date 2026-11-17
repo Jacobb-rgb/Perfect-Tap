@@ -2413,7 +2413,9 @@ function PlacementController.enter()
 	-- camera flies to the overview
 	local cam = camera()
 	savedCF = cam.CFrame
-	savedFov = cam.FieldOfView
+	-- (an egg opening's view still easing home: the player's own is saved; required here, not at the top:
+	-- this module is at Luau's 200 locals)
+	savedFov = require(script.Parent.CapsuleController).settleView() or cam.FieldOfView
 	camCF = cam.CFrame
 	flyFrom = cam.CFrame
 	flyStart = os.clock()

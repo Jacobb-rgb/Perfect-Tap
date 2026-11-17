@@ -25,17 +25,21 @@
 
 	The round look (owner 2026-10-27, the UI pack reel's HUD; PopTheme.Look =
 	"Round"): the game menu is the owner's picture tiles (RoundMenu: Store,
-	Rebirth, Golems, Inventory, Ride, Build, Elevator, Trade, More; behind
-	More: Index, Settings, Daily, Spin, Boosts, RoundMoreOrder), two a
-	row in a tall block with the TRAIN chip under it as wide as it (owner
+	Rebirth, Golems, Ride, Build, Elevator, Trade, More; behind More: Index,
+	Settings, Daily, Spin, Boosts, RoundMoreOrder; the Inventory is the
+	GOLD button at the bottom since 2026-11-11: goldFace), two a row
+	in a tall block with the TRAIN chip under it as wide as it (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
-	screen; touch screens keep it wide at the top, out of the thumbstick's
-	zone), Title Case words, a tilted sticker ("FREE!" on Spin while
-	WheelController's badge counts a ready spin, setTileBadge); the top centre is a row of separate buttons
-	(Shop red: the Robux STORE, then LOBBY / BASE / VAULT from TeleportView);
-	the money bottom-left without the cash, the income line under it; three
-	offers mid-right (Offers: the product's picture, a green "R$99" tag, its
-	name; StoreController opens the Store at it and hides what is owned).
+	screen: a full block with no hole, his pick A of 2026-11-11, two a row
+	and four rows on a mouse or a TV, four a row on touch screens, at the
+	top out of the thumbstick's zone), Title Case words, a tilted sticker
+	("FREE!" on Spin while WheelController's badge counts a ready spin,
+	setTileBadge); the top centre is a row of separate buttons (Shop red:
+	the Robux STORE, then LOBBY / BASE / VAULT from TeleportView); the money
+	bottom-left without the cash, the income line under it; three offers
+	mid-right (Offers: the product's sticker from the shop's icon sheet, a
+	green "R$99" tag, its name; StoreController opens the Store at it and
+	hides what is owned).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -69,14 +73,14 @@ HudBubble.Menu = {
 
 -- The round look's game menu (owner 2026-11-07: his picture tiles, IconAssets.TileArt; then "dej do
 -- More index, settings, daily, spin, boosts", two a row): every tile hidden until a controller
--- claims it (StoreController Store, SideMenuController Rebirth / Golems / Elevator, BackpackController
--- Inventory, HoverboardView Ride, BuildView Build, SideMenuController Trade; More by the first tile
--- behind it, HudBubble.addMore).
+-- claims it (StoreController Store, SideMenuController Rebirth / Golems / Elevator, HoverboardView
+-- Ride, BuildView Build, SideMenuController Trade; More by the first tile behind it,
+-- HudBubble.addMore). No Inventory tile (owner 2026-11-11: "so we don't have two inventories"):
+-- the green Inventory button at the bottom opens it (carryGroup, BackpackController).
 HudBubble.RoundMenu = {
 	{ Id = "Store", Label = "Store", Icon = "cart", Role = "Store" },
 	{ Id = "Rebirth", Label = "Rebirth", Icon = "rebirth", Role = "Rebirth" },
 	{ Id = "Golems", Label = "Golems", Icon = "golem_GildedPorter", Role = "Golems" },
-	{ Id = "Backpack", Label = "Inventory", Icon = "backpack", Role = "Backpack" },
 	{ Id = "Ride", Label = "Ride", Icon = "hoverboard", Role = "Ride" },
 	{ Id = "Build", Label = "Build", Icon = "build", Role = "Build" },
 	{ Id = "Elevator", Label = "Elevator", Icon = "lift", Role = "Base" },
@@ -84,7 +88,9 @@ HudBubble.RoundMenu = {
 	{ Id = "More", Label = "More", Icon = "more", Role = "More" },
 } :: { MenuEntry }
 
--- The tiles that only say "coming soon" for now (a sticker and a toast: SideMenuController).
+-- The tiles that only say "coming soon" for now (a sticker and a toast: SideMenuController). Every
+-- screen shows them since the Inventory tile went to the bottom (owner 2026-11-11: a touch screen's
+-- block is four a row with no hole, as tall as its six or five a row were).
 HudBubble.RoundSoon = { "Trade" }
 
 -- Tiles their own controllers claim (claimTile) that stand behind More in the round look.
@@ -123,15 +129,9 @@ HudBubble.RoundMain = {
 	Elevator = true,
 } :: { [string]: boolean }
 
--- Does this screen show the "coming soon" tiles? Touch screens keep the room (above the thumbstick).
-function HudBubble.showsSoon(touch: boolean?): boolean
-	return touch ~= true
-end
-
--- How many tiles the round look's grid holds on this layout.
-function HudBubble.roundCount(layout: Layout): number
-	local soon = if HudBubble.showsSoon(layout.Touch) then 0 else #HudBubble.RoundSoon
-	return #HudBubble.RoundMenu - soon
+-- How many tiles the round look's grid holds (the same on every screen since 2026-11-11).
+function HudBubble.roundCount(_layout: Layout?): number
+	return #HudBubble.RoundMenu
 end
 
 -- The side menu entries with no tile in the round look (owner 2026-11-07, no picture: "only things
@@ -143,12 +143,21 @@ HudBubble.RoundHidden = { Collection = true, Boards = true, Hoverboards = true }
 --[[
 	The round look's offers mid-right (the reel's three potions with "R$49"):
 	a Store card each (StoreConfig), its picture, the tag and the name.
+	Sheet: its sticker from the shop's icon sheet (IconAssets.Shop; owner
+	2026-11-11: "the new picture there"), the one the shop shows for the
+	same product (StoreConfig's Sheet; the Starter Pack's card shows its
+	slots, here the gift); Badge: a small sticker on its corner, as the
+	shop's 2x Money card wears its x2. Icon: the old picture (its icon
+	sheet, else a live 3D model) while the shop's sheet isn't there.
 ]]
+export type Offer = { Card: string, Name: string, Icon: string, Sheet: string, Badge: string? }
+
 HudBubble.Offers = {
-	{ Card = "StarterPack", Name = "Starter Pack", Icon = "golem_GildedPorter" },
-	{ Card = "DoubleMoney", Name = "2x Money", Icon = "cash_safe" },
-	{ Card = "TripleLucky15", Name = "Triple Lucky", Icon = "clover" },
-}
+	{ Card = "StarterPack", Name = "Starter Pack", Icon = "golem_GildedPorter", Sheet = "gift" },
+	{ Card = "DoubleMoney", Name = "2x Money", Icon = "cash_safe", Sheet = "cash", Badge = "x2" },
+	{ Card = "TripleLucky15", Name = "Triple Lucky", Icon = "clover", Sheet = "clover_gold" },
+} :: { Offer }
+HudBubble.OfferBadge = 0.56 -- the badge's size, a share of the picture's
 HudBubble.OfferSize = 74 -- design units: the picture square (phones: OfferSizePhone); the reel: ~110 px of 1080
 HudBubble.OfferGap = 35 -- between two offers (the reel: one every 200 px)
 HudBubble.OfferSizePhone = 74 -- 46 pt at the phones' 0.62 scale
@@ -584,16 +593,17 @@ HudBubble.StackChipHeightTv = 158 -- the stacked chip on a TV (the name and the 
 HudBubble.TouchChipWidth = 384 -- TrainView's compact chip at its own width
 HudBubble.StackGap = 8 -- the tiles and the stacked chip under them
 HudBubble.RoundMinTile = 56 -- design units: the smallest tile on a mouse or a TV (touch: 44 pt)
--- his picture tiles, two a row (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"):
--- the biggest on a big screen and in a small mouse window, the TRAIN chip always under them
--- (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to ale udelj ty velke
--- dlazdice"). A small mouse window (Compact: his Studio, 1402 x 490) is too short for nine big
--- tiles two a row with the chip under them: three a row there, where that makes them at least
--- RoundThreeGain bigger
-HudBubble.RoundBigMax = 88
+-- his picture tiles (owner 2026-11-07: "ty ikonky trochu zvetsi, na kazdy radek jenom 2"), the TRAIN
+-- chip always under them (owner 2026-11-07 23:20: "dal bych verzi A jenom ten train dej prosim pod to
+-- ale udelj ty velke dlazdice"). Owner 2026-11-11, in his Studio window (1402 x 683 pt): 116-unit
+-- tiles were "terribly big, a lot smaller", up to RoundBigMax (his pick B's size); RoundMouseTile in a
+-- small mouse window (Compact: his 1402 x 490 with the Output open). With the Inventory tile gone
+-- (eight tiles) he picked A: a full block with no hole, two a row and four rows (fullRows)
+HudBubble.RoundBigMax = 78
 HudBubble.RoundMouseTile = 80
-HudBubble.RoundThreeGain = 8
-HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the first that fits wins
+-- a full block (no hole) wins while its tiles keep this share of the biggest any row count reaches
+HudBubble.RoundFullShare = 0.9
+HudBubble.RoundTouchColumns = { 6, 5, 4 } -- touch: the tries, the full blocks first (columnOrder), the first that fits wins
 HudBubble.TouchChipMinWidth = 300 -- the touch chip under the tiles needs this much (its name, line and SEND)
 HudBubble.TutorialBarGap = 10 -- TutorialView.BarGap: the touch bubble starts this far right of the top row
 -- BoostView's corner column beside the touch tutorial bubble: CornerGap + CornerWidth + CornerGap
@@ -633,6 +643,46 @@ function HudBubble.touchButtonBoxes(width: number, height: number, uiScale: numb
 end
 HudBubble.RoundColumns = { 2, 3, 4, 5 } -- a mouse or a TV: the tries (two: the owner's tall block)
 
+-- Do `columns` a row fill every row of `count` tiles (a full block, no hole: owner 2026-11-11)?
+function HudBubble.fullRows(count: number, columns: number): boolean
+	return columns > 0 and count % columns == 0
+end
+
+-- The row counts of `tries` for `count` tiles in the order to try them: the full blocks first, each
+-- group in `tries`' own order. Pure (specs).
+function HudBubble.columnOrder(count: number, tries: { number }): { number }
+	local order, rest = {}, {}
+	for _, columns in tries do
+		table.insert(if HudBubble.fullRows(count, columns) then order else rest, columns)
+	end
+	table.move(rest, 1, #rest, #order + 1, order)
+	return order
+end
+
+--[[
+	The round look's pick from `tries` ({ columns a row, tile } each, in their order) for `count`
+	tiles: the first full block (no hole) whose tile keeps RoundFullShare of the biggest tile any
+	of them reaches (owner 2026-11-11, pick A: two a row and four rows), else the biggest tile
+	(the first of equals); nil without tries. Pure (specs).
+]]
+function HudBubble.pickColumns(count: number, tries: { { number } }): { number }?
+	local best: { number }? = nil
+	for _, try in tries do
+		if best == nil or try[2] > best[2] then
+			best = try
+		end
+	end
+	if best == nil then
+		return nil
+	end
+	for _, try in tries do
+		if HudBubble.fullRows(count, try[1]) and try[2] >= HudBubble.RoundFullShare * best[2] then
+			return try
+		end
+	end
+	return best
+end
+
 -- The stacked TRAIN chip's height on this layout (TrainView mirrors it: CHIP.Stack / CHIP.StackTv).
 function HudBubble.stackChipHeight(layout: Layout): number
 	return if layout.TenFoot then HudBubble.StackChipHeightTv else HudBubble.StackChipHeight
@@ -656,18 +706,23 @@ end
 --[[
 	The round look's grid for a gui `height` design units tall at `uiScale` (owner
 	2026-10-28: "the block tall, not wide", the TRAIN chip under it, "ending like
-	it"): sets layout.Columns, Tile, Top, Chip and ChipStack.
-	  mouse / TV   two a row (the reel's column), the tiles smaller on a short
-	               screen (never under RoundMinTile); three, four, five a row
-	               when two can't fit, and three in a small mouse window where
-	               that keeps them big (RoundThreeGain); the stacked chip
-	               (StackChipHeight) under them as wide as them, all above the
-	               floaters (roundFloor). As low as the reel's tiles
-	               (RoundMenuTop) where there is room.
+	it"): sets layout.Columns, Tile, Top, Chip and ChipStack. A full block wins
+	(owner 2026-11-11, pick A: "no hole"; eight tiles: two a row and four rows,
+	else four a row; pickColumns, columnOrder).
+	  mouse / TV   two a row (the reel's column, his pick A) while its tiles keep
+	               RoundFullShare of the biggest any row count reaches (up to
+	               RoundBigMax), else four a row, else the biggest; the tiles
+	               smaller on a short screen (never under RoundMinTile); never
+	               wider than the room left of the top row (narrower tiles
+	               there, not fewer a row); the stacked chip (StackChipHeight)
+	               under them as wide as them, all above the floaters
+	               (roundFloor). As low as the reel's tiles (RoundMenuTop)
+	               where there is room.
 	  touch        at the top, wide: the thumbstick's start zone (the left 40 %
-	               under the top third) stays free on tablets; five a row where
-	               they stay left of the top row, else four; the touch chip
-	               (TouchChipHeight) under them as wide as them
+	               under the top third) stays free on tablets; four a row (a
+	               full block) where they stay left of the top row at 44 pt,
+	               else six, five; the touch chip (TouchChipHeight) under them
+	               as wide as them
 	  no fit       (the smallest screens) the tiles at the top, as many a row as
 	               stay left of the top row at their size (touch: never under
 	               44 pt), the chip beside their last row. Touch: squeezed
@@ -694,7 +749,7 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 		local limit = if layout.Compact then floor else math.min(floor, height / 3)
 		local minTile = math.ceil(44 / math.max(uiScale, 0.01))
 		local chipGap = if layout.Compact then HudBubble.ChipGap else HudBubble.TabletChipGap
-		for _, columns in HudBubble.RoundTouchColumns do
+		for _, columns in HudBubble.columnOrder(count, HudBubble.RoundTouchColumns) do
 			local rows = math.ceil(count / columns)
 			local tile = layout.Tile
 			-- (narrower tiles to stay left of the top row, and shorter ones to stay above the zone)
@@ -707,39 +762,41 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 			end
 		end
 	else
-		-- (the biggest tile `across` a row with the stacked chip under them, above the floaters; its rows)
-		local function fit(across: number): (number, number)
+		-- (the biggest tile `across` a row with the stacked chip under them, above the floaters, and
+		-- left of the top row)
+		local function fit(across: number): number
 			local down = math.ceil(count / across)
 			local room = floor - HudBubble.MenuTop - HudBubble.StackGap - stackH - (down - 1) * gap
-			return math.min(layout.Tile, math.floor(room / down)), down
+			local broad = math.floor((tabsLeft - left - (across - 1) * gap) / across)
+			return math.min(layout.Tile, math.floor(room / down), broad)
 		end
+		local tries: { { number } } = {}
 		for _, columns in HudBubble.RoundColumns do
-			local tile, rows = fit(columns)
-			if tile >= HudBubble.RoundMinTile and left + wide(columns, tile) <= tabsLeft then
-				local across = columns
-				if columns == 2 and layout.Compact and layout.Mouse then
-					-- (a small mouse window: three a row where that keeps the tiles big)
-					local three, threeRows = fit(3)
-					if three - tile >= HudBubble.RoundThreeGain and left + wide(3, three) <= tabsLeft then
-						across, tile, rows = 3, three, threeRows
-					end
-				end
-				local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + stackH
-				layout.Columns, layout.Tile = across, tile
-				layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
-				layout.Chip, layout.ChipStack = "Under", true
-				return
+			local tile = fit(columns)
+			if tile >= HudBubble.RoundMinTile then
+				table.insert(tries, { columns, tile })
 			end
+		end
+		-- (a full block: two a row, the owner's pick A, while its tiles stay as big; else four a row)
+		local pick = HudBubble.pickColumns(count, tries)
+		if pick then
+			local across, tile = pick[1], pick[2]
+			local rows = math.ceil(count / across)
+			local need = rows * tile + (rows - 1) * gap + HudBubble.StackGap + stackH
+			layout.Columns, layout.Tile = across, tile
+			layout.Top = math.clamp(floor - need, HudBubble.MenuTop, HudBubble.RoundMenuTop)
+			layout.Chip, layout.ChipStack = "Under", true
+			return
 		end
 	end
 	-- nothing fits: at the top, as many a row as stay left of the top row (touch: at 44 pt;
-	-- fewer a row, more rows), the chip beside their last row
+	-- fewer a row, more rows; a full block first), the chip beside their last row
 	local tile = layout.Tile
 	if layout.Touch then
 		tile = math.max(tile, math.ceil(44 / math.max(uiScale, 0.01)))
 	end
 	local columns = 2
-	for _, try in { 5, 4, 3 } do
+	for _, try in HudBubble.columnOrder(count, { 5, 4, 3 }) do
 		if left + wide(try, tile) <= tabsLeft then
 			columns = try
 			break
@@ -753,13 +810,17 @@ function HudBubble.fitRound(layout: Layout, height: number, uiScale: number)
 		local _, _, moneyPanel = HudBubble.moneySize(layout)
 		local band = if layout.TenFoot then math.ceil(height * HudBubble.TenFootSafe) else 0
 		local room = height - band - moneyPanel - HudBubble.MoneyBottom - 1 - HudBubble.MenuTop
-		local best = 0
-		for _, try in { 5, 4, 3, 2 } do
+		local tries: { { number } } = {}
+		for _, try in HudBubble.RoundColumns do
 			local rows = math.ceil(count / try)
 			local fit = math.min(tile, math.floor((room - (rows - 1) * gap) / rows))
-			if fit > best and left + wide(try, fit) <= tabsLeft then
-				best, layout.Columns, layout.Tile = fit, try, fit
+			if fit > 0 and left + wide(try, fit) <= tabsLeft then
+				table.insert(tries, { try, fit })
 			end
+		end
+		local pick = HudBubble.pickColumns(count, tries)
+		if pick then
+			layout.Columns, layout.Tile = pick[1], pick[2]
 		end
 		return
 	end
@@ -1414,7 +1475,27 @@ function HudBubble.offers(gui: Instance, layout: Layout): Frame
 			ZIndex = 3,
 		}, holder)
 		button:SetAttribute("Card", offer.Card)
-		if IconAssets.find(offer.Icon) ~= "" then
+		if IconAssets.shopShows(offer.Sheet) then
+			-- the shop's sticker (owner 2026-11-11), the same picture its card shows
+			IconAssets.applyShop(button, offer.Sheet)
+			local badge = offer.Badge
+			if badge and IconAssets.shopShows(badge) then
+				-- (the shop's 2x Money card wears its x2 on the picture's corner; here the top-left:
+				-- the price takes the top-right)
+				local side = math.floor(size * HudBubble.OfferBadge)
+				local mark = UIKit.new("ImageLabel", {
+					Name = "Badge",
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					Position = UDim2.fromScale(0.2, 0.24),
+					Rotation = -10,
+					ScaleType = Enum.ScaleType.Fit,
+					Size = UDim2.fromOffset(side, side),
+					ZIndex = 5,
+				}, button)
+				IconAssets.applyShop(mark, badge)
+			end
+		elseif IconAssets.find(offer.Icon) ~= "" then
 			IconAssets.apply(button, offer.Icon)
 			button:SetAttribute("Icon", offer.Icon)
 		else
@@ -2047,6 +2128,24 @@ end
 	key (setBackpackKey: Q, the gamepad's R1 glyph, nothing on touch).
 	Clicking, tapping or a gamepad's A on it opens the inventory
 	(BackpackController).
+	  round look (owner 2026-11-11: "take the Inventory from the left, a
+	             lying rectangle by the blaster: the backpack on the left,
+	             the numbers, the newer backpack; a green background with a
+	             cool border, e.g. blue"; the left grid has no Inventory tile
+	             any more; then "make the whole hotbar more cool": his pick
+	             "3 GOLD s pruhy", obrazky/hud_inventar_2026-11-11/06_*) the
+	             GOLD hotbar (goldFace): the Inventory button in a dark
+	             outline, a blue outer rim and a gold inner rim round a green
+	             face with diagonal white stripes, a gloss and a dark lip; the
+	             shop's sticker backpack (packArt) on its left end, a touch
+	             above the middle, the count in gold letters over a progress
+	             bar (a gold fill with drifting stripes, red when full), a
+	             white Q keycap, a gold star and two sparkles; the BLASTER slot
+	             the same in gold; both with a soft gold glow round them and a
+	             dark slab under them (underlay). Motion, tweens only and none
+	             with Reduce motion: the gleam sweeps across (PixelFx), the
+	             bar's stripes drift and the backpack and the count bounce
+	             when ore comes in (HudController)
 	  light HUD  (carryGroup, owner 2026-10-28: "a custom slot for the
 	             blaster left of the backpack, the pair in the middle")
 	             Roblox's own hotbar is off (Util/Hotbar); the game's BLASTER
@@ -2063,6 +2162,10 @@ HudBubble.SlotBottom = Color3.fromRGB(54, 58, 72)
 HudBubble.SlotRim = Color3.fromRGB(150, 160, 188)
 HudBubble.BackpackSize = Vector2.new(176, 64) -- design units (PC)
 HudBubble.BackpackSizePhone = Vector2.new(196, 76) -- 47 pt tall at the phones' 0.62 scale
+-- the round look's GOLD Inventory by the BLASTER slot (owner 2026-11-11: as long as his pick's, 3.1
+-- times its height with the outline; carryPackSize)
+HudBubble.InventorySize = Vector2.new(210, 64)
+HudBubble.InventorySizePhone = Vector2.new(240, 76) -- 47 pt tall at the phones' 0.62 scale
 HudBubble.BackpackBottom = 12 -- design units above the safe area's bottom edge
 HudBubble.BlasterSlot = 60 -- the dark HUD: Roblox's hotbar slot in px (100 on a TV: GuiService:IsTenFootInterface)
 HudBubble.BlasterGap = 16 -- the dark HUD: px between the slot's middle half and the button (its 5 px border included)
@@ -2073,6 +2176,66 @@ HudBubble.WellPaints = { Blaster = "Blue", Backpack = "Ember" } :: { [string]: s
 HudBubble.EquippedColor = Color3.fromRGB(255, 203, 46) -- the slot's ring while the Blaster is in hand
 HudBubble.DiscColor = Color3.fromRGB(130, 214, 255) -- the light behind the slot's blaster (a laser's cyan)
 HudBubble.FullColor = Color3.fromRGB(255, 92, 84)
+--[[
+	The GOLD hotbar's colours (the owner's pick, the mockup's own: obrazky/hud_inventar_2026-11-11,
+	06_spodni_lista_GOLD_batoh_vys.jpg), top to bottom where there are three.
+]]
+local hex = Color3.fromHex
+HudBubble.Gold = {
+	Outline = hex("1a1030"), -- every outline, the count's edge
+	Slab = hex("0c0828"), -- the dark slab under a button
+	Blue = { hex("8ae6ff"), hex("2a8cff"), hex("1a5ad8") }, -- the Inventory's outer rim
+	Rim = { hex("fff27a"), hex("ffb41a"), hex("e8780a") }, -- its gold inner rim
+	Green = { hex("b4ff6a"), hex("5fe03a"), hex("2fae22") }, -- its face
+	Slot = { hex("fff2a0"), hex("ffb41a"), hex("c86a00") }, -- the BLASTER slot's face (light in the middle)
+	Count = { hex("fffbd0"), hex("ffd23a"), hex("ff9a1a") }, -- the count's letters
+	Track = hex("0f3a0a"), -- the progress bar's track
+	Fill = { hex("fff27a"), hex("ffb41a"), hex("f08a0a") }, -- its fill
+	FillFull = { hex("ffb0a4"), hex("ff5a4a"), hex("cf1f2e") }, -- its fill while the backpack is full
+	Glow = Color3.fromRGB(255, 200, 60), -- the soft glow round both
+	Key = { Color3.new(1, 1, 1), hex("d8def0"), hex("b4bcd6") }, -- the white Q keycap and its lip
+}
+--[[
+	The GOLD hotbar's sizes in design units for a button 64 tall (a phone's 76: times 76 / 64), from
+	the mockup's (168 px with its 7 px outline: 0.4156 units a px). The backpack's sticker: its square
+	(Pack), its middle from the left edge (PackX) and from the button's middle (PackY: the bag's top
+	just inside the rims, its middle a touch above the button's: owner "batoh jeste o kus vys").
+]]
+HudBubble.GoldSizes = {
+	Edge = 3, -- the dark outline (outside the button)
+	Blue = 3, -- the Inventory's outer rim
+	Gold = 2.5, -- its inner rim
+	Corner = 11,
+	Lip = 4.2, -- the darker band along a face's bottom
+	Stripe = 10.8, -- the faces' white stripes: apart
+	StripeWidth = 4.2,
+	StripeShow = 0.78, -- (transparency: the mockup's 22 %)
+	Glow = 3, -- the glow beyond the outline (and a fainter ring as wide again)
+	Drop = 4.6, -- the slab under a button
+	Pack = 66,
+	PackX = 38,
+	PackY = -2.8,
+	CountLeft = 64, -- the count's box: from the left edge, from the right edge, its top, its height
+	CountRight = 10,
+	CountTop = 8,
+	CountHeight = 33,
+	CountText = 29,
+	CountEdge = 4, -- its dark edge (the mockup's 11 px)
+	BarLeft = 70, -- the progress bar's track (its outline outside): from the left, the right, the bottom
+	BarRight = 15,
+	BarBottom = 11.5,
+	BarHeight = 7.4,
+	BarEdge = 1.7,
+	BarStripe = 7.5, -- the fill's stripes: apart, wide, transparency
+	BarStripeWidth = 3.3,
+	BarStripeShow = 0.65,
+	Star = 20, -- the gold star on the top edge (its middle from the right edge)
+	StarX = 72,
+	Sparkle = 22, -- the sparkle over the top-left corner, and a smaller one under the right end
+	SparkleSmall = 16,
+}
+HudBubble.BarDrift = 0.7 -- seconds a stripe takes to drift one stripe along (HudController)
+HudBubble.GoldDisc = hex("fff2a0") -- the light behind the GOLD slot's blaster (its middle)
 -- the drawn pack (no uploaded picture yet): the Rookie Pack's colours (BackpackData)
 local PACK = {
 	Body = Color3.fromRGB(240, 140, 58),
@@ -2088,14 +2251,23 @@ function HudBubble.backpackX(uiScale: number, tenFoot: boolean?): number
 	return math.ceil((slot / 2 + HudBubble.BlasterGap) / math.max(uiScale, 0.01))
 end
 
+-- The light HUD's button by the BLASTER slot (design units): the round look's GOLD Inventory, else
+-- the backpack button.
+function HudBubble.carryPackSize(compact: boolean): Vector2
+	if PopTheme.round() then
+		return if compact then HudBubble.InventorySizePhone else HudBubble.InventorySize
+	end
+	return if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+end
+
 -- The light HUD's BLASTER slot: a square as tall as the backpack button (design units).
 function HudBubble.blasterSlotSize(compact: boolean): number
-	return (if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize).Y
+	return HudBubble.carryPackSize(compact).Y
 end
 
 -- The light HUD's bottom group: the BLASTER slot, the gap, the backpack button (design units).
 function HudBubble.carryGroupSize(compact: boolean): Vector2
-	local pack = if compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local pack = HudBubble.carryPackSize(compact)
 	return Vector2.new(HudBubble.blasterSlotSize(compact) + HudBubble.GroupGap + pack.X, pack.Y)
 end
 
@@ -2162,9 +2334,11 @@ local function packBit(parent: Instance, name: string, x0: number, y0: number, x
 end
 
 --[[
-	The pack's picture `size` units square ("Pack"): the uploaded "backpack"
-	icon, or until the sheet is uploaded a drawn pack (straps, body, flap,
-	pocket, buckle; black outlines). Returns the frame.
+	The pack's picture `size` units square ("Pack"): the shop's sticker
+	backpack (IconAssets.Shop, owner 2026-11-11: "the newer backpack"), else
+	the old icon sheet's "backpack", or until a sheet is uploaded a drawn
+	pack (straps, body, flap, pocket, buckle; black outlines). Returns the
+	frame.
 ]]
 function HudBubble.packArt(parent: Instance, size: number, props: { [string]: any }?): Frame
 	local art = UIKit.new("Frame", {
@@ -2180,10 +2354,15 @@ function HudBubble.packArt(parent: Instance, size: number, props: { [string]: an
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 5,
 	}, art)
-	IconAssets.apply(icon, "backpack")
-	icon:SetAttribute("Icon", "backpack")
+	local sticker = IconAssets.shopShows("backpack")
+	if sticker then
+		IconAssets.applyShop(icon, "backpack")
+	else
+		IconAssets.apply(icon, "backpack")
+		icon:SetAttribute("Icon", "backpack")
+	end
 	-- (only an uploaded sheet: the previews draw the pack like the game does until then)
-	local shows = IconAssets.find("backpack") ~= ""
+	local shows = sticker or IconAssets.find("backpack") ~= ""
 	icon.Visible = shows
 	if not shows then
 		local drawn = UIKit.new("Frame", {
@@ -2282,26 +2461,320 @@ local function well(parent: Instance, name: string, size: Vector2?, paint: strin
 	return button
 end
 
+---------------------------------------------------------------- the GOLD hotbar (the round look)
+
+-- A gradient top to bottom through three colours (the middle one at `mid`).
+local function threeTone(colors: { Color3 }, mid: number?): ColorSequence
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, colors[1]),
+		ColorSequenceKeypoint.new(mid or 0.55, colors[2]),
+		ColorSequenceKeypoint.new(1, colors[3]),
+	})
+end
+
+--[[
+	Diagonal white stripes (the mockup's, top-left to bottom-right) in `parent`, whose clipping
+	ancestor cuts them (Roblox clips the turned children of an unturned clip): `count` frames
+	turned -45 degrees side by side through its middle, each painting four stripes with its
+	gradient (four keys a stripe for crisp edges: a UIGradient holds 20), `period` units apart,
+	`width` wide, at `transparency`, each `length` long. Pure.
+]]
+function HudBubble.stripeBands(parent: GuiObject, period: number, width: number, transparency: number, count: number, length: number)
+	local seg = 4 * period
+	local half = width / 2 / seg
+	local keys = { NumberSequenceKeypoint.new(0, 1) }
+	for i = 1, 4 do
+		local c = (i - 0.5) / 4
+		table.insert(keys, NumberSequenceKeypoint.new(c - half, 1))
+		table.insert(keys, NumberSequenceKeypoint.new(c - half + 0.002, transparency))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half - 0.002, transparency))
+		table.insert(keys, NumberSequenceKeypoint.new(c + half, 1))
+	end
+	table.insert(keys, NumberSequenceKeypoint.new(1, 1))
+	local pattern = NumberSequence.new(keys)
+	local ux, uy = math.cos(math.rad(-45)), math.sin(math.rad(-45))
+	for j = 1, count do
+		local along = (j - (count + 1) / 2) * seg
+		local band = UIKit.new("Frame", {
+			Name = "Band",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Position = UDim2.new(0.5, ux * along, 0.5, uy * along),
+			Rotation = -45,
+			Size = UDim2.fromOffset(seg, length),
+			ZIndex = parent.ZIndex,
+		}, parent)
+		UIKit.new("UIGradient", { Transparency = pattern }, band)
+	end
+end
+
+-- The stripes over a face `w` x `h` units: a clip "Stripes" `inset` inside it (clear of its round
+-- corners), as many bands as cover it.
+local function faceStripes(face: GuiObject, w: number, h: number, inset: number, k: number, z: number): Frame
+	local g = HudBubble.GoldSizes
+	local clip = UIKit.new("Frame", {
+		Name = "Stripes",
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(inset, inset),
+		Size = UDim2.new(1, -2 * inset, 1, -2 * inset),
+		ZIndex = z,
+	}, face)
+	local period = g.Stripe * k
+	local reach = w + h
+	HudBubble.stripeBands(clip, period, g.StripeWidth * k, g.StripeShow, math.ceil(reach / math.sqrt(2) / (4 * period)) + 1, reach)
+	return clip
+end
+
+-- A light band over the top 40 % of `face`, fading down (the mockup's gloss).
+local function gloss(face: GuiObject, k: number, z: number)
+	local band = UIKit.new("Frame", {
+		Name = "Gloss",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(4 * k, 2.5 * k),
+		Size = UDim2.new(1, -8 * k, 0.4, 0),
+		ZIndex = z,
+	}, face)
+	UIKit.corner(band, math.floor(7 * k))
+	UIKit.new("UIGradient", {
+		Rotation = 90,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.45),
+			NumberSequenceKeypoint.new(1, 0.95),
+		}),
+	}, band)
+end
+
+-- A light edge "Rim" (its stroke "Light") `inset` inside `button`, `width` wide, `transparency` from
+-- the top down (a NumberSequence) or all round (a number).
+local function lightEdge(
+	button: GuiObject,
+	inset: number,
+	corner: number,
+	width: number,
+	transparency: number | NumberSequence,
+	z: number
+): Frame
+	local rim = UIKit.new("Frame", {
+		Name = "Rim",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(inset, inset),
+		Size = UDim2.new(1, -2 * inset, 1, -2 * inset),
+		ZIndex = z,
+	}, button)
+	UIKit.corner(rim, math.max(2, corner))
+	local light = UIKit.new("UIStroke", {
+		Name = "Light",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = Color3.new(1, 1, 1),
+		Thickness = width,
+		Transparency = if type(transparency) == "number" then transparency else 0,
+	}, rim)
+	if type(transparency) ~= "number" then
+		UIKit.new("UIGradient", { Rotation = 90, Transparency = transparency }, light)
+	end
+	return rim
+end
+
+--[[
+	A GOLD hotbar button's face on `button` (`size` units, the round look; owner 2026-11-11, his
+	pick: obrazky/hud_inventar_2026-11-11/06_spodni_lista_GOLD_batoh_vys.jpg). The button's own
+	paint ("Paint": its white background times the gradient) is its outer colour inside the dark
+	outline ("Border"); `kind`:
+	  Inventory  the blue outer rim, the gold inner rim ("Gold") and in it the green face
+	             ("Green", its darker lip in its gradient) with the diagonal stripes, a gloss over
+	             its top, a light line along its top edge ("Rim") and a gleam that PixelFx sweeps
+	             across now and then
+	  Blaster    the gold face itself with the stripes and the gloss, a light ring inside the
+	             outline ("Rim"; its colour and width as attributes: setBlasterEquipped)
+	Every piece is inside the button: all of it is the touch area. Returns the face (the
+	Inventory's green, the slot itself).
+]]
+function HudBubble.goldFace(button: GuiButton, kind: "Inventory" | "Blaster", size: Vector2): GuiObject
+	local g, gold = HudBubble.GoldSizes, HudBubble.Gold
+	local k = size.Y / 64
+	local corner = math.floor(g.Corner * k + 0.5)
+	button.BackgroundColor3 = Color3.new(1, 1, 1)
+	button.BackgroundTransparency = 0
+	button:SetAttribute("Gold", kind)
+	UIKit.corner(button, corner)
+	Pop.border(button, g.Edge, gold.Outline)
+	Pop.fxTag(button, "Press")
+	if kind == "Blaster" then
+		UIKit.new("UIGradient", { Name = "Paint", Rotation = 90, Color = threeTone(gold.Slot, 0.5) }, button)
+		local inset = math.ceil(corner * 0.3)
+		faceStripes(button, size.X - 2 * inset, size.Y - 2 * inset, inset, k, 4)
+		gloss(button, k, 4)
+		local ring = 2.5 * k
+		lightEdge(button, ring, corner - ring, ring, 0.6, 5)
+		button:SetAttribute("RimColor", Color3.new(1, 1, 1))
+		button:SetAttribute("RimWidth", ring)
+		return button
+	end
+	UIKit.new("UIGradient", { Name = "Paint", Rotation = 90, Color = threeTone(gold.Blue) }, button)
+	local blue, rim = g.Blue * k, (g.Blue + g.Gold) * k
+	local inner = UIKit.new("Frame", {
+		Name = "Gold",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(blue, blue),
+		Size = UDim2.new(1, -2 * blue, 1, -2 * blue),
+		ZIndex = 3,
+	}, button)
+	UIKit.corner(inner, math.floor(corner - blue))
+	UIKit.new("UIGradient", { Rotation = 90, Color = threeTone(gold.Rim) }, inner)
+	local face = UIKit.new("Frame", {
+		Name = "Green",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(rim, rim),
+		Size = UDim2.new(1, -2 * rim, 1, -2 * rim),
+		ZIndex = 4,
+	}, button)
+	local faceCorner = math.max(3, math.floor(corner - rim + 1))
+	UIKit.corner(face, faceCorner)
+	local w, h = size.X - 2 * rim, size.Y - 2 * rim
+	local lip = g.Lip * k / h
+	local low = gold.Green[3]:Lerp(Color3.fromRGB(0, 60, 0), 0.28)
+	UIKit.new("UIGradient", {
+		Name = "Shade",
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, gold.Green[1]),
+			ColorSequenceKeypoint.new(0.45, gold.Green[2]),
+			ColorSequenceKeypoint.new(1 - lip - 0.002, gold.Green[3]),
+			ColorSequenceKeypoint.new(1 - lip, low),
+			ColorSequenceKeypoint.new(1, low),
+		}),
+	}, face)
+	faceStripes(face, w, h, math.ceil(faceCorner * 0.3), k, 4)
+	gloss(face, k, 5)
+	Pop.gleam(face, 6)
+	-- (the mockup's light line along the face's top edge)
+	lightEdge(
+		button,
+		rim + 1.8 * k,
+		faceCorner - 2,
+		1.8 * k,
+		NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.4),
+			NumberSequenceKeypoint.new(0.3, 0.9),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		5
+	)
+	return face
+end
+
+--[[
+	Behind a GOLD button in its holder (call it once the button is placed: the same anchor, its
+	position): a soft gold glow round it ("<Name>Glow": a gold band beyond the outline and a fainter
+	ring beyond that) and the dark slab under it ("<Name>Slab", the mockup's 3D drop).
+]]
+function HudBubble.underlay(button: GuiObject, size: Vector2)
+	local g, gold = HudBubble.GoldSizes, HudBubble.Gold
+	local holder = button.Parent
+	if not holder then
+		return
+	end
+	local k = size.Y / 64
+	local corner = math.floor(g.Corner * k + 0.5)
+	local a = button.AnchorPoint
+	local function behind(name: string, grow: number, drop: number, z: number): Frame
+		local frame = UIKit.new("Frame", {
+			Name = button.Name .. name,
+			AnchorPoint = a,
+			BackgroundColor3 = gold.Glow,
+			BorderSizePixel = 0,
+			Position = button.Position + UDim2.fromOffset((2 * a.X - 1) * grow, (2 * a.Y - 1) * grow + drop),
+			Size = button.Size + UDim2.fromOffset(2 * grow, 2 * grow),
+			ZIndex = z,
+		}, holder)
+		UIKit.corner(frame, corner + math.floor(grow))
+		return frame
+	end
+	local glow = behind("Glow", g.Edge + g.Glow, 0, 1)
+	glow.BackgroundTransparency = 0.5
+	UIKit.new("UIStroke", {
+		Name = "Halo",
+		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		Color = gold.Glow,
+		Thickness = g.Glow,
+		Transparency = 0.78,
+	}, glow)
+	local slab = behind("Slab", g.Edge, g.Drop * k, 2)
+	slab.BackgroundColor3 = gold.Slab
+end
+
+-- One of the shop's stickers (IconAssets.Shop: "star", "sparkle") `size` square on `button`, its
+-- middle at `at`; nothing while that sheet doesn't show.
+local function goldSticker(button: GuiObject, name: string, icon: string, size: number, at: UDim2, z: number)
+	if not IconAssets.shopShows(icon) then
+		return
+	end
+	local image = UIKit.new("ImageLabel", {
+		Name = name,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Position = at,
+		ScaleType = Enum.ScaleType.Fit,
+		Size = UDim2.fromOffset(size, size),
+		ZIndex = z,
+	}, button)
+	IconAssets.applyShop(image, icon)
+end
+
+-- How much of the GOLD bar shows the backpack's load (0..1; junk reads 0). Pure (specs).
+function HudBubble.fillShare(count: number, capacity: number): number
+	if type(count) ~= "number" or count ~= count or type(capacity) ~= "number" or capacity ~= capacity or capacity <= 0 then
+		return 0
+	end
+	return math.clamp(count / capacity, 0, 1)
+end
+
 --[[
 	A well's key hint (setBackpackKey fills it): a key cap "Key" (keyboards,
 	like the TRAIN chip's T) and a gamepad glyph "Glyph", both hidden, on the
-	top-right corner (`left`: the top-left).
+	top-right corner (`left`: the top-left). `light`: the GOLD Inventory's
+	white cap with a dark letter (else dark with a white one).
 ]]
-local function keyHint(button: TextButton, compact: boolean, left: boolean?)
+local function keyHint(button: TextButton, compact: boolean, left: boolean?, light: boolean?)
 	local keySize = if compact then 30 else 28
 	local at = if left then UDim2.new(0, 8, 0, 2) else UDim2.new(1, -8, 0, 2)
 	local key = Pop.text(button, "", 20, {
 		Name = "Key",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = PopTheme.Well,
+		BackgroundColor3 = if light then Color3.new(1, 1, 1) else PopTheme.Well,
 		BackgroundTransparency = 0,
 		Position = at,
 		Size = UDim2.fromOffset(keySize, keySize),
 		Visible = false,
-		ZIndex = 8,
+		ZIndex = 10,
 	})
 	UIKit.corner(key, 6)
-	Pop.border(key, 2.5)
+	if light then
+		-- (the mockup's white cap: a dark letter, a light grey lip along its bottom)
+		local gold = HudBubble.Gold
+		key.TextColor3 = gold.Outline
+		local edge = key:FindFirstChild("Edge") :: UIStroke?
+		if edge then
+			edge.Enabled = false
+		end
+		UIKit.new("UIGradient", {
+			Rotation = 90,
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, gold.Key[1]),
+				ColorSequenceKeypoint.new(0.74, gold.Key[2]),
+				ColorSequenceKeypoint.new(0.76, gold.Key[3]),
+				ColorSequenceKeypoint.new(1, gold.Key[3]),
+			}),
+		}, key)
+		Pop.border(key, 2.5, gold.Outline)
+	else
+		Pop.border(key, 2.5)
+	end
 	UIKit.new("ImageLabel", {
 		Name = "Glyph",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2309,12 +2782,133 @@ local function keyHint(button: TextButton, compact: boolean, left: boolean?)
 		Position = at,
 		Size = UDim2.fromOffset(keySize, keySize),
 		Visible = false,
-		ZIndex = 8,
+		ZIndex = 10,
 	}, button)
 end
 
--- The backpack button itself in `holder`: the well, the pack's picture, "n / cap", FULL, the key hint.
+--[[
+	The round look's Inventory button in `holder` (goldFace; `own` nil fills the holder): the
+	shop's sticker backpack on the left end, a touch above the middle (owner 2026-11-11: "batoh
+	jeste o kus vys": its top just inside the rims) with its dark drop; the count in gold letters
+	(a thick dark edge, a dark copy under it) over the progress bar ("Bar": a dark green track, the
+	gold "Fill" with the stripes HudController drifts, "Drift"); the red FULL tag on the top edge
+	over the count, the gold star on the top edge, two sparkles, the white Q keycap on the top-right
+	corner. The backpack ("Pack") and the count bounce by their "Bounce" UIScales (HudController).
+]]
+local function inventoryButton(holder: Instance, layout: Layout, size: Vector2, own: Vector2?): (TextButton, TextLabel)
+	local g, gold = HudBubble.GoldSizes, HudBubble.Gold
+	local k = size.Y / 64
+	local button = UIKit.new("TextButton", {
+		Name = "Backpack",
+		AutoButtonColor = true,
+		BorderSizePixel = 0,
+		Text = "",
+		Size = if own then UDim2.fromOffset(own.X, own.Y) else UDim2.fromScale(1, 1),
+		Selectable = true,
+		ZIndex = 3,
+	}, holder)
+	HudBubble.goldFace(button, "Inventory", size)
+	local pic = math.floor(g.Pack * k + 0.5)
+	local pack = HudBubble.packArt(button, pic, {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, g.PackX * k, 0.5, g.PackY * k),
+		ZIndex = 7,
+	})
+	-- (the sticker's dark drop under it, the mockup's: a dark copy a little lower)
+	local icon = pack:FindFirstChild("Icon") :: ImageLabel?
+	if icon and icon.Visible then
+		local drop = icon:Clone()
+		drop.Name = "Drop"
+		drop.ImageColor3 = gold.Slab
+		drop.ImageTransparency = 0.45
+		drop.Position = UDim2.fromOffset(0, 2.5 * k)
+		drop.ZIndex = icon.ZIndex - 1
+		drop.Parent = pack
+	end
+	UIKit.new("UIScale", { Name = "Bounce", Scale = 1 }, pack)
+	local left = g.CountLeft * k
+	local boxW = size.X - left - g.CountRight * k
+	local count = Pop.text(button, HudBubble.backpackText(0, 5), math.floor(g.CountText * k), {
+		Name = "Count",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(left + boxW / 2, (g.CountTop + g.CountHeight / 2) * k),
+		Size = UDim2.fromOffset(boxW, g.CountHeight * k),
+		ZIndex = 9,
+	})
+	local edge = count:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Color = gold.Outline
+		edge.Thickness = g.CountEdge * k
+	end
+	UIKit.new("UIGradient", {
+		Name = "Gold",
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, gold.Count[1]),
+			ColorSequenceKeypoint.new(0.2, gold.Count[1]),
+			ColorSequenceKeypoint.new(0.6, gold.Count[2]),
+			ColorSequenceKeypoint.new(1, gold.Count[3]),
+		}),
+	}, count)
+	local shade = Pop.shadow(count, 2.5 * k)
+	UIKit.new("UIScale", { Name = "Bounce", Scale = 1 }, count)
+	UIKit.new("UIScale", { Name = "Bounce", Scale = 1 }, shade)
+	-- the progress bar: how full the backpack is
+	local bar = UIKit.new("Frame", {
+		Name = "Bar",
+		AnchorPoint = Vector2.new(0, 1),
+		BackgroundColor3 = gold.Track,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, g.BarLeft * k, 1, -g.BarBottom * k),
+		Size = UDim2.new(1, -(g.BarLeft + g.BarRight) * k, 0, g.BarHeight * k),
+		ZIndex = 7,
+	}, button)
+	UIKit.corner(bar, 999)
+	Pop.border(bar, g.BarEdge * k, gold.Outline)
+	local fill = UIKit.new("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		Size = UDim2.fromScale(0, 1),
+		Visible = false,
+		ZIndex = 8,
+	}, bar)
+	UIKit.corner(fill, 999)
+	UIKit.new("UIGradient", { Name = "Paint", Rotation = 90, Color = threeTone(gold.Fill, 0.6) }, fill)
+	local barW = size.X - (g.BarLeft + g.BarRight) * k
+	local period = g.BarStripe * k
+	local step = period * math.sqrt(2) -- (the stripes along the bar: one apart)
+	local drift = UIKit.new("Frame", {
+		Name = "Drift",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, barW + step, 1, 0),
+		ZIndex = 9,
+	}, fill)
+	drift:SetAttribute("Step", step)
+	local reach = barW + step + g.BarHeight * k
+	HudBubble.stripeBands(drift, period, g.BarStripeWidth * k, g.BarStripeShow, math.ceil(reach / math.sqrt(2) / (4 * period)) + 1, reach)
+	-- a full backpack: the red FULL tag on the top edge over the count (setBackpack: a red count and fill)
+	Pop.tag(button, "FULL", "Red", Vector2.new(if layout.Compact then 84 else 72, if layout.Compact then 30 else 26), {
+		Name = "Full",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromOffset(left + boxW / 2, 0),
+		Visible = false,
+		ZIndex = 11,
+	})
+	goldSticker(button, "Star", "star", g.Star * k, UDim2.new(1, -g.StarX * k, 0, 0), 10)
+	goldSticker(button, "Sparkle", "sparkle", g.Sparkle * k, UDim2.fromOffset(-4 * k, -4 * k), 10)
+	goldSticker(button, "Sparkle2", "sparkle", g.SparkleSmall * k, UDim2.new(1, -30 * k, 1, 2 * k), 10)
+	keyHint(button, layout.Compact, false, true)
+	return button, count
+end
+
+-- The backpack button itself in `holder`: the well (the round look: the Inventory button), the
+-- pack's picture, "n / cap", FULL, the key hint.
 local function packButton(holder: Instance, layout: Layout, size: Vector2, own: Vector2?): (TextButton, TextLabel)
+	if PopTheme.round() then
+		return inventoryButton(holder, layout, size, own)
+	end
 	local button = well(holder, "Backpack", own, HudBubble.WellPaints.Backpack)
 	local pic = size.Y - 8
 	HudBubble.packArt(button, pic, {
@@ -2357,6 +2951,9 @@ function HudBubble.backpackButton(gui: Instance, layout: Layout, uiScale: number
 		Size = UDim2.fromOffset(size.X, size.Y),
 	}, gui)
 	local button, count = packButton(holder, layout, size, nil)
+	if button:GetAttribute("Gold") then
+		HudBubble.underlay(button, size)
+	end
 	return holder, button, count
 end
 
@@ -2372,25 +2969,43 @@ end
 ]]
 function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
 	local side = HudBubble.blasterSlotSize(layout.Compact)
-	local button = well(parent, "Blaster", Vector2.new(side, side), HudBubble.WellPaints.Blaster)
+	-- (the round look: the GOLD slot, the owner's pick 2026-11-11; its pieces under the picture)
+	local gold = PopTheme.round()
+	local button: TextButton
+	if gold then
+		button = UIKit.new("TextButton", {
+			Name = "Blaster",
+			AutoButtonColor = true,
+			BorderSizePixel = 0,
+			Text = "",
+			Size = UDim2.fromOffset(side, side),
+			Selectable = true,
+			ZIndex = 3,
+		}, parent)
+		HudBubble.goldFace(button, "Blaster", Vector2.new(side, side))
+	else
+		button = well(parent, "Blaster", Vector2.new(side, side), HudBubble.WellPaints.Blaster)
+	end
 	-- a soft light disc behind the picture, lit from above (the blaster is dark iron:
-	-- it reads on the dark well); gold while in hand (setBlasterEquipped)
+	-- it reads on the dark well; GOLD: the light middle of the mockup's round gradient); gold
+	-- while in hand (setBlasterEquipped)
 	local disc = UIKit.new("Frame", {
 		Name = "Disc",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = HudBubble.DiscColor,
+		BackgroundColor3 = if gold then HudBubble.GoldDisc else HudBubble.DiscColor,
 		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, if gold then 0.42 else 0.5),
 		Size = UDim2.fromOffset(side - 12, side - 12),
-		ZIndex = 4,
+		ZIndex = if gold then 3 else 4,
 	}, button)
+	button:SetAttribute("DiscColor", disc.BackgroundColor3)
 	UIKit.corner(disc, side)
 	UIKit.new("UIGradient", {
 		Rotation = 90,
 		Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.05),
-			NumberSequenceKeypoint.new(1, 0.5),
+			NumberSequenceKeypoint.new(0, if gold then 0.15 else 0.05),
+			NumberSequenceKeypoint.new(1, if gold then 0.8 else 0.5),
 		}),
 	}, disc)
 	-- (a bit under the middle: the 1 key cap sits on the top-left corner)
@@ -2404,7 +3019,7 @@ function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
 			Position = at,
 			ScaleType = Enum.ScaleType.Fit,
 			Size = UDim2.fromOffset(pic, pic),
-			ZIndex = 5,
+			ZIndex = 6,
 		}, button)
 		IconAssets.apply(icon, "blaster")
 		icon:SetAttribute("Icon", "blaster")
@@ -2413,7 +3028,7 @@ function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
 		Pop.model(button, "blaster", pic, model, {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = at,
-			ZIndex = 5,
+			ZIndex = 6,
 		}, from)
 	end
 	-- in hand: a gold ring round the black outline (outside the well, so it covers nothing)
@@ -2426,7 +3041,7 @@ function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
 		Visible = false,
 		ZIndex = 7,
 	}, button)
-	UIKit.corner(ring, (if PopTheme.round() then HudBubble.WellCorner else 14) + PopTheme.Edge)
+	UIKit.corner(ring, (if gold then math.floor(HudBubble.GoldSizes.Corner * side / 64 + 0.5) else 14) + PopTheme.Edge)
 	UIKit.new("UIStroke", {
 		Name = "Gold",
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
@@ -2436,6 +3051,9 @@ function HudBubble.blasterSlot(parent: Instance, layout: Layout): TextButton
 	}, ring)
 	keyHint(button, layout.Compact, true)
 	button:SetAttribute("Equipped", false)
+	if gold then
+		HudBubble.underlay(button, Vector2.new(side, side)) -- (the slot stays at its holder's top-left)
+	end
 	return button
 end
 
@@ -2447,14 +3065,19 @@ function HudBubble.setBlasterEquipped(button: GuiObject, on: boolean)
 	end
 	local disc = button:FindFirstChild("Disc") :: GuiObject?
 	if disc then
-		disc.BackgroundColor3 = if on then HudBubble.EquippedColor else HudBubble.DiscColor
+		local discColor = button:GetAttribute("DiscColor") -- (the GOLD slot: its light gold middle)
+		disc.BackgroundColor3 = if on
+			then HudBubble.EquippedColor
+			elseif typeof(discColor) == "Color3" then discColor
+			else HudBubble.DiscColor
 	end
 	local rim = button:FindFirstChild("Rim")
 	local light = rim and rim:FindFirstChild("Light") :: UIStroke?
 	if light then
 		local rimColor = button:GetAttribute("RimColor") -- (the round look: the well's own colour)
+		local rimWidth = button:GetAttribute("RimWidth")
 		light.Color = if on then HudBubble.EquippedColor elseif typeof(rimColor) == "Color3" then rimColor else HudBubble.SlotRim
-		light.Thickness = if on then 3 else 2
+		light.Thickness = if on then 3 elseif type(rimWidth) == "number" then rimWidth else 2
 	end
 	button:SetAttribute("Equipped", on)
 end
@@ -2466,7 +3089,7 @@ end
 	"Backpack", its count label "Count", the slot "Blaster").
 ]]
 function HudBubble.carryGroup(gui: Instance, layout: Layout): (Frame, TextButton, TextLabel, TextButton)
-	local size = if layout.Compact then HudBubble.BackpackSizePhone else HudBubble.BackpackSize
+	local size = HudBubble.carryPackSize(layout.Compact)
 	local group = HudBubble.carryGroupSize(layout.Compact)
 	local holder = UIKit.new("Frame", {
 		Name = "Carry",
@@ -2482,23 +3105,50 @@ function HudBubble.carryGroup(gui: Instance, layout: Layout): (Frame, TextButton
 	local button, count = packButton(holder, layout, size, size)
 	button.AnchorPoint = Vector2.new(1, 0)
 	button.Position = UDim2.fromScale(1, 0)
+	if button:GetAttribute("Gold") then
+		HudBubble.underlay(button, size)
+	end
 	return holder, button, count, slot
 end
 
--- Shows "count / capacity" on the button; a full backpack gets the red count and the FULL tag.
+-- Shows "count / capacity" on the button; a full backpack gets the red count and the FULL tag (the
+-- GOLD Inventory: its bar shows how full, red while full; the star steps aside for FULL).
 function HudBubble.setBackpack(button: GuiObject, count: number, capacity: number)
 	local full = capacity > 0 and count >= capacity
+	local text = HudBubble.backpackText(count, capacity)
 	local label = button:FindFirstChild("Count") :: TextLabel?
 	if label then
-		local text = HudBubble.backpackText(count, capacity)
 		if label.Text ~= text then
 			label.Text = text
 		end
 		label.TextColor3 = if full then HudBubble.FullColor else PopTheme.Ink
+		local letters = label:FindFirstChild("Gold") -- (the GOLD count's gold letters: red while full)
+		if letters and letters:IsA("UIGradient") then
+			letters.Enabled = not full
+		end
+	end
+	local shade = button:FindFirstChild("CountShadow") :: TextLabel?
+	if shade and shade.Text ~= text then
+		shade.Text = text
 	end
 	local tag = button:FindFirstChild("Full") :: GuiObject?
 	if tag then
 		tag.Visible = full
+	end
+	local bar = button:FindFirstChild("Bar")
+	local fill = if bar then bar:FindFirstChild("Fill") else nil
+	if fill and fill:IsA("GuiObject") then
+		local share = HudBubble.fillShare(count, capacity)
+		fill.Size = UDim2.fromScale(share, 1)
+		fill.Visible = share > 0
+		local paint = fill:FindFirstChild("Paint")
+		if paint and paint:IsA("UIGradient") and button:GetAttribute("Full") ~= full then
+			paint.Color = threeTone(if full then HudBubble.Gold.FillFull else HudBubble.Gold.Fill, 0.6)
+		end
+	end
+	local star = button:FindFirstChild("Star")
+	if star and star:IsA("GuiObject") then
+		star.Visible = not full
 	end
 	button:SetAttribute("Full", full)
 end

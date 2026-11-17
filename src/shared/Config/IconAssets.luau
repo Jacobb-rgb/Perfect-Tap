@@ -403,9 +403,329 @@ function IconAssets.applyTileArt(label: ImageLabel, art: string)
 	label.ImageRectSize = Vector2.new(t.Cell, t.Cell)
 end
 
+--[[
+	The shop v3 icons (owner 2026-11-11: the "WOW" shop concept's own sticker
+	icons, docs/art/shop_v3_concept/icons.js) in one image:
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_ikony.png, made by
+	tools/preview/shop_icon_sheet.mjs (6 x 6 cells of Cell px, the order of
+	Icons below; 1020 px square, under Roblox's 1024). Id 0 = not uploaded:
+	the shop shows its live 3D models, drawn pictures or words instead
+	(UI/ShopFx.icon returns nil). The previews draw build/preview/icons/shop_<name>.png
+	(the same tool writes them) while Previewing and Preview are on.
+]]
+IconAssets.Shop = {
+	File = "obchod_ikony.png",
+	Id = 137705934014876, -- uploaded by the owner 2026-11-11 (Studio Asset Manager)
+	Cell = 170,
+	Columns = 6,
+	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Icons = {
+		"clover",
+		"clover_rainbow",
+		"clover_gold",
+		"cash",
+		"coin",
+		"coins",
+		"bag",
+		"chest",
+		"gift",
+		"basket",
+		"ticket",
+		"crown",
+		"bolt",
+		"bolt_cyan",
+		"star",
+		"egg",
+		"wheel",
+		"potion",
+		"clock",
+		"rebirth",
+		"book",
+		"backpack",
+		"hammer",
+		"moon",
+		"gem",
+		"fire",
+		"lock",
+		"trophy",
+		"sparkle",
+		"x2",
+		"blaster",
+		"heart_fire",
+		"star_break",
+		"globe",
+		"users",
+	},
+}
+local shopCell: { [string]: number } = {}
+for i, name in IconAssets.Shop.Icons do
+	shopCell[name] = i - 1
+end
+
+-- The cell of shop icon `name` in its image (0-based; nil: not in the sheet).
+function IconAssets.shopCell(name: string): number?
+	return shopCell[name]
+end
+
+--[[
+	The shop's golems and eggs as drawn stickers (owner 2026-11-11: "the eggs,
+	all the golems are terribly basic ... make them like the icons"; he picked
+	B, 2D stickers of the skins in the game; 2026-11-12: "more cool, and it has
+	to look like it is in the game"): each one drawn from the game's own model,
+	the one its 3D picture shows (PictureModels.build), in the shop icons' style
+	by tools/preview/shop_golem_sheet.mjs (the toon renderer
+	tools/preview/golem_toon), all in one image,
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_golemove.png (Columns x rows of
+	Cell px in the order of Icons, 1024 px square). Icons are the shop's picture
+	names (golem_<Kind>, capsule_<Id>: the live models UI/StoreView shows). Id
+	0 = not uploaded: the shop keeps its live 3D models (UI/ShopFx.stickerPicture
+	returns nil), and so does a golem or egg with no sticker (a later
+	edition's). The previews draw build/preview/icons/sticker_<name>.png while
+	Previewing and Preview are on.
+]]
+export type StickerSheet = {
+	File: string,
+	Id: number,
+	Cell: number,
+	Columns: number,
+	Preview: boolean, -- (a preview of the shop before the upload sets it false)
+	Icons: { string },
+}
+
+IconAssets.ShopGolems = {
+	File = "obchod_golemove.png",
+	Id = 78687800602987, -- (the owner's upload, 2026-11-12)
+	Cell = 256,
+	Columns = 4,
+	Preview = true,
+	Icons = {
+		-- the Royal Egg's golems (rarest last) and the egg
+		"golem_SilverSquire",
+		"golem_RoseKnight",
+		"golem_MoonstoneOracle",
+		"golem_StormTitan",
+		"golem_CelestialSovereign",
+		"capsule_Royal",
+		-- the Starter Pack's golem
+		"golem_GildedPorter",
+		-- the Dragonforge limited edition (Config/LimitedGolems, rarest last) and its shard
+		"golem_CinderWhelp",
+		"golem_EmberHatchling",
+		"golem_ScaleKnight",
+		"golem_Flamewing",
+		"golem_MagmaWyvern",
+		"golem_DragonKing",
+		"capsule_Dragonforge",
+	},
+} :: StickerSheet
+
+--[[
+	The shop's other live 3D pictures drawn the same way, from the same game
+	models (owner 2026-11-12, once the golem stickers were in: "the hoverboard
+	etc. doesn't have the drawn style yet, and one more thing on the same
+	page"): the PASSES tab's podium (Two More Podiums; the Starter Pack's
+	podium skin is the same one), Express Train and Custom Hoverboard (its deck
+	doodles as the game builds them while the painted deck,
+	Textures.board_custom_deck, isn't uploaded). One image,
+	../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_predmety.png (Columns x rows of
+	Cell px in the order of Icons), by the same tool. Id 0 = not uploaded:
+	their live 3D models.
+]]
+IconAssets.ShopItems = {
+	File = "obchod_predmety.png",
+	Id = 83079493320751, -- (the owner's upload, 2026-11-16)
+	Cell = 256,
+	Columns = 3,
+	Preview = true,
+	Icons = { "podium", "train", "board_TerraForgeCustom" },
+} :: StickerSheet
+
+-- Every image of drawn shop stickers (a picture name is in one of them at most).
+IconAssets.StickerSheets = { IconAssets.ShopGolems, IconAssets.ShopItems } :: { StickerSheet }
+local stickerSheet: { [string]: StickerSheet } = {}
+local stickerCell: { [string]: number } = {}
+for _, sheet in IconAssets.StickerSheets do
+	for i, name in sheet.Icons do
+		assert(stickerSheet[name] == nil, "IconAssets: the sticker " .. name .. " is in two images")
+		stickerSheet[name] = sheet
+		stickerCell[name] = i - 1
+	end
+end
+
+-- The image holding the drawn sticker `name` (nil: no sticker).
+function IconAssets.shopStickerSheet(name: string): StickerSheet?
+	return stickerSheet[name]
+end
+
+-- The cell of the drawn sticker `name` in its image (0-based; nil: no sticker).
+function IconAssets.shopStickerCell(name: string): number?
+	return stickerCell[name]
+end
+
+-- Will the drawn sticker `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.shopStickerShows(name: string): boolean
+	local sheet = stickerSheet[name]
+	if sheet == nil then
+		return false
+	end
+	if sheet.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and sheet.Preview
+end
+
+-- Shows the drawn sticker `name` on an ImageLabel (its cell of its uploaded image; the previews: its own picture).
+function IconAssets.applyShopSticker(label: ImageLabel, name: string)
+	local sheet, cell = stickerSheet[name], stickerCell[name]
+	label:SetAttribute("Icon", "sticker_" .. name)
+	if sheet == nil or cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell)
+	label.ImageRectSize = Vector2.new(sheet.Cell, sheet.Cell)
+end
+
+--[[
+	The shop v3 effects (owner 2026-11-11: "cool and smooth, not laggy"):
+	one picture of white sprites the game tints (ImageColor3), cut by Cells
+	{ x, y, w, h } in px: ../NAHRAJ_DO_ROBLOXU/ikony_obchod/obchod_efekty.png,
+	made by tools/preview/shop_effects_sheet.mjs (1024 px square). One
+	ImageLabel each instead of hundreds of frames: the sunburst behind
+	pictures, a soft glow, a sparkle, a flame, a patch of studs (12 x 12)
+	and three lightning bolts (the drifting dots stay in the picture,
+	unused: owner 2026-11-12 "take the dotted square away"). Id 0 = not uploaded: the shop
+	keeps plain gradients (no rays, no studs) and the icon sheet's bolt and
+	sparkle (UI/ShopFx.sprite returns nil). The previews draw
+	build/preview/icons/shopfx_<name>.png while Previewing and Preview are on.
+]]
+IconAssets.ShopFx = {
+	File = "obchod_efekty.png",
+	Id = 137388038264514, -- uploaded by the owner 2026-11-12 (Studio Asset Manager)
+	Preview = true, -- (a preview of the shop before the upload sets it false)
+	Cells = {
+		rays = { 0, 0, 512, 512 },
+		glow = { 512, 0, 256, 256 },
+		sparkle = { 768, 0, 256, 256 },
+		dots = { 512, 256, 256, 256 }, -- (unused since 2026-11-12; the uploaded picture keeps it)
+		flame = { 768, 256, 128, 256 },
+		studs = { 0, 512, 384, 384 },
+		bolt1 = { 384, 512, 192, 512 },
+		bolt2 = { 576, 512, 192, 512 },
+		bolt3 = { 768, 512, 192, 512 },
+	} :: { [string]: { number } },
+}
+
 -- The preview tools set this: they draw every icon from build/preview/icons,
 -- so layouts that differ without an uploaded picture use the uploaded look.
 IconAssets.Previewing = false
+
+-- Will effect sprite `name` show (the effects picture is uploaded, or a preview that shows it)?
+function IconAssets.shopFxShows(name: string): boolean
+	local sheet = IconAssets.ShopFx
+	if sheet.Cells[name] == nil then
+		return false
+	end
+	if sheet.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and sheet.Preview
+end
+
+-- Shows effect sprite `name` on an ImageLabel (its cell of the uploaded picture; the previews: its own).
+function IconAssets.applyShopFx(label: ImageLabel, name: string)
+	local sheet = IconAssets.ShopFx
+	local cell = sheet.Cells[name]
+	label:SetAttribute("Icon", "shopfx_" .. name)
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new(cell[1], cell[2])
+	label.ImageRectSize = Vector2.new(cell[3], cell[4])
+end
+
+--[[
+	The elevator window's pictures (owner 2026-11-15: his reference with a
+	painted picture of every floor filling its card, and a dark COMING SOON
+	banner): one picture of the floors as the game shows them,
+	../NAHRAJ_DO_ROBLOXU/ikony_vytah/vytah_patra.png (1024 px square, made
+	from the game's floors, tools/preview/elevator_art), cut by Cells
+	{ x, y, w, h } in px: a 512 x 288 cell per floor (MineFloors Id) and the
+	1024 x 160 banner. Uploaded by the owner 2026-11-16 (id from him, the
+	file read by his Studio's import 5 s before the asset appeared). Id 0 =
+	not uploaded: the cards keep their painted backdrops in the floor's
+	colours (UI/ElevatorWindow; they stay under the pictures too, for the
+	minutes Roblox checks an upload). The previews draw
+	build/preview/icons/elevator_<name>.png.
+]]
+IconAssets.ElevatorArt = {
+	File = "vytah_patra.png",
+	Id = 103680480493166,
+	Preview = true, -- (the previews before the upload; unused once Id is set)
+	Cells = {
+		Quarry = { 0, 0, 512, 288 },
+		EmberCaves = { 512, 0, 512, 288 },
+		DeepHollow = { 0, 288, 512, 288 },
+		SunkenPalace = { 512, 288, 512, 288 },
+		StormglassRift = { 0, 576, 512, 288 },
+		HeartstoneCore = { 512, 576, 512, 288 },
+		ComingSoon = { 0, 864, 1024, 160 },
+	} :: { [string]: { number } },
+}
+
+-- Will elevator picture `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.elevatorArtShows(name: string): boolean
+	local sheet = IconAssets.ElevatorArt
+	if sheet.Cells[name] == nil then
+		return false
+	end
+	if sheet.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and sheet.Preview
+end
+
+-- Shows elevator picture `name` on an ImageLabel (its cell of the uploaded picture; the previews: its own).
+function IconAssets.applyElevatorArt(label: ImageLabel, name: string)
+	local sheet = IconAssets.ElevatorArt
+	local cell = sheet.Cells[name]
+	label:SetAttribute("Icon", "elevator_" .. name)
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new(cell[1], cell[2])
+	label.ImageRectSize = Vector2.new(cell[3], cell[4])
+end
+
+-- Will shop icon `name` show (its image is uploaded, or a preview that shows it)?
+function IconAssets.shopShows(name: string): boolean
+	if shopCell[name] == nil then
+		return false
+	end
+	if IconAssets.Shop.Id > 0 then
+		return true
+	end
+	return IconAssets.Previewing and IconAssets.Shop.Preview
+end
+
+-- Shows shop icon `name` on an ImageLabel (its cell of the uploaded image; the previews: its own picture).
+function IconAssets.applyShop(label: ImageLabel, name: string)
+	local cell = shopCell[name]
+	label:SetAttribute("Icon", "shop_" .. name)
+	local sheet = IconAssets.Shop
+	if cell == nil or sheet.Id <= 0 then
+		label.Image = ""
+		return
+	end
+	label.Image = "rbxassetid://" .. tostring(sheet.Id)
+	label.ImageRectOffset = Vector2.new((cell % sheet.Columns) * sheet.Cell, (cell // sheet.Columns) * sheet.Cell)
+	label.ImageRectSize = Vector2.new(sheet.Cell, sheet.Cell)
+end
 
 -- Will icon `name` show a picture (its sheet is uploaded, or a preview)?
 function IconAssets.shows(name: string): boolean

@@ -539,13 +539,25 @@ return function(T, Loader)
 		local refs = HudView.build()
 		HudView.placeBackpack(refs, 0.62, false)
 		T.eq(refs.CarryPanel.Position.X.Offset, HudBubble.backpackX(0.62), "placed for the new scale")
-		-- the light HUD's group stays centred at any scale (design units, no Roblox slot to clear)
+		-- the light HUD's group stays centred at any scale (design units, no Roblox slot to clear); at a
+		-- phone's scale it keeps out of the thumbstick's zone (the left 40 %: HudBubble.carryLeft)
 		withLight(true, function()
 			local light = HudView.build()
 			for _, scale in { 0.62, 1, 1.25 } do
 				HudView.placeBackpack(light, scale, scale > 1)
 				local holder = light.CarryPanel
-				T.eq(2 * holder.Position.X.Offset + holder.Size.X.Offset, 0, `light: centred at {scale}`)
+				local width = light.CarryPanel:GetAttribute("ScreenWidth")
+				local zone = scale <= HudBubble.CompactScale and holder.Size.X.Offset > (1 - 2 * HudBubble.ThumbZone) * width
+				if zone then
+					T.near(
+						width / 2 + holder.Position.X.Offset,
+						HudBubble.ThumbZone * width,
+						1,
+						`light: at the thumbstick zone's edge at {scale}`
+					)
+				else
+					T.eq(2 * holder.Position.X.Offset + holder.Size.X.Offset, 0, `light: centred at {scale}`)
+				end
 			end
 		end)
 		T.eq(HudView.backpackText(12, 30), "12 / 30")

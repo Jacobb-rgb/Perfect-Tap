@@ -292,13 +292,29 @@ end
 local settingReduced = false
 local systemReduced = false
 local pointer: Pointer = "Mouse"
+local reducedHooks: { (boolean) -> () } = {}
+
+-- Reduce motion turned on or off: the loops follow, and every onReducedChanged hook hears it.
+local function reducedChanged()
+	Motion.refreshLoops()
+	local now = Motion.reduced()
+	for _, hook in reducedHooks do
+		task.spawn(hook, now)
+	end
+end
+
+-- Calls `hook(reduced)` whenever Reduce motion turns on or off (a controller's own endless tweens,
+-- the GOLD hotbar's drifting stripes: HudController).
+function Motion.onReducedChanged(hook: (boolean) -> ())
+	table.insert(reducedHooks, hook)
+end
 
 -- The game's own setting (SettingsConfig.ReduceMotion; UIMotionController).
 function Motion.setReduced(on: boolean)
 	local was = Motion.reduced()
 	settingReduced = on == true
 	if was ~= Motion.reduced() then
-		Motion.refreshLoops()
+		reducedChanged()
 	end
 end
 
@@ -307,7 +323,7 @@ function Motion.setSystemReduced(on: boolean)
 	local was = Motion.reduced()
 	systemReduced = on == true
 	if was ~= Motion.reduced() then
-		Motion.refreshLoops()
+		reducedChanged()
 	end
 end
 

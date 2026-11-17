@@ -68,7 +68,8 @@ return function(T, Loader)
 		data.TotalEarned = 9e9
 		data.BlasterLevel = 8
 		data.BlasterOre = "CrystalRose"
-		data.Upgrades = { Bellows = 3, ExtraSlots = 2, PenLevel = 4, PenAutomation = 2, Elevator = true }
+		data.Upgrades =
+			{ Bellows = 3, ExtraSlots = 2, PenLevel = 4, PenAutomation = 2, Floors = { SunkenPalace = true, StormglassRift = true } }
 		data.MachineUpgrades = { Crusher = { Speed = 3, Quality = 2 } }
 		data.MachineInventory = { Conveyor = 12 }
 		data.PlacedMachines = {
@@ -225,7 +226,9 @@ return function(T, Loader)
 		T.eq(data.BlasterLevel, 1)
 		T.eq(data.BlasterOre, "", "the rusty starter")
 		T.eq(data.Upgrades.Bellows, 0, "machine speed")
-		T.eq(data.Upgrades.Elevator, false, "the elevator")
+		T.eq(type(data.Upgrades.Floors), "table", "the elevator floors bought...")
+		T.eq(next(data.Upgrades.Floors), nil, "...go, as the one-time elevator did")
+		T.eq(data.Upgrades.Elevator, nil, "no one-time elevator flag")
 		T.truthy(deepEqual(data.MachineUpgrades, {}), "Tech shop levels")
 		T.eq(data.Train.CapacityLevel, 0)
 		T.eq(data.Train.SpeedLevel, 0)

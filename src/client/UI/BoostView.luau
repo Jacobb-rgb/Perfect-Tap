@@ -3241,6 +3241,36 @@ function BoostView.cornerHeight(): number
 	return BoostView.CornerIcon + 2 + BoostView.CornerText
 end
 
+-- The running boosts' stickers from the shop's icon sheet (IconAssets.Shop; owner 2026-11-11: "the
+-- new picture there"): the ones the shop shows for the same boosts (StoreConfig's TripleLucky15 and
+-- HexaLucky15 cards; Server Luck's is the plain clover, but it has no chip: the line over the money).
+BoostView.Stickers = { TripleLucky = "clover_gold", HexaLucky = "clover_rainbow" } :: { [string]: string }
+BoostView.StickerScale = 1.12 -- the sticker's square, a share of its spot (the sheet's cells have a margin)
+
+--[[
+	A corner tile's picture "Art" in `dot` (filling it): the boost's sticker once the shop's
+	sheet shows, else the drawn clover / gem (BoostView.art). Returns it.
+]]
+function BoostView.cornerArt(dot: GuiObject, kindId: string): GuiObject
+	local sheet = BoostView.Stickers[kindId]
+	if sheet and IconAssets.shopShows(sheet) then
+		local sticker = UIKit.new("ImageLabel", {
+			Name = "Art",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0.5),
+			ScaleType = Enum.ScaleType.Fit,
+			Size = UDim2.fromScale(BoostView.StickerScale, BoostView.StickerScale),
+			ZIndex = 4,
+		}, dot)
+		IconAssets.applyShop(sticker, sheet)
+		return sticker
+	end
+	local art = BoostView.art(dot, kindId, false)
+	art.Size = UDim2.fromScale(1, 1)
+	return art
+end
+
 local function cornerTile(button: TextButton, kindId: string)
 	button:SetAttribute("Corner", true)
 	local pill = button:FindFirstChild("Pill") :: Frame?
@@ -3271,7 +3301,7 @@ local function cornerTile(button: TextButton, kindId: string)
 		BackgroundTransparency = 1,
 		ZIndex = 3,
 	}, pill)
-	BoostView.art(dot, kindId, false).Size = UDim2.fromScale(1, 1)
+	BoostView.cornerArt(dot, kindId)
 	local label = UIKit.label(pill, "", BoostView.CornerText, {
 		Name = "Text",
 		AnchorPoint = Vector2.new(0.5, if round then 0.5 else 0),

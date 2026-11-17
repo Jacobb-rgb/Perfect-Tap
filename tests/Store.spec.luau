@@ -33,12 +33,25 @@ return function(T, Loader)
 	end
 
 	T.test("Store: a card for every store product, the blaster band of the next level", function()
-		for _, key in { "CoinsSmall", "CoinsMedium", "CoinsLarge", "CoinsHuge", "CoinsMega", "RoyalCapsule5", "ServerLuck15", "BlasterNextA", "BlasterNextD" } do
+		for _, key in
+			{
+				"CoinsSmall",
+				"CoinsMedium",
+				"CoinsLarge",
+				"CoinsHuge",
+				"CoinsMega",
+				"RoyalCapsule5",
+				"ServerLuck15",
+				"BlasterNextA",
+				"BlasterNextD",
+			}
+		do
 			T.truthy(StoreConfig.sells(key), key .. " is sold")
 		end
 		T.falsy(StoreConfig.sells("Nope"), "unknown key")
 		-- (review #12) the pass opens the Glimmer Grotto: its odds show before the buy
 		T.truthy(StoreConfig.ById.BigPass.Odds, "the Forgemaster's Pass card shows the Grotto odds first")
+		T.truthy(StoreConfig.ById.BigPassWide.Odds, "and its wide card on PASSES")
 		-- (review #4/#11) the blaster texts say what a rebirth really does
 		for _, key in { "BlasterNextA", "BlasterNextB", "BlasterNextC", "BlasterNextD" } do
 			T.truthy(string.find(MonetizationConfig.get(key).Description, "1 level higher", 1, true) ~= nil, key .. " text")
@@ -54,17 +67,125 @@ return function(T, Loader)
 		T.eq(StoreConfig.blasterKey(spec, 9), "BlasterNextD", "LV 9 -> the top")
 		T.eq(StoreConfig.blasterKey(spec, 10), nil, "nothing at the top")
 		T.eq(StoreConfig.blasterKey(spec, nil), "BlasterNextA", "no level: LV 1")
-		-- (owner 2026-10-20 evening: sections one under the other) every card sits in a known
-		-- section, every section has cards, and a section's rows fill 1..n
+		-- (shop v3, owner 2026-11-11) six tabs, every card on a known one, every tab has cards,
+		-- a tab's rows fill 1..n with 1 to 5 cards
+		local ids = {}
+		for _, section in StoreConfig.Sections do
+			table.insert(ids, section.Id)
+		end
+		T.eq(table.concat(ids, ","), "Featured,Golems,Blasters,Passes,Boosts,Cash", "the six tabs in the concept's order")
 		local seen: { [string]: number } = {}
 		for _, card in StoreConfig.Cards do
-			T.truthy(StoreConfig.SectionById[card.Section], card.Id .. " in a known section")
+			T.truthy(StoreConfig.SectionById[card.Section], card.Id .. " in a known tab")
 			seen[card.Section] = (seen[card.Section] or 0) + 1
 		end
 		for _, section in StoreConfig.Sections do
 			T.truthy((seen[section.Id] or 0) > 0, section.Id .. " has cards")
-			for _, row in StoreConfig.rows(section.Id) do
-				T.truthy(#row >= 1 and #row <= 4, section.Id .. ": 1 to 4 cards a row")
+			for r, row in StoreConfig.rows(section.Id) do
+				T.truthy(#row >= 1 and #row <= 5, section.Id .. ": 1 to 5 cards a row")
+				T.truthy(section.RowHeights[r] ~= nil, section.Id .. " row " .. r .. " has a height")
+			end
+		end
+	end)
+
+	-- (owner rule 2026-11-11) everything the shop sold before is still on a tab, plus the wheel's spins
+	T.test("Store: every product the shop sells stays reachable on a tab", function()
+		local reachable: { [string]: boolean } = {}
+		for _, spec in StoreConfig.Cards do
+			for _, key in StoreConfig.keysOf(spec) do
+				reachable[key] = true
+			end
+		end
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
+		if edition then
+			for _, key in edition.Products do
+				reachable[key] = true -- (the FEATURED banner's four buttons)
+			end
+		end
+		for _, key in
+			{
+				"BigPass",
+				"StarterPack",
+				"Podiums",
+				"OfflineExtension",
+				"DoubleMoney",
+				"TrainExpress",
+				"HoverboardCustom",
+				"CoinsSmall",
+				"CoinsMedium",
+				"CoinsLarge",
+				"CoinsHuge",
+				"CoinsMega",
+				"TripleLucky15",
+				"TripleLucky60",
+				"HexaLucky15",
+				"HexaLucky60",
+				"ServerLuck15",
+				"WheelSpins1",
+				"WheelSpins5",
+				"WheelSpins10",
+				"EnchantHeartfire",
+				"EnchantStarbreaker",
+				"BlasterNextA",
+				"BlasterNextB",
+				"BlasterNextC",
+				"BlasterNextD",
+				"RoyalCapsule1",
+				"RoyalCapsule3",
+				"RoyalCapsule5",
+				"RoyalCapsule10",
+				"StarComet",
+				"StarNebula",
+				"StarPulsar",
+				"StarSupernova",
+				"StarSingularity",
+				"DragonforgeCapsule1",
+				"DragonforgeCapsule3",
+				"DragonforgeCapsule10",
+				"DragonforgeCapsule50",
+			}
+		do
+			T.truthy(reachable[key], key .. " is on a tab")
+			T.truthy(MonetizationConfig.Products[key] ~= nil, key .. " exists")
+		end
+		-- every product it shows has a Grant (a handler gives it: MonetizationService)
+		for key in reachable do
+			local product = MonetizationConfig.Products[key]
+			T.truthy(product and product.Grant ~= nil, key .. " has a Grant")
+		end
+	end)
+
+	-- (owner rule 2026-11-11) paid random products and the pass that opens odds always show the odds first
+	T.test("Store: every paid random buy button shows the odds before the buy", function()
+		local StoreView = ui("StoreView")
+		local refs = StoreView.build()
+		local buttons = 0
+		for _, card in refs.Cards do
+			for key, face in card.Buys do
+				buttons += 1
+				local product = MonetizationConfig.Products[key]
+				T.eq(face:GetAttribute("Key"), key, card.Spec.Id .. ": the button knows its product")
+				if product.PaidRandom then
+					T.truthy(face:GetAttribute("Odds"), `{card.Spec.Id} {key}: the odds first`)
+					T.truthy(StoreView.needsOdds(card.Spec, key), key)
+				end
+			end
+		end
+		T.truthy(buttons >= #StoreConfig.Cards, "a price button on every card")
+		T.truthy(StoreView.needsOdds(StoreConfig.ById.BigPass, "BigPass"), "the pass: the Grotto odds first")
+		T.falsy(StoreView.needsOdds(StoreConfig.ById.Podiums, "Podiums"), "a plain pass: no odds panel")
+		for _, key in { "WheelSpins1", "WheelSpins5", "WheelSpins10", "TripleLucky60", "HexaLucky60", "ServerLuck15", "EnchantStarbreaker" } do
+			T.truthy(MonetizationConfig.Products[key].PaidRandom, key .. " is a paid random item")
+		end
+		-- the limited banner's buttons too
+		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
+		local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
+		if edition then
+			local banner = StoreView.setEdition(refs, edition) :: any
+			for count, face in banner.Buys do
+				T.truthy(face:GetAttribute("Odds"), `x{count}: the odds first`)
+				T.eq(face:GetAttribute("Key"), edition.Products[count])
 			end
 		end
 	end)
@@ -88,22 +209,23 @@ return function(T, Loader)
 		end
 		T.eq(#refs.Order, #StoreConfig.Cards, "gamepad order")
 		StoreView.setCard(refs, "Podiums", "Podiums", "Owned")
-		T.truthy(refs.Cards.Podiums.Owned.Visible, "OWNED chip")
-		T.falsy(refs.Cards.Podiums.Price.Visible, "no price on an owned pass")
+		T.truthy(refs.Cards.Podiums.Owned.Visible, "OWNED")
+		T.falsy((refs.Cards.Podiums.Price.Parent :: any).Visible, "no price on an owned pass")
 		StoreView.setCard(refs, "Blaster", "BlasterNextB", "Buy")
 		T.eq(refs.Cards.Blaster.Key, "BlasterNextB", "the band")
-		-- (the round look: the reel's "R$99" words, no mark)
-		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
-		T.eq(refs.Cards.Blaster.PriceAmount.Text, if PopTheme.round() then "R$99" else "99", "its price")
+		T.eq(refs.Cards.Blaster.PriceAmount.Text, "99", "its price")
+		T.eq(refs.Cards.Blaster.Price:GetAttribute("Key"), "BlasterNextB", "its button buys the band")
 		StoreView.setCard(refs, "Blaster", "BlasterNextD", "Hidden")
-		T.falsy(refs.Cards.Blaster.Button.Visible, "hidden at the top")
+		T.falsy(refs.Cards.Blaster.Holder.Visible, "hidden at the top")
 		StoreView.setCard(refs, "Royal5", "RoyalCapsule5", "Pending")
-		T.falsy(refs.Cards.Royal5.Button.Active, "greyed while a buy is on its way")
+		T.falsy(refs.Cards.Royal5.Price.Active, "greyed while a buy is on its way")
+		T.truthy(refs.Cards.Royal5.Shade.Visible)
 		StoreView.setCoins(refs, 0)
 		T.eq((refs.Cards.CoinsSmall.Amount :: any).Text, "$2.5K", "no income: the minimum")
 		StoreView.setCoins(refs, 1000)
 		T.eq((refs.Cards.CoinsMega.Amount :: any).Text, "$18M", "5 hours of 1,000/s")
-		StoreView.showDetail(refs, { Title = "Royal Capsule x5", Lines = { "a", "b" }, Robux = 229, Paint = "Pink" })
+		T.eq((refs.Cards.StarterPack.Amount :: any).Text, "$1.2M", "the Starter Pack: 20 min of 1,000/s")
+		StoreView.showDetail(refs, { Title = "Royal Egg x5", Lines = { "a", "b" }, Robux = 229, Paint = "Pink" })
 		T.truthy(refs.Detail.Visible, "the odds panel")
 		T.eq(refs.DetailLines.Text, "a\nb")
 		StoreView.showDetail(refs, nil)
@@ -113,21 +235,50 @@ return function(T, Loader)
 		local _, fitPhone = StoreView.windowSize(600, 300)
 		T.eq(fitTall, 1, "a PC screen: full size")
 		T.lt(fitPhone, 1, "a short screen: fitted")
-		-- a hidden card closes its row up; a section with nothing to show folds away with its tab
-		local before = refs.Cards.Blaster.Button.Position
-		StoreView.setCard(refs, "Blaster", "BlasterNextD", "Hidden")
-		T.eq(refs.Cards.StarComet.Button.Position.X.Offset, 0, "the next card moves to the row's start")
-		T.eq(before.X.Offset, 0, "the blaster card was first")
+		-- a hidden card closes its row up; a tab with nothing to show hides (the open one moves)
+		-- (a card is held by its middle: it pops in and squashes about its centre)
+		local comet = refs.Cards.StarComet.Holder
+		T.eq(comet.Position.X.Offset - math.floor(comet.Size.X.Offset / 2), 0, "the next card moves to the row's start")
+		StoreView.selectTab(refs, "Golems")
 		for _, id in { "Royal1", "Royal3", "Royal5", "Royal10" } do
 			StoreView.setCard(refs, id, refs.Cards[id].Key, "Hidden")
 		end
-		T.falsy(refs.Sections.Eggs.Visible, "no capsules: the section folds")
-		T.falsy((refs.Tabs.Eggs.Parent :: any).Visible, "and its tab hides")
-		T.truthy(StoreView.sectionTop(refs, "Blasters") > StoreView.sectionTop(refs, "Luck"), "sections run top to bottom")
+		StoreView.setRoyalShown(refs, false)
+		T.falsy(StoreView.tabShown(refs, "Golems"), "no eggs: the tab hides")
+		T.truthy(refs.Current ~= "Golems", "the open tab moved to one that shows")
+		T.falsy(table.find(StoreView.visibleTabs(refs), "Golems"), "not in the LB / RB order")
 	end)
 
-	-- (review #5) on phones the section tabs and the limited banner's buy buttons stay >= 44 pt
-	T.test("Store: phone tabs and banner buttons are at least 44 pt", function()
+	-- (shop v3) a tab shows its own page in its own colours; nothing else shows
+	T.test("Store: a tab shows its page, its colour world and the first thing a gamepad lands on", function()
+		local StoreView = ui("StoreView")
+		local ShopFx = ui("ShopFx")
+		local refs = StoreView.build()
+		for _, section in StoreConfig.Sections do
+			T.truthy(StoreView.selectTab(refs, section.Id) or refs.Current == section.Id, section.Id)
+			for id, page in refs.Pages do
+				T.eq(page.Visible, id == section.Id, section.Id .. ": only its page shows (" .. id .. ")")
+			end
+			local paint = refs.Window.Header:FindFirstChild("Paint") :: any
+			T.eq(paint.Color.Keypoints[1].Value, ShopFx.Themes[section.Id].Head[1], section.Id .. ": its header colour")
+			local first = StoreView.firstSelectable(refs) :: any
+			T.truthy(first and first:IsDescendantOf(refs.Pages[section.Id]), section.Id .. ": the gamepad lands on its page")
+			T.truthy(first.Selectable, "a selectable stop")
+			local tab = refs.TabRefs[section.Id]
+			T.truthy(tab.Ring.Visible, "the open tab's white rim")
+			T.truthy(tab.Scale.Scale > 1, "the open tab is bigger")
+		end
+		-- a multi-option card: no face stop, every option is one; a one-price card: the face
+		T.falsy(refs.Cards.WheelSpins.Button.Selectable, "the wheel card's face is no stop")
+		for _, key in StoreConfig.ById.WheelSpins.Options :: { string } do
+			T.truthy(refs.Cards.WheelSpins.Buys[key].Selectable, key .. " is a stop")
+		end
+		T.truthy(refs.Cards.Podiums.Button.Selectable, "a pass card is one stop")
+		T.falsy(refs.Cards.Podiums.Price.Selectable, "its price is not a second one")
+	end)
+
+	-- (review #5) on phones the tabs, the buy buttons and the odds panel's BUY stay >= 44 pt
+	T.test("Store: phone tabs and buy buttons are at least 44 pt", function()
 		local StoreView = ui("StoreView")
 		local LimitedGolems = Loader.requirePath("ReplicatedStorage.Shared.Config.LimitedGolems")
 		local edition = LimitedGolems.current(LimitedGolems.Current.EndsAt - 86400)
@@ -135,35 +286,121 @@ return function(T, Loader)
 		for _, screen in { { 667, 375 }, { 844, 390 }, { 568, 320 }, { 740, 360 } } do
 			local scale = 0.62 -- HudController.uiScale on phones
 			local w, h = screen[1] / scale, (screen[2] - 58) / scale
-			local refs = StoreView.build()
+			local _, fit = StoreView.windowSize(w, h)
+			local refs = StoreView.build(StoreView.metricsFor(true, fit))
 			StoreView.setEdition(refs, edition)
 			StoreView.layout(refs, w, h, true)
+			T.falsy(StoreView.needsRebuild(refs, w, h, true), "built for this screen")
 			local pt = refs.Fit * scale
+			local where = `{screen[1]}x{screen[2]}`
 			for id, face in refs.Tabs do
-				local frame = face.Parent :: any
-				T.truthy(frame.Size.Y.Offset * pt >= 44, `tab {id} >= 44 pt at {screen[1]}x{screen[2]} ({frame.Size.Y.Offset * pt})`)
+				local size = (face.Parent :: any).Parent.Size
+				local k = refs.TabRefs[id].Scale.Scale
+				T.truthy(size.Y.Offset * k * pt >= 44 - 1e-6, `tab {id} >= 44 pt at {where} ({size.Y.Offset * k * pt})`)
 			end
-			for count, button in (refs.Banner :: any).Buys do
-				T.truthy(button.Size.Y.Offset * pt >= 44, `banner x{count} >= 44 pt at {screen[1]}x{screen[2]}`)
+			for id, card in refs.Cards do
+				for key, face in card.Buys do
+					local size = StoreView.buttonSize(face)
+					T.truthy(size.Y * pt >= 44 - 1e-6, `{id} {key} >= 44 pt at {where} ({size.Y * pt})`)
+				end
 			end
-			T.truthy(refs.DetailBuy.Size.Y.Offset * pt >= 44, "the odds panel's BUY")
+			for count, face in (refs.Banner :: any).Buys do
+				T.truthy(StoreView.buttonSize(face).Y * pt >= 44 - 1e-6, `banner x{count} >= 44 pt at {where}`)
+			end
+			T.truthy(StoreView.buttonSize(refs.DetailBuy).Y * pt >= 44 - 1e-6, "the odds panel's BUY")
+			T.truthy(refs.Window.Close.Parent and (refs.Window.Close.Parent :: any).Size.Y.Offset * pt >= 44 - 1e-6, "the X")
+			-- the six tabs fit between the basket and the X
+			local m = refs.Metrics
+			local right = 0
+			for _, tab in refs.TabRefs do
+				right = math.max(right, tab.Holder.Position.X.Offset + tab.Width / 2)
+			end
+			T.truthy(right <= StoreView.Width - (m.Close + 14), `{where}: the tabs end before the X ({right})`)
 		end
+		-- a PC is not rebuilt for a phone's sizes until it is one
+		local pc = StoreView.build()
+		T.falsy(StoreView.needsRebuild(pc, 1280, 684, false))
+		T.truthy(StoreView.needsRebuild(pc, 1076, 511, true))
 	end)
 
-	-- (review #6) with the icon sheets not uploaded, every card still shows a picture (a live model) or lays out without one
+	-- (review #6) with the icon sheets not uploaded, every card still shows a picture (a live model, a drawn one)
 	T.test("Store: no blank picture areas before the icon sheets are uploaded", function()
 		local StoreView = ui("StoreView")
 		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
-		local before = IconAssets.Previewing
+		local before, beforeId, beforeFx = IconAssets.Previewing, IconAssets.Shop.Id, IconAssets.ShopFx.Id
+		local beforeStickers: { number } = {}
+		for i, sheet in IconAssets.StickerSheets do
+			beforeStickers[i] = sheet.Id
+			sheet.Id = 0 -- (and the drawn stickers: their live 3D models)
+		end
 		IconAssets.Previewing = false
+		IconAssets.Shop.Id = 0 -- (as before the owner's upload, or if it ever fails to load)
+		IconAssets.ShopFx.Id = 0 -- (the effects picture too: owner's upload 2026-11-12)
 		local ok, err = pcall(function()
 			for _, spec in StoreConfig.Cards do
 				T.truthy(StoreView.hasPicture(spec), spec.Id .. " shows a picture in the game")
 			end
+			-- no empty sheet pictures in the built window either (the 3D models stand in)
+			local refs = StoreView.build()
+			for _, d in refs.Gui:GetDescendants() do
+				if d:IsA("ImageLabel") then
+					local icon = d:GetAttribute("Icon")
+					T.falsy(
+						type(icon) == "string" and (string.sub(icon, 1, 5) == "shop_" or string.sub(icon, 1, 8) == "sticker_"),
+						"no sheet picture before the upload: " .. d:GetFullName()
+					)
+				end
+			end
 		end)
 		IconAssets.Previewing = before
+		IconAssets.Shop.Id = beforeId
+		IconAssets.ShopFx.Id = beforeFx
+		for i, sheet in IconAssets.StickerSheets do
+			sheet.Id = beforeStickers[i]
+		end
 		if not ok then
 			error(err, 0)
+		end
+	end)
+
+	-- (owner 2026-11-11) his upload of the shop icon sheet is in: every tab and card picture shows from it
+	T.test("Store: the uploaded shop icon sheet shows its pictures", function()
+		local IconAssets = Loader.requirePath("ReplicatedStorage.Shared.Config.IconAssets")
+		T.truthy(IconAssets.Shop.Id > 0, "the owner's upload is set")
+		T.truthy(IconAssets.shopShows("clover"), "the clover (Lucky) shows from the sheet")
+	end)
+
+	-- (owner rule 2026-11-11) the stickers only say what the prices back up
+	T.test("Store: BEST VALUE only where the price per item is the lowest", function()
+		local StoreView = ui("StoreView")
+		T.eq(StoreView.bestValue({ "RoyalCapsule1", "RoyalCapsule3", "RoyalCapsule5", "RoyalCapsule10" }), "RoyalCapsule10")
+		T.eq(StoreView.bestValue({ "WheelSpins1", "WheelSpins5", "WheelSpins10" }), "WheelSpins10")
+		T.eq(StoreView.bestValue({ "TripleLucky15", "TripleLucky60" }), "TripleLucky60")
+		T.eq(
+			StoreView.bestValue({ "DragonforgeCapsule1", "DragonforgeCapsule3", "DragonforgeCapsule10", "DragonforgeCapsule50" }),
+			"DragonforgeCapsule50"
+		)
+		local packs = { "CoinsSmall", "CoinsMedium", "CoinsLarge", "CoinsHuge", "CoinsMega" }
+		T.eq(StoreView.bestValue(packs, 0), "CoinsMega", "at no income (the minimums)")
+		T.eq(StoreView.bestValue(packs, 1840), "CoinsMega", "at $1.84K/s")
+		T.eq(StoreView.bestValue({ "BigPass" }), nil, "one option: nothing to compare")
+		T.eq(StoreView.bestValue({ "WheelSpins1", "WheelSpins1" }), nil, "a tie: no claim")
+		-- the built shop: one sticker on the eggs, the best coin pack only
+		local refs = StoreView.build()
+		StoreView.setCoins(refs, 1840)
+		for _, card in refs.Cards do
+			if card.Spec.Look == "Coins" or card.Spec.Look == "Egg" then
+				local best = card.Spec.Id == "CoinsMega" or card.Spec.Id == "Royal10"
+				T.eq((card.Sticker :: any).Visible, best, card.Spec.Id .. " sticker")
+			end
+		end
+		-- no made-up words anywhere in the window (the concept's placeholders)
+		for _, d in refs.Gui:GetDescendants() do
+			if d:IsA("TextLabel") then
+				for _, banned in { "POPULAR", "FREE!", "Yours forever", "FOR EVERYONE", "250K", "15 min luck" } do
+					T.falsy(string.find(d.Text, banned, 1, true), `"{banned}" in {d:GetFullName()}`)
+				end
+			end
 		end
 	end)
 
@@ -179,6 +416,8 @@ return function(T, Loader)
 		local refs = StoreView.build()
 		local banner = StoreView.setEdition(refs, edition) :: any
 		T.falsy(string.find(banner.Frame.Tagline.Text, "Limited time", 1, true), "no rush line")
+		StoreView.setTimer(refs, 86400 + 3600)
+		T.eq(banner.Timer.Text, StoreView.endsOn(edition.EndsAt) .. " · 1d 1h left", "the real end and the time left")
 		local odds = {}
 		for _, line in CapsuleConfig.odds(edition.CapsuleId, true) do
 			odds[line.Golem] = line.Chance
@@ -186,8 +425,17 @@ return function(T, Loader)
 		StoreView.setBannerOdds(refs, odds, true)
 		local mythic = edition.Golems[#edition.Golems]
 		T.eq(banner.Chances[mythic.Id].Text, StoreView.percent(odds[mythic.Id]), "the Mythic tile shows the lucky chance")
+		T.eq(banner.Hero.Text, `{mythic.Name} {StoreView.percent(odds[mythic.Id])}`, "and the big one's chip")
 		T.truthy(odds[mythic.Id] > edition.Odds[mythic.Id], "Triple Lucky raises it")
 		T.truthy(banner.Lucky.Parent.Visible, "the WITH TRIPLE LUCKY tag")
+		-- the Royal Egg's tiles the same way
+		local royal = {}
+		for _, line in CapsuleConfig.odds("Royal", false) do
+			royal[line.Golem] = line.Chance
+		end
+		StoreView.setRoyalOdds(refs, royal, false)
+		T.eq((refs.Royal :: any).Chances.CelestialSovereign.Text, "1%")
+		T.eq((refs.Royal :: any).Chances.SilverSquire.Text, "48%")
 	end)
 
 	-- StoreService with fakes: the save, Net answers and the prompts it asks for
@@ -234,6 +482,8 @@ return function(T, Loader)
 		T.eq(w.answers[#w.answers].Status, "Unknown", "capsules go through CapsuleAction")
 		StoreService.buy(w.player, "HexaLucky15")
 		T.eq(w.answers[#w.answers].Status, "Unknown", "boosts go through BoostAction")
+		StoreService.buy(w.player, "WheelSpins10")
+		T.eq(w.answers[#w.answers].Status, "Unknown", "spins go through WheelAction (its Full rules)")
 		T.eq(#w.prompts, 0, "nothing prompted for those")
 		w.data.BlasterLevel = 1
 		StoreService.buy(w.player, "BlasterNextA")
