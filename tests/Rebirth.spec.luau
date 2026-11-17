@@ -83,6 +83,7 @@ return function(T, Loader)
 		-- packs bought (kept, owner 2026-10-25) and a full backpack: ore (cleared) and a relic (to the pen)
 		data.Backpacks = { Equipped = "MinersPack", Owned = { RookiePack = true, TrailPack = true, MinersPack = true } }
 		data.BackpackItems = { ["Clean|Gold|Pristine|"] = 4, ["Raw|Coal||"] = 9, ["Relic|CrownCoin||"] = 1 }
+		data.PenTaken = 9 -- the pen's Take credit (PenService)
 		-- slot 2 holds a paid enchant (a game pass gave it)
 		data.Enchants = { Owned = { Lucky = 2, Midas = 3 }, Slots = { "Lucky", "Midas", "", "" }, Passes = { Midas = true } }
 		data.Golems = { Owned = { { Id = 1, Kind = "PebbleGolem" } }, Equipped = { 1 }, NextId = 2 }
@@ -218,6 +219,7 @@ return function(T, Loader)
 		T.truthy(deepEqual(data.MachineUpgrades, {}), "Tech shop levels")
 		T.eq(data.Train, nil, "no train record")
 		T.eq(next(data.BackpackItems), nil, "the backpack's ore is gone")
+		T.eq(data.PenTaken, 0, "so is the pen's Take credit (never above the backpack)")
 		T.truthy(deepEqual(data.Backpacks, before.Backpacks), "the packs bought stay (owner 2026-10-25)")
 		-- the pen keeps only dusty relics (artifacts, never ore): from the pen and the queues
 		T.eq(#data.Storage, 3, "the pen holds just the relics (the backpack's too)")

@@ -815,12 +815,22 @@ return function(T, Loader)
 		T.eq(newer.Coins, coins)
 		T.eq(newer.Stars, stars)
 		T.eq(newer.StarPerks.ExpressRails, 1, "a perk id this build doesn't sell is kept")
-		-- the pen quests' taken-out credit (PenService): a whole number 0..1000
+		-- the pen quests' taken-out credit (PenService): a whole number 0..1000, never above the
+		-- backpack's count (CarryService.clampPenTaken)
+		newer.BackpackItems = { ["Raw|Copper||"] = 1500 }
 		for _, case in { { 0 / 0, 0 }, { -3, 0 }, { 7.6, 7 }, { 1e9, 1000 }, { "x", 0 } } do
 			newer.PenTaken = case[1]
 			Migrations.run(newer)
 			T.eq(newer.PenTaken, case[2], "PenTaken " .. tostring(case[1]))
 		end
+		newer.BackpackItems = { ["Raw|Copper||"] = 4 }
+		newer.PenTaken = 9
+		Migrations.run(newer)
+		T.eq(newer.PenTaken, 4, "PenTaken over the backpack drops to its count")
+		newer.BackpackItems = {}
+		newer.PenTaken = 3
+		Migrations.run(newer)
+		T.eq(newer.PenTaken, 0, "an empty backpack: no credit")
 	end)
 
 	T.test("Migration: a machine at the inventory cap is refunded, never lost", function()
