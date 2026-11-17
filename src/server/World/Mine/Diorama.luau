@@ -36,8 +36,9 @@ local Diorama = {}
 
 -- A way through a floor's room wall that Land keeps open: on side Side ("N" = local -Z, "S" = +Z,
 -- "E" = +X, "W" = -X), From..To along the wall (local X for N/S, Z for E/W), up to Top (local Y;
--- nil = the ceiling). Veil: a glowing curtain of that colour fills it, walked through but never
--- seen through (a cave's way out, where its dark lighting turned the sky beyond black).
+-- nil = the ceiling). Veil: a lighting portal fills it, walked through (a cave's way out, where its
+-- dark lighting turned the sky beyond black); its colour was a glowing curtain's until the owner
+-- took the red off (2026-11-17), the part is never drawn now.
 export type Opening = { Side: string, From: number, To: number, Top: number?, Veil: Color3? }
 export type Look = {
 	Walls: { string }?,
@@ -153,7 +154,9 @@ Diorama.Floors = {
 		Thin = { "S" },
 		-- (owner 2026-11-14: "when I go through to the next location I see through the walls": from
 		-- inside, under the caves' dark lighting, the town and the sky out through the DEPTHS
-		-- portal showed as black holes) a glowing ember curtain fills the way in from the quarry
+		-- portal showed as black holes) a glowing ember curtain filled the way in from the quarry
+		-- (owner 2026-11-17: "take the red off": only its lighting portal stays, never drawn, and
+		-- Floor1Quarry walls the passage instead)
 		Openings = {
 			{ Side = "N", From = -12.3, To = 12.3, Top = 16.3 },
 			{ Side = "S", From = -10, To = 10, Top = 17, Veil = Color3.fromRGB(80, 22, 10) },
@@ -743,8 +746,8 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		piece(side, t, a1, bottom, top, pad, if endLow then Diorama.OpeningPad else 0)
 	end
 
-	-- the veils: a glowing curtain in an opening (look.Openings[*].Veil), just behind the wall's
-	-- line, tucked a little behind its edges and lintel; walked through, never seen through. Each is
+	-- the veils: a lighting portal in an opening (look.Openings[*].Veil), just behind the wall's
+	-- line, tucked a little behind its edges and lintel; walked through, never drawn. Each is
 	-- a lighting portal (LightingController: tag Diorama.PortalTag, its LookVector into the room,
 	-- attributes Inside / Outside = the presets of the zones either side): the light follows the
 	-- camera's side and changes the frame the camera passes through; its sides part at the middle of
@@ -773,6 +776,9 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 			{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
 		)
 		veil.Name = "Veil"
+		-- (owner 11-17: it looks better without the red curtain: the veil is only the lighting
+		-- portal now, never drawn; the way through is walled by a lined passage instead)
+		veil.Transparency = 1
 		local function presetAt(p: Vector3): string
 			local zone = WorldLayout.zoneAt(origin:PointToWorldSpace(p))
 			return if zone then zone.Lighting else "Surface"

@@ -1418,6 +1418,146 @@ local function smoothSurround(model: Model, origin: CFrame)
 	end
 end
 
+--[[
+	(owner 2026-11-17, walking back out of the Ember Caves: "on the way back you still see out:
+	just put a wall there with a way through to the next location, and take the red off") The
+	model's mine door (its facade x -19 .. 18, z -44 .. -32, the door x -3.2 .. 1.7 to about local 8)
+	is cut open behind at z -44 for the DEPTHS portal's block (tools/meshy/jobs_2026-11-17.json
+	"cuts"), and a model is drawn from the front only: from the DEPTHS tunnel the whole facade was
+	see-through, the town and the sky behind it. The passage gets walls of its own, all of them
+	behind the model or the portal's stone (from the quarry, stone shows only where the cut's open
+	pockets beside the portal showed before):
+	  Wall     right behind the facade's cut, its door the model's (Door: x0, x1, up to local y),
+	           its top a little under the facade's (Tops: x0, x1, top; probed on the model)
+	  Frame    a stone frame round the door on the tunnel's side: the cut left thin slivers of the
+	           model's arch sticking out up to local z -47.3 (the jagged edges in his shot), inside it
+	  Ceiling  from the portal's lintel to the wall at the lintel's underside (looking up over
+	           the wall's top through the door showed the sky), sides from the pillars to the wall
+	  Cap      the slot between the parapet and the lintel's back
+	  Roof     over the tunnel between the Ember Caves' south wall and the parapet, sides there
+	           behind the portal's buttresses (the cut's open sides showed the lawn and the sky)
+	  Fill     invisible bodies in the corners these walls close and the trenches behind his back
+	           cliffs, so nobody is trapped in one
+	  Threshold sand under the Ember Caves' doorway's floor seam
+	The Ember Caves' red curtain went too (Mine/Diorama: only its lighting portal stays).
+]]
+Floor.Passage = {
+	Wall = { Z0 = -45.1, Z1 = -44.1 },
+	Door = {
+		{ -3.2, 1.7, 7.75 },
+	},
+	Frame = { X0 = -4.2, X1 = 2.7, Top = 11, Z = -47.5 },
+	Tops = {
+		{ -24, -18, 13.3 },
+		{ -18, -17, 18.3 },
+		{ -17, -15.5, 20.3 },
+		{ -15.5, -10, 21.8 },
+		{ -10, 9, 20.8 },
+		{ 9, 14.5, 19.8 },
+		{ 14.5, 17, 18.3 },
+		{ 17, 18.25, 11.3 },
+		{ 18.25, 24, 12.3 },
+	},
+	Ground = -1, -- the walls stand from a little under the passage's sand
+	Lintel = { X = 16.6, Y = 18, Z = -46.6 }, -- the portal's lintel: half width, underside, front
+	-- the passage's sides over the pillars' outer blocks (15.88 / 16.12, their base 16.4): from
+	-- inside the buttresses (front -51) to the wall, short of the lintel's ends (16.6)
+	Pillar = { X0 = 15.7, X1 = 16.55, Z = -51.2 },
+	Parapet = { X = 16.2, Y = 22, Z0 = -51.6, Z1 = -58 }, -- its underside, front and back
+	LintelBack = { Z = -50, Top = 24 },
+	Buttress = { X = 16.2, Top = 30 },
+	EmberWall = -59.95, -- a hair in front of the Ember Caves' south wall (its face at -59.98)
+	-- the corners beside the portal, closed by these walls (Meshy chat's review: a player who walked
+	-- off the model's back cliffs onto the wall's low end dropped in and could not jump out):
+	-- invisible bodies from the door's sides out to the model's walk boxes, as high as the wall there
+	-- and the trenches behind the back cliffs: their first walk boxes start by -53.32
+	Fill = { X0 = 16.6, X1 = 24.42, TopW = 13.3, TopE = 12.3, TrenchZ = -53.32 },
+	Threshold = { X = 10.5, Y0 = -1.5, Y1 = -0.5, Z0 = -60.2, Z1 = -59.85 },
+}
+
+local function depthsPassage(model: Model, origin: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "DepthsPassage"
+	m.Parent = model
+	local k = Floor.Passage
+	local function box(name: string, a: Vector3, b: Vector3, color: Color3, props: { [string]: any }?): Part
+		local mn, mx = a:Min(b), a:Max(b)
+		local part = Geo.block(m, origin * CFrame.new((mn + mx) / 2), mx - mn, color, nil, props or SOLID)
+		part.Name = name
+		return part
+	end
+	-- the wall: per stretch of its top, split where the door's steps start and end
+	local function doorTop(a: number, b: number): number?
+		local top: number? = nil
+		for _, d in k.Door do
+			if a >= d[1] - 1e-6 and b <= d[2] + 1e-6 then
+				top = math.max(top or 0, d[3])
+			end
+		end
+		return top
+	end
+	for _, s in k.Tops do
+		local cuts = { s[1], s[2] }
+		for _, d in k.Door do
+			for _, x in { d[1], d[2] } do
+				if x > s[1] and x < s[2] and not table.find(cuts, x) then
+					table.insert(cuts, x)
+				end
+			end
+		end
+		table.sort(cuts)
+		for i = 1, #cuts - 1 do
+			local a, b = cuts[i], cuts[i + 1]
+			local bottom = doorTop(a, b) or k.Ground
+			box("Wall", Vector3.new(a, bottom, k.Wall.Z0), Vector3.new(b, s[3], k.Wall.Z1), C.StoneDark)
+		end
+	end
+	-- the door's frame: its head over the slivers (7.75 high, as the town's shop doors), a post
+	-- either side
+	local f, door = k.Frame, k.Door[1]
+	box("Frame", Vector3.new(f.X0, door[3], f.Z), Vector3.new(f.X1, f.Top, k.Wall.Z0), C.Stone)
+	box("Frame", Vector3.new(f.X0, k.Ground, f.Z), Vector3.new(door[1], door[3], k.Wall.Z0), C.Stone)
+	box("Frame", Vector3.new(door[2], k.Ground, f.Z), Vector3.new(f.X1, door[3], k.Wall.Z0), C.Stone)
+	-- the ceiling from the lintel to the wall; its sides from inside the buttresses to the wall over
+	-- the pillars' outer blocks (Style.pillar's blocks alternate in width: slits between them, the
+	-- buttresses and the corners showed the sky), up to the cap, the lintel and the ceiling
+	local l, p = k.Lintel, k.Pillar
+	box("Ceiling", Vector3.new(-l.X, l.Y - 0.5, l.Z), Vector3.new(l.X, l.Y, k.Wall.Z0), C.Stone)
+	local pp = k.Parapet
+	for _, side in { -1, 1 } do
+		local x0, x1 = side * p.X0, side * p.X1
+		box("Side", Vector3.new(x0, k.Ground, p.Z), Vector3.new(x1, pp.Y - 0.1, k.LintelBack.Z), C.Stone)
+		box("Side", Vector3.new(x0, k.Ground, k.LintelBack.Z), Vector3.new(x1, l.Y, l.Z), C.Stone)
+		box("Side", Vector3.new(x0, k.Ground, l.Z), Vector3.new(x1, l.Y - 0.5, k.Wall.Z0), C.Stone)
+	end
+	-- the cap between the parapet and the lintel's back (meeting it, no faces on one plane)
+	box("Cap", Vector3.new(-l.X, pp.Y - 0.1, pp.Z0 - 0.1), Vector3.new(l.X, k.LintelBack.Top, k.LintelBack.Z), C.Stone)
+	-- the roof between the Ember Caves' wall and the parapet, its sides behind the buttresses
+	box("Roof", Vector3.new(-pp.X, pp.Y - 0.1, k.EmberWall), Vector3.new(pp.X, pp.Y + 0.5, pp.Z1 + 0.05), C.StoneDeep)
+	for _, side in { -1, 1 } do
+		local b = k.Buttress
+		box("Side", Vector3.new(side * b.X, k.Ground, k.EmberWall), Vector3.new(side * (b.X + 1), b.Top, pp.Z1), C.StoneDark)
+	end
+	-- the walled corners either side (the buttresses, the pillars, the model's back cliffs, these
+	-- walls) and the trenches behind his back cliffs out to his model's edges (they drained into the
+	-- tunnel behind the buttresses before) filled up to the wall's top there: nobody drops into one
+	-- and stays, from the fill a player walks over the wall's low end back into the quarry
+	local fill = k.Fill
+	local lo, hi = Diorama.footprint(Floor.Index)
+	local body = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
+	for _, side in { -1, 1 } do
+		local top = if side < 0 then fill.TopW else fill.TopE
+		local edge = if side < 0 then lo.X else hi.X
+		box("Fill", Vector3.new(side * fill.X0, k.Ground, k.EmberWall), Vector3.new(side * fill.X1, top, k.Wall.Z0), C.StoneDark, body)
+		box("Fill", Vector3.new(side * fill.X1, k.Ground, k.EmberWall), Vector3.new(edge, top, fill.TrenchZ), C.StoneDark, body)
+	end
+	-- (with the curtain gone) a strip of sand under the Ember Caves' doorway: the caves' floor and
+	-- the quarry's sand leave a 0.1 seam there that showed the void
+	local t = k.Threshold
+	local sand = box("Threshold", Vector3.new(-t.X, t.Y0, t.Z0), Vector3.new(t.X, t.Y1, t.Z1), Floor.FillSand, TINY)
+	sand.Material = Enum.Material.Sand
+end
+
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	if not Diorama.has(Floor.Index) then
 		return buildParts(parent, origin, opts)
@@ -1426,6 +1566,9 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	if MineFloors.usesNextSet(Floor.Index) then
 		smoothSurround(model, origin)
 		trackCover(model, origin)
+		if not (opts and opts.Cutaway) then
+			depthsPassage(model, origin)
+		end
 		return model
 	end
 	local rim = buildParts(model, origin, opts)

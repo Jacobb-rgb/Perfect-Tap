@@ -954,7 +954,8 @@ return function(T, Loader)
 						end
 						T.eq(blocked, 0, label .. " the " .. o.Side .. " way through stays open")
 						T.truthy(out ~= nil, label .. " an opening on a walled side")
-						-- a veiled opening: one glowing curtain over all of it, walked through, never seen through
+						-- a veiled opening: one lighting portal over all of it, walked through and (owner
+						-- 2026-11-17: "take the red off, it looks better without it") never drawn
 						if o.Veil then
 							local veils = 0
 							for _, d in room:GetChildren() do
@@ -962,7 +963,7 @@ return function(T, Loader)
 									veils += 1
 									T.eq(d.CanCollide, false, label .. " the veil is walked through")
 									T.eq(d.CanQuery, false, label .. " the veil takes no clicks or shots")
-									T.eq(d.Transparency, 0, label .. " the veil is never seen through")
+									T.eq(d.Transparency, 1, label .. " the veil is only the lighting portal, no red curtain")
 									-- (its box from its 8 corners: a veil is turned to face into the room)
 									local q0 = V3.new(math.huge, math.huge, math.huge)
 									local q1 = V3.new(-math.huge, -math.huge, -math.huge)
