@@ -1503,12 +1503,12 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 	end
 	-- the pen's Take credit (PenService) never exceeds what the backpack holds
-	local held = 0
+	local backpackHeld = 0
 	for _, n in items do
-		held += n
+		backpackHeld += n
 	end
-	if isFinite(data.PenTaken) and data.PenTaken > held then
-		data.PenTaken = math.floor(held)
+	if isFinite(data.PenTaken) and data.PenTaken > backpackHeld then
+		data.PenTaken = math.floor(backpackHeld)
 	end
 	local packs = record(data, "Backpacks", report)
 	local ownedPacks = subTable(packs, "Owned", report)
