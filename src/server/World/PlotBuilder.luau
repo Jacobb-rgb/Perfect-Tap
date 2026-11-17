@@ -20,8 +20,8 @@
 	                   padWalls), the wall between pad and yard with the
 	                   YardGate between two posts
 	  Yard.Ground      the slate tile pad over the whole yard (the pen's floor colour)
-	  Yard.Fence       the yard's cut back corners and the back walls up to
-	                   the train stop opening
+	  Yard.Fence       the yard's cut back corners and the back walls, meeting
+	                   at one post in the middle
 	  Yard.Pen         the Ore Pen: a slate tray floor with painted tile seams,
 	                   low soft walls (plinth, body, round lid) and a gate of
 	                   two round posts with glowing bands carrying the ORE PEN
@@ -40,23 +40,16 @@
 	                   ore floats and a "100 R$" `PricePlate` (PodiumService
 	                   hides them for players with the Podiums perk and lights
 	                   the rim; the plate's neon frame lives in the lock)
-	  Yard.TrainStop   a light metal platform with a glowing strip and a
-	                   striped safety edge, the slate TRAIN STOP sign on two
-	                   round cream posts, a slate lamp post with a glowing lamp,
-	                   and the `Track` placeholder (a short track piece with a
-	                   `BufferStop`) that the railway step replaces
 	Everything decorative stays outside the build grid, so every cell
 	is free for machines. Machines are added at runtime into the plot's
 	"Machines" folder by MachineService. A plot with its yard is <= 300 parts
-	(13 of them in the Track placeholder the railway replaces) and one light
+	and one light
 	(8 plots): style A uses fewer parts than the brick walls did (see
 	PlotBuilder.PieceParts).
 	Perf pass 1 (phone audit fix 4): no see-through part (the holo-rings are
 	opaque), no shadow from small trim (TRIM: post caps and feet, the podium
-	bands, the chimney flange, the buffer stop struts: under a stud thick
-	and at most 3 studs long, the rule tests/PlotService.spec.luau checks),
-	none from the platform step either (STEP: 5 studs long, so outside that
-	rule; it stays queryable like the platform it steps up to).
+	bands, the chimney flange: under a stud thick and at most 3 studs long,
+	the rule tests/PlotService.spec.luau checks).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -111,9 +104,6 @@ local ROBUX_GREEN = rgb(110, 255, 140)
 local P = SoftKit.Palette
 local PEN_FLOOR = rgb(104, 112, 142) -- the pen's tray: a softer slate than the machines' Floor
 local LOCKED_RED = rgb(190, 16, 16) -- deep: a bright red neon tone-maps to salmon
--- Factory / Space Station metal (docs/ART_DIRECTION.md section 9): the Track
--- placeholder's buffer stop (replaced at runtime)
-local HOUSING = rgb(66, 72, 92) -- gunmetal (concept v2 dark metal)
 -- the podium's holo-ring: style A's soft cyan (the Fusion Reactor's). Perf
 -- pass 1: the bars are opaque, so holoTone mixes a glow color 0.4 of the way
 -- to HOLO_BEHIND (the grey-blue the old 0.4 see-through bars let through over
@@ -126,8 +116,6 @@ local function holoTone(glow: Color3): Color3
 end
 local HOLO_GLOW = rgb(90, 200, 255)
 local HOLO = holoTone(HOLO_GLOW) -- about rgb(94, 166, 206)
-local RAIL_STEEL = rgb(196, 200, 214)
-local SLEEPER = rgb(196, 112, 62)
 
 PlotBuilder.RimGold = RIM_GOLD
 PlotBuilder.RimLocked = RIM_LOCKED
@@ -139,15 +127,15 @@ PlotBuilder.holoTone = holoTone
 --[[
 	Part budgets per piece: the brick-wall look's counts before style A
 	(2026-10-20, plot 1); style A must stay at or under them (tests/
-	PlotService.spec.luau). Podium / PodiumLocked: a free / a locked slot;
-	TrainStop with its 13-part Track placeholder.
+	PlotService.spec.luau). Podium / PodiumLocked: a free / a locked slot.
+	(The train stop went with the train, owner 2026-11-17.)
 ]]
-PlotBuilder.PieceParts = { Walls = 77, Fence = 22, Pen = 22, Podium = 23, PodiumLocked = 31, TrainStop = 23 }
+PlotBuilder.PieceParts = { Walls = 77, Fence = 22, Pen = 22, Podium = 23, PodiumLocked = 31 }
 
 -- Border walls (plot-local): the center line of the walls around the pad
 -- (the pad's outer edge, |x| or |z|), pillars 0.1 further out so their caps
 -- stay off the build grid, the half width of the road entrance, and the
--- back wall's line at the train stop.
+-- yard's back wall's line.
 PlotBuilder.WallLine = GameConfig.PlotCells * GameConfig.CellSize / 2 + 1
 PlotBuilder.EntranceHalf = 10
 PlotBuilder.BackWallZ = BaseLayout.Yard.Center.Z + BaseLayout.Yard.Size.Z / 2 - 0.4
@@ -164,9 +152,6 @@ local THIN = SoftKit.TRIM -- collides, too thin for a shadow
 -- stop struts: it still collides, but casts no shadow
 local TRIM = THIN
 local TINY = SoftKit.TINY
--- (perf pass 1) the train platform's step: no shadow (a 0.5-stud riser), but
--- solid and queryable like the platform (SOLID without the shadow)
-local STEP = { CanTouch = false, CastShadow = false }
 local GHOST = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
 
 local function model(name: string, parent: Instance): Model
@@ -377,7 +362,7 @@ end
 --[[
 	The yard's ground (owner 2026-10-25: "the whole yard from those tiles, no
 	green at all"): one slate pad in the Ore Pen's floor colour over the whole
-	yard (the podiums, the Cleaning Station, the train stop and the walk to it),
+	yard (the podiums, the Cleaning Station and the walks between them),
 	with painted tile seams of about the pen's tile size so it never looks flat.
 	It is the yard's walkable ground (the pen's tray lies on it).
 ]]
@@ -401,21 +386,21 @@ local function ground(yard: Model, cf: CFrame)
 end
 
 -- The yard's back border (its long side walls belong to the pad's Walls):
--- a 45-degree corner run at each back corner and the back walls up to a
--- post at each side of the train stop opening.
+-- a 45-degree corner run at each back corner and the back walls meeting at
+-- one post in the middle (the train stop's opening there went with the
+-- train, owner 2026-11-17: the back of the yard is closed).
 local function fence(yard: Model, cf: CFrame)
 	local f = model("Fence", yard)
 	local k = PLOT_WALL
 	local L = WALL_LINE
 	local backZ = PlotBuilder.BackWallZ
-	local gapX = BaseLayout.TrainStop.Size.X / 2 + 0.5 + 1.6 / 2
 	for _, s in { -1, 1 } do
 		local turnA = Vector3.new(s * L, 0, backZ - CHAMFER)
 		local turnB = Vector3.new(s * (L - CHAMFER), 0, backZ)
 		wall(f, cf, k, turnA, turnB, TURN, TURN)
-		wall(f, cf, k, turnB, Vector3.new(s * gapX, 0, backZ), TURN, nil)
-		post(f, cf, k, Vector3.new(s * gapX, 0, backZ))
+		wall(f, cf, k, turnB, Vector3.new(0, 0, backZ), TURN, nil)
 	end
+	post(f, cf, k, Vector3.new(0, 0, backZ))
 end
 
 --[[
@@ -641,109 +626,6 @@ local function podium(yard: Model, cf: CFrame, index: number, rect: BaseLayout.R
 	m.PrimaryPart = plinth
 end
 
---[[
-	Train stop in style A: a light metal platform (the plot floor's plate)
-	with a glowing strip along its yard face and a striped safety edge on
-	the rail side, a slate step, the slate TRAIN STOP sign (both faces: the
-	yard and the trains) on two round cream posts beside its ends, and a
-	slate lamp post with a glowing lamp ball (neon only, lights are budgeted
-	on mobile). And a short track piece on the rail line at the platform's
-	far end (track-detailed: dense orange sleepers under pale steel rails)
-	ending in an open buffer stop (two sloped struts, a red beam, two
-	buffers down the rails): the `Track` model with the attribute
-	`RailwayPlaceholder`, which the railway step replaces with the through
-	line (its `BufferStop` would stand in the trains' way).
-]]
-local function trainStop(yard: Model, cf: CFrame)
-	local rect = BaseLayout.TrainStop
-	local m = model("TrainStop", yard)
-	local c = rect.Center
-	local platformH = 1
-	local bottom = -0.4
-	local platform = SoftKit.part(
-		m,
-		cf * CFrame.new(c.X, (bottom + platformH) / 2, c.Z),
-		Vector3.new(rect.Size.X, platformH - bottom, rect.Size.Z),
-		PLOT_PLATE,
-		SOLID,
-		"Platform"
-	)
-	platform.Reflectance = 0.04
-	-- a glowing strip along the yard face, the striped safety edge on the rail side
-	local frontZ = c.Z - rect.Size.Z / 2
-	SoftKit.part(
-		m,
-		cf * CFrame.new(c.X, platformH * 0.5, frontZ - 0.03),
-		Vector3.new(rect.Size.X - 1, 0.14, 0.06),
-		"Neon",
-		TINY,
-		"PlatformGlow"
-	)
-	local railSide = c.Z + rect.Size.Z / 2
-	local edge = SoftKit.part(
-		m,
-		cf * CFrame.new(c.X, platformH + 0.03, railSide - 0.35),
-		Vector3.new(rect.Size.X, 0.06, 0.5),
-		"Trim",
-		TINY,
-		"SafetyEdge"
-	)
-	SoftKit.paint(edge, Enum.NormalId.Top, { { x = 0, y = 0, w = 1, h = 1, color = P.Trim, stripes = 68 } })
-	SoftKit.part(m, cf * CFrame.new(0.7, 0.25, frontZ - 0.5), Vector3.new(5, 0.5, 1), "Frame", STEP, "Step")
-	-- the sign on two round cream posts just beyond the board's ends
-	local signZ = c.Z + 0.3
-	local signW = 7.4
-	for _, side in { -1, 1 } do
-		local x = c.X + 5 + side * (signW / 2 + 0.45)
-		SoftKit.cylUp(m, cf * CFrame.new(x, platformH + 2.65, signZ), 5.3, 0.8, "Body", FENCE, "SignPost")
-	end
-	SoftKit.sign(m, cf * CFrame.new(c.X + 5, platformH + 4.2, signZ), Vector3.new(signW + 0.2, 1.6, 0.26), "TRAIN STOP", true)
-	-- the lamp post: a slate foot and pole, a glowing lamp ball on top
-	local lamp = cf * CFrame.new(c.X - rect.Size.X / 2 + 1.2, platformH, signZ)
-	local poleH = 5.4
-	SoftKit.cylUp(m, lamp * CFrame.new(0, 0.3, 0), 0.6, 0.9, "Frame", THIN)
-	SoftKit.cylUp(m, lamp * CFrame.new(0, poleH / 2, 0), poleH, 0.36, "Frame", THIN, "LampPost")
-	SoftKit.glow(SoftKit.ball(m, (lamp * CFrame.new(0, poleH + 0.3, 0)).Position, 0.7, SoftKit.Lamp, TINY, "Lamp"))
-	-- the track piece at the platform's +X end (track-detailed has no ballast): six sleepers, two rails
-	local track = model("Track", m)
-	track:SetAttribute("RailwayPlaceholder", true)
-	local railZ = BaseLayout.RailZ
-	local stopX = c.X + rect.Size.X / 2 + 2 -- the buffer stop, just past the platform's end
-	local trackL = 14
-	local trackX = stopX - trackL / 2
-	local gauge = 2.5
-	local sleepers = 6
-	local pitch = 2.3
-	for i = 0, sleepers - 1 do
-		local x = stopX - 1.4 - i * pitch
-		Geo.block(track, cf * CFrame.new(x, 0.12, railZ), Vector3.new(1.1, 0.24, 4.4), SLEEPER, nil, THIN)
-	end
-	for _, side in { -1, 1 } do
-		Geo.block(track, cf * CFrame.new(trackX, 0.42, railZ + side * gauge / 2), Vector3.new(trackL, 0.36, 0.36), RAIL_STEEL, nil, THIN)
-	end
-	-- open buffer stop at the +X end: two sloped struts, a red beam facing the track,
-	-- two buffers pointing down the rails
-	local buffer = model("BufferStop", track)
-	local stop = cf * CFrame.new(stopX, 0, railZ)
-	local beamH, beamY = 0.8, 1.25
-	for _, side in { -1, 1 } do
-		-- wedge: tall side at the beam, sloping down away from the track
-		Geo.wedge(
-			buffer,
-			stop * CFrame.new(1.3, 0.8, side * gauge / 2) * CFrame.Angles(0, -math.pi / 2, 0),
-			Vector3.new(0.45, 1.6, 1.8),
-			HOUSING,
-			nil,
-			TRIM
-		)
-	end
-	Geo.block(buffer, stop * CFrame.new(0.2, beamY, 0), Vector3.new(0.6, beamH, gauge + 1.6), C.AwningRed, nil, SOLID)
-	for _, side in { -1, 1 } do
-		local pad = Geo.block(buffer, stop * CFrame.new(-0.35, beamY, side * gauge / 2), Vector3.new(0.5, 0.8, 0.8), RAIL_STEEL, nil, THIN)
-		pad.Shape = Enum.PartType.Cylinder
-	end
-end
-
 -- The yard behind a plot (plot-local +Z side), from BaseLayout.
 function PlotBuilder.buildYard(parent: Instance, cf: CFrame): Model
 	local yard = model("Yard", parent)
@@ -753,14 +635,13 @@ function PlotBuilder.buildYard(parent: Instance, cf: CFrame): Model
 	for index, rect in BaseLayout.Podiums do
 		podium(yard, cf, index, rect)
 	end
-	trainStop(yard, cf)
 	return yard
 end
 
 ---------------------------------------------------------------- keep-out (decor, nodes)
 
--- Plot-local box of everything that belongs to a yard (the yard, the train
--- stop and the railway line just behind it).
+-- Plot-local box of everything that belongs to a yard (the yard and the strip just behind it,
+-- where the train stop and the railway were: kept clear as before).
 local KEEP_MIN = Vector3.new(-BaseLayout.Yard.Size.X / 2, 0, BaseLayout.Yard.Center.Z - BaseLayout.Yard.Size.Z / 2 - 1)
 local KEEP_MAX = Vector3.new(BaseLayout.Yard.Size.X / 2, 0, BaseLayout.RailZ + 3)
 

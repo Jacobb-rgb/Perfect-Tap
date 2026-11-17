@@ -142,15 +142,6 @@ BadgeConfig.List = {
 		end,
 	},
 	{
-		Key = "TrainMaster",
-		Id = 0,
-		Name = "All Aboard",
-		Description = "Bring 25 ore trains home.",
-		Check = function(data)
-			return stat(data, "TrainTrips") >= 25
-		end,
-	},
-	{
 		Key = "Tycoon",
 		Id = 0,
 		Name = "Tycoon",

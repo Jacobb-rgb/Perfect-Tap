@@ -16,11 +16,11 @@
 	                     thumbstick's corner free)
 	  ui_menu_phone_small 568 x 320 pt phone, the grid open
 	  ui_menu_column_pc / _phone / _phone_open / _small / _small_open
-	                     the whole left column as it ships: coins, the TRAIN
-	                     chip, two running boost chips and the side menu (PC:
+	                     the whole left column as it ships: coins, two running
+	                     boost chips in the chip slot and the side menu (PC:
 	                     the column under the chips; phones: MENU first in the
-	                     train chip's row; open: the grid in the chips' place,
-	                     the TRAIN and boost chips hidden until it shuts)
+	                     slot's row; open: the grid in the chips' place, the
+	                     boost chips hidden until it shuts)
 	  ui_codex           PC: the codex, 14 of 36 found, Bronze selected (NEW)
 	  ui_codex_hidden    PC: an undiscovered ore selected
 	  ui_codex_phone     667 x 375 pt phone (compact)
@@ -194,28 +194,18 @@ function Preview.build(Loader: any): { [string]: any }
 		return refs
 	end
 
-	-- the train chip and two running boost chips under it, placed like
-	-- TrainController and BoostController place them; `gridOpen` = the touch
-	-- side menu's grid is open in their place (both hide, as in the game)
+	-- two running boost chips in the chip slot, placed like BoostController places them;
+	-- `gridOpen` = the touch side menu's grid is open in their place (they hide, as in the game)
 	local BoostView = Loader.requirePath(UI .. "BoostView")
-	local TrainView = Loader.requirePath(UI .. "TrainView")
 	local NOW = 1.7e9
-	local function chips(renderScale: number, compact: boolean, designW: number, designH: number, gridOpen: boolean?): { any }
-		local train = TrainView.build(compact)
-		train.Chip.Scale.Scale = renderScale
-		train.Gui.Scale.Scale = renderScale
-		TrainView.layout(train, compact, designW, designH)
-		train.ChipKey.Visible = not compact
-		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
-		train.Gui.Enabled = false
-		train.Chip.Enabled = TrainView.chipVisible(true, false, gridOpen)
+	local function chips(renderScale: number, compact: boolean, _designW: number, _designH: number, gridOpen: boolean?): { any }
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
-		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact))
+		BoostView.placeChips(boost, BoostView.chipsTop(compact))
 		local state = { Boosts = { TripleLuckyUntil = NOW + 222, HexaLuckyUntil = NOW + 3900 } }
 		BoostView.setChips(boost, BoostView.chips(state, NOW), false)
 		boost.Gui.Enabled = BoostView.chipsVisible(true, false, gridOpen)
-		return { train.Chip, boost.Gui }
+		return { boost.Gui }
 	end
 
 	-- the side menu as it ships (STORE hidden until step 8's store) over the whole left column

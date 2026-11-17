@@ -319,10 +319,9 @@ return function(T, Loader)
 	withWorld("MachineService: machines on the new chutes get their own toast", function(w)
 		local data = newData()
 		local px, pz = BaseLayout.chuteCell("Pen")
-		local tx, tz = BaseLayout.chuteCell("Train")
 		data.PlacedMachines = {
 			{ Id = "Crusher", X = px - 1, Z = pz - 1, R = 0 }, -- covers the PEN chute
-			{ Id = "Conveyor", X = tx, Z = tz, R = 0 }, -- belts may stand on a chute
+			{ Id = "Conveyor", X = px + 3, Z = pz, R = 0 }, -- (the old TRAIN chute's cell: a plain cell since 2026-11-17)
 			{ Id = "ClayFurnace", X = GameConfig.PlotCells - 1, Z = 0, R = 0 }, -- sticks out of the plot
 		}
 		w.data[w.player] = data

@@ -1,7 +1,7 @@
 --[[
 	Reduce motion works with UI motion on or off (review 2026-10-25: while
 	Config/AnimConfig.UIMotion was off, nothing set UI/Motion's flag, so
-	Motion.reduced() stayed false for the Level, HUD, Train, Wheel and
+	Motion.reduced() stayed false for the Level, HUD, Wheel and
 	Placement controllers). ReduceMotionController sets it from the SETTINGS
 	toggle and Roblox's GuiService.ReducedMotionEnabled.
 ]]

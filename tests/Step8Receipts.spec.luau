@@ -53,7 +53,6 @@ return function(T, Loader)
 		BigPass = "Perks",
 		Podiums = "Perks",
 		OfflineExtension = "Perks",
-		TrainExpress = "Perks",
 		HoverboardCustom = "Hoverboard",
 		StarComet = "RebirthWeapon",
 		StarNebula = "RebirthWeapon",
@@ -418,7 +417,7 @@ return function(T, Loader)
 		-- a pass handler missing
 		local perks = m.passHandlers.Perks
 		m.passHandlers.Perks = nil
-		T.eq(#MonetizationService.unhandled(), 5, "the five perk passes")
+		T.eq(#MonetizationService.unhandled(), 4, "the four perk passes (the Express Train went with the train)")
 		T.falsy(MonetizationService.openGate(), "closed")
 		m.passHandlers.Perks = perks
 		-- nothing registered at all: every live id is listed
@@ -692,23 +691,23 @@ return function(T, Loader)
 		for _, perk in MonetizationConfig.Entries.BigPass.Perks do
 			T.eq(w.player.attrs["Perk_" .. perk], true, `{perk} from the big pass`)
 		end
-		T.eq(w.player.attrs.Perk_TrainExpress, nil, "not the train")
+		T.eq(w.player.attrs.Perk_DoubleMoney, nil, "not the 2x Money pass's")
 		T.truthy(MonetizationService.passesChecked(w.player), "the load's checks are done")
 		local changes = w.changed
 		m.checkAll(w.player)
 		T.eq(w.changed, changes, "the next load changes nothing")
 		-- bought in game
-		m.purchaseFinished(w.player, w.ids.TrainExpress, false)
-		T.eq(w.player.attrs.Perk_TrainExpress, nil, "not bought: nothing")
-		m.purchaseFinished(w.player, w.ids.TrainExpress, true)
-		T.eq(w.player.attrs.Perk_TrainExpress, true, "bought: the perk")
+		m.purchaseFinished(w.player, w.ids.DoubleMoney, false)
+		T.eq(w.player.attrs.Perk_DoubleMoney, nil, "not bought: nothing")
+		m.purchaseFinished(w.player, w.ids.DoubleMoney, true)
+		T.eq(w.player.attrs.Perk_DoubleMoney, true, "bought: the perk")
 		changes = w.changed
-		m.purchaseFinished(w.player, w.ids.TrainExpress, true)
+		m.purchaseFinished(w.player, w.ids.DoubleMoney, true)
 		T.eq(w.changed, changes, "a second signal changes nothing")
 		-- never consumed: still there after many loads and receipts
-		w.owned[w.ids.TrainExpress] = true
+		w.owned[w.ids.DoubleMoney] = true
 		m.checkAll(w.player)
-		T.eq(w.player.attrs.Perk_TrainExpress, true, "kept")
+		T.eq(w.player.attrs.Perk_DoubleMoney, true, "kept")
 		T.eq(w.player.attrs.Perk_Podiums, true, "kept")
 	end)
 
@@ -815,7 +814,7 @@ return function(T, Loader)
 	---------------------------------------------------------------- pass check timing
 
 	withWorld("Step 8: a pass bought while its check is in flight keeps the purchase (Roblox's stale 'not owned')", function(w)
-		for _, key in { "EnchantHeartfire", "TrainExpress" } do
+		for _, key in { "EnchantHeartfire", "DoubleMoney" } do
 			local id = w.ids[key]
 			w.owned[id] = function()
 				-- bought while Roblox works on the check, which answers from before the purchase
@@ -828,20 +827,20 @@ return function(T, Loader)
 		T.eq(w.data.Enchants.Passes.Heartfire, true, "marked as the pass's")
 		T.eq(w.data.Enchants.Slots[1], "Heartfire", "still slotted")
 		T.truthy(MonetizationService.owns(w.player, "EnchantHeartfire"), "owned this session")
-		T.eq(w.player.attrs.Perk_TrainExpress, true, "the perk stays")
-		T.truthy(MonetizationService.owns(w.player, "TrainExpress"), "owned this session")
-		T.eq(MonetizationService.perkAtJoin(w.player, "TrainExpress"), false, "bought now: not owned at join")
+		T.eq(w.player.attrs.Perk_DoubleMoney, true, "the perk stays")
+		T.truthy(MonetizationService.owns(w.player, "DoubleMoney"), "owned this session")
+		T.eq(MonetizationService.perkAtJoin(w.player, "DoubleMoney"), false, "bought now: not owned at join")
 		-- a later check in this session (a cached answer) takes nothing either
 		w.owned[w.ids.EnchantHeartfire] = false
-		w.owned[w.ids.TrainExpress] = false
+		w.owned[w.ids.DoubleMoney] = false
 		m.checkAll(w.player)
 		T.eq(w.data.Enchants.Owned.Heartfire, 1, "kept for the session")
-		T.eq(w.player.attrs.Perk_TrainExpress, true, "kept for the session")
+		T.eq(w.player.attrs.Perk_DoubleMoney, true, "kept for the session")
 		-- the next session: Roblox's "not owned" is a refund
 		m.forget(w.player)
 		m.checkAll(w.player)
 		T.eq(w.data.Enchants.Owned.Heartfire, nil, "refunded: taken back on the next load")
-		T.eq(w.player.attrs.Perk_TrainExpress, nil, "refunded: the perk is gone")
+		T.eq(w.player.attrs.Perk_DoubleMoney, nil, "refunded: the perk is gone")
 	end)
 
 	withWorld("Step 8: the passes giving the offline perks are checked first", function(w)

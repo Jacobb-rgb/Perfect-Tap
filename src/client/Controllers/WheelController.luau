@@ -126,7 +126,6 @@ local PROMPT_MEMORY = 10 -- seconds a "Buy" waits for its PurchasePrompt answer
 WheelController.OtherPanels = {
 	"PenController",
 	"SellController",
-	"TrainController",
 	"IronBoxController",
 	"TechShopController",
 	"VaultController",

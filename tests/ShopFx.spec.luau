@@ -761,8 +761,8 @@ return function(T, Loader)
 			T.eq(views(refs.Pages.Golems), 0, "no 3D view left on the Golems tab")
 			T.eq(stickers(refs.Pages.Golems).sticker_capsule_Royal, 1 + 1 + 3 * 3, "the banner's egg, x1, three in each pile")
 			T.eq(views(refs.Pages.Featured), 0, "the Featured tab: no 3D view (the Starter Pack's coins: an icon, its podium: a sticker)")
-			T.eq(views(refs.Pages.Passes), 0, "the PASSES tab: no 3D view (the podium, the train, the hoverboard: stickers)")
-			for _, id in { "Podiums", "Train", "CustomBoard" } do
+			T.eq(views(refs.Pages.Passes), 0, "the PASSES tab: no 3D view (the podium, the hoverboard: stickers)")
+			for _, id in { "Podiums", "CustomBoard" } do
 				local picture = refs.Cards[id].Picture :: any
 				T.truthy(picture:IsA("ImageLabel") and string.sub(picture:GetAttribute("Icon"), 1, 8) == "sticker_", id .. ": its sticker")
 				T.eq(picture:GetAttribute("ShopFx"), "Idle", id .. ": it lives a little")

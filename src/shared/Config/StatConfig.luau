@@ -30,8 +30,6 @@
 	  CarryPct         + share of backpack space (Deep Pockets: 0.1 per level)
 	  LampRange        head lamp range (studs, 0 = no lamp)
 	  LampBrightness   head lamp brightness
-	  TrainTimeCutPct  share cut off every train trip (Express Rails, the
-	                   rebirth Star Shop: TrainService)
 
 	Caps (Max, applied to each total by combine): they are real limits the
 	best gear can reach, so the numbers on the cards are what the game
@@ -95,7 +93,6 @@ StatConfig.List = {
 	{ Id = "CarryPct", Kind = "Add", Label = "backpack space", Format = "Percent", Max = 1 },
 	{ Id = "LampRange", Kind = "Add", Label = "lamp range", Format = "Studs", Max = 120 },
 	{ Id = "LampBrightness", Kind = "Add", Label = "lamp brightness", Format = "Number", Max = 10 },
-	{ Id = "TrainTimeCutPct", Kind = "Add", Label = "shorter train trips", Format = "Percent", Max = 0.5 },
 } :: { Stat }
 
 StatConfig.ById = {} :: { [string]: Stat }

@@ -100,7 +100,6 @@ local RESTORE_CONFIRM = 4 -- seconds the RESTORE button waits for its second pre
 ArtifactController.OtherPanels = {
 	"PenController",
 	"SellController",
-	"TrainController",
 	"IronBoxController",
 	"TechShopController",
 	"VaultController",

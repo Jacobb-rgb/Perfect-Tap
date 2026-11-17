@@ -17,8 +17,8 @@
 	                     panel closes itself when one appears)
 	  closeAll()         every open panel closes (CleaningController and
 	                     PlacementController call it when they take the screen)
-	  gridOpen()         the touch side menu's grid is open: the TRAIN chip and
-	                     the boost chips hide under it (setGridOpen / onGridChanged)
+	  gridOpen()         the touch side menu's grid is open: the boost chips
+	                     hide under it (setGridOpen / onGridChanged)
 	  device helpers     usingGamepad / isTouch / padName / glyph
 ]]
 
@@ -30,7 +30,6 @@ local MenuPanels = {}
 MenuPanels.Names = {
 	"PenController",
 	"SellController",
-	"TrainController",
 	"IronBoxController",
 	"TechShopController",
 	"VaultController",
@@ -138,10 +137,9 @@ end
 ---------------------------------------------------------------- the side menu's touch grid
 
 -- The touch side menu's grid (SideMenuController.setExpanded) opens where the
--- left column's TRAIN chip and boost chips are. While it is open those chips
--- hide (TrainController / BoostController read gridOpen and listen with
--- onGridChanged), so the grid never covers them half-way (a SEND button
--- peeking out under it); they come back the moment it shuts.
+-- left column's boost chips are. While it is open those chips hide
+-- (BoostController reads gridOpen and listens with onGridChanged), so the grid
+-- never covers them half-way; they come back the moment it shuts.
 local gridOpen = false
 local gridListeners: { (boolean) -> () } = {}
 

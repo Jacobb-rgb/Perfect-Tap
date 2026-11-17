@@ -54,7 +54,7 @@ Net.Events = {
 	--              "Dirty" (all dirty ore) | "Unkept" (everything MachineData.keeps
 	--              doesn't keep: dirty ore, crushed ore, ingots and the unkept clean
 	--              ore; needs Upgrades.PenAutomation >= 1) | "All" (everything in the pen)
-	--   "StopSend" (no arg)        empties your send queue (the train's Direct Unload goes on)
+	--   "StopSend" (no arg)        empties your send queue
 	--   "AutoSort" { On: boolean } the sorting billboard (PenAutomation >= 1) on / off:
 	--              data.AutoSort; off drops what it queued (State: AutoSort)
 	--   The send queue holds intents only (Key/Count or Filter, how many are left),
@@ -66,10 +66,6 @@ Net.Events = {
 	--   just drops the intents: there is nothing to put back.
 	PodiumAction = { Rate = 6, Burst = 10 }, -- (slot: 1..4, action: "Remove" | "Place", arg: { Key }?)
 	SellAction = { Rate = 4, Burst = 8 }, -- (action: "Sell" | "SellAll", arg: { Key?, Count?, Dirty? })
-	TrainAction = { Rate = 4, Burst = 6 }, -- (action: "Send" | "Upgrade", arg: { Kind = "Capacity" | "Speed", Level = the level bought }?: "Stale" unless Level = current + 1)
-	--   Every request read gets a TrainResult; a sent train or a bought level pushes State at once
-	--   (StateService.pushNow). TrainController keeps its own copy of this limit (a click over it
-	--   gets a sound there instead of being dropped here without a word).
 	-- automation (step 3, docs/plans/STEP3_PLAN.md)
 	IronBoxAction = { Rate = 4, Burst = 12 }, -- (action, arg) what clean ore the Iron Box and
 	--   the pen's sorting billboard keep (MachineData.Keep / keeps / keepsOre; State:
@@ -216,11 +212,6 @@ Net.Events = {
 	AnvilBegin = false, -- { Id, Anvil, OreId, Grade, Count, Recipes, Timeout }
 	AnvilResult = false, -- { Id, Ok, Reason?, Recipe?, OreId?, Grade?, Value?, ItemId? (a short per-session number) }
 	Earned = false, -- { Amount, Source, Position? } coin popups ("Sell", "Offline", ...)
-	TrainTrip = false, -- { UserId, PlotId, DepartAt, ArriveAt, Count, Color, Load = { oreColor... } } (also a list on join)
-	-- the answer to a TrainAction: { Action: "Send" | "Upgrade", Ok, Reason?: "Stale" | "Max" |
-	--   "Coins" (Upgrade), Kind?, Level?: the level the request named }; the client drops what it
-	--   showed ahead of the server for a refused one (TrainController)
-	TrainResult = false,
 	-- the answer to every ShopBuy the server reads: { Item, Ok, Reason?: an
 	--   EconomyConfig.TechShop.Reasons code ("BadItem" | "BadCount" | "MaxOwned" | "Max" |
 	--   "Stale" | "NoCoins" | "TooFar"), Level?: the item's level after a levelled buy,

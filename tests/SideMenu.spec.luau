@@ -23,6 +23,7 @@ return function(T, Loader)
 	local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 	local Format = Loader.requirePath("ReplicatedStorage.Shared.Util.Format")
 	local MenuPanel = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.MenuPanel")
+	local ChipSlot = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ChipSlot")
 	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 	local CodexView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.CodexView")
 	local SettingsView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SettingsView")
@@ -52,11 +53,11 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- side menu
 
-	T.test("side menu: on a PC the column starts under the train and boost chips, inside the screen", function()
+	T.test("side menu: on a PC the column starts under the boost chips, inside the screen", function()
 		local layout = SideMenuView.layout(1, 720 - 36)
 		T.falsy(layout.Touch)
 		T.eq(layout.Left, SideMenuView.Left)
-		T.truthy(layout.Top >= SideMenuView.TopMin, "below the train chip and the boost chips")
+		T.truthy(layout.Top >= SideMenuView.TopMin, "below the boost chips")
 		T.le(layout.Top + SideMenuView.Drop + layout.Size.Y, 720 - 36 - SideMenuView.BottomMargin)
 		-- (eleven buttons since QUESTS: the dark fallback column may take a third column)
 		T.truthy(layout.Columns >= 2 and layout.Columns <= 3, "a 720p window: two or three columns under the chips")
@@ -138,12 +139,11 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- MENU sits first in the train chip's row (the chip starts right of it on touch layouts)
+		-- MENU sits first in the chip slot's row (where the TRAIN chip stood until 2026-11-17)
 		local phone = SideMenuView.layout(PHONE, (375 - 58) / PHONE, { Touch = true })
-		local train = SideMenuView.trainRect(true)
-		T.le(phone.Left + phone.Width, train.X - 8, "MENU left of the train chip")
-		T.truthy(phone.Top + SideMenuView.Drop >= train.Y, "in the train chip's row")
-		T.le(phone.Top + SideMenuView.Drop + phone.Height, train.Y + train.H)
+		T.le(phone.Left + phone.Width, ChipSlot.left(true) - 8, "MENU left of the slot's room")
+		T.truthy(phone.Top + SideMenuView.Drop >= ChipSlot.Top, "in the slot's row")
+		T.le(phone.Top + SideMenuView.Drop + phone.Height, ChipSlot.Top + ChipSlot.RowHeight.Compact)
 		-- a small window (phone-sized buttons) uses the touch layout even without touch
 		T.truthy(SideMenuView.layout(PHONE, (375 - 58) / PHONE).Touch)
 	end)
@@ -234,8 +234,7 @@ return function(T, Loader)
 		return list
 	end
 
-	T.test("side menu: one owner for the left column (coins, train chip, boost chips, menu never overlap)", function()
-		local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+	T.test("side menu: one owner for the left column (coins, boost chips, menu never overlap)", function()
 		local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 		local coins = { X = 16, Y = 16, W = HudView.CoinsWidth, H = 74 }
 		-- { label, width pt, height pt, uiScale, touch, top inset pt }
@@ -245,23 +244,17 @@ return function(T, Loader)
 			{ "phone 667x375", 667, 375, PHONE, true, 58 },
 			{ "phone 568x320", 568, 320, PHONE, true, 58 },
 		}
+		ChipSlot.useHud(nil)
 		for _, screen in screens do
 			local label, w, h, scale, touch, inset = screen[1], screen[2], screen[3], screen[4], screen[5], screen[6]
 			local designW, designH = w / scale, (h - inset) / scale
-			-- the train chip where TrainController puts it (compact = touch here)
-			local train = TrainView.build(touch)
-			TrainView.layout(train, touch, designW, designH)
-			local frame = train.ChipFrame
-			local trainRect = { X = frame.Position.X.Offset, Y = frame.Position.Y.Offset, W = frame.Size.X.Offset, H = frame.Size.Y.Offset }
-			local expected = SideMenuView.trainRect(touch)
-			T.eq(trainRect.X, expected.X, label .. ": train chip x")
-			T.eq(trainRect.W, expected.W, label .. ": train chip width")
-			-- the boost chips' row under it (BoostController: chipsTop of the real frame), at its widest
+			-- the boost chips' row where BoostController puts it (compact = touch here), at its widest
 			local chips =
-				{ X = BoostView.ChipLeft, Y = BoostView.chipsTop(frame, touch), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
-			T.eq(chips.Y, SideMenuView.chipsRect(touch).Y, label .. ": chips where the side menu expects them")
-			T.falsy(overlaps(trainRect, chips), label .. ": train chip and boost chips")
-			T.falsy(overlaps(coins, trainRect), label .. ": coins and train chip")
+				{ X = BoostView.chipsLeft(touch), Y = BoostView.chipsTop(touch), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
+			local expected = SideMenuView.chipsRect(touch)
+			T.eq(chips.X, expected.X, label .. ": chips where the side menu expects them (x)")
+			T.eq(chips.Y, expected.Y, label .. ": chips where the side menu expects them (y)")
+			T.falsy(overlaps(coins, chips), label .. ": coins and boost chips")
 			local refs = SideMenuView.build()
 			SideMenuView.setHidden(refs, "Store", true)
 			local count = #SideMenuView.shown(refs)
@@ -269,7 +262,6 @@ return function(T, Loader)
 			SideMenuView.apply(refs, layout)
 			-- shut (touch: MENU alone; mouse: every button): nothing overlaps
 			for _, rect in targetRects(refs) do
-				T.falsy(overlaps(rect, trainRect), `{label}: {rect.Name} clear of the train chip`)
 				T.falsy(overlaps(rect, chips), `{label}: {rect.Name} clear of the boost chips`)
 				T.falsy(overlaps(rect, coins), `{label}: {rect.Name} clear of the coins`)
 				T.le(rect.Y + rect.H, designH, `{label}: {rect.Name} on the screen`)
@@ -277,27 +269,22 @@ return function(T, Loader)
 			T.eq(refs.Gui.DisplayOrder, SideMenuView.Order)
 			if touch then
 				-- open: the grid takes the chips' place, so the chips it would cover hide
-				-- (never a half-covered TRAIN chip with its SEND peeking out)
 				SideMenuView.setExpanded(refs, true)
-				local coversTrain, coversChips = false, false
+				local coversChips = false
 				for _, rect in targetRects(refs) do
-					coversTrain = coversTrain or overlaps(rect, trainRect)
 					coversChips = coversChips or overlaps(rect, chips)
 					T.falsy(overlaps(rect, coins), `{label}: open {rect.Name} clear of the coins`)
 				end
-				T.truthy(coversTrain, label .. ": the open grid opens in the train chip's row")
-				T.falsy(TrainView.chipVisible(true, false, true), label .. ": the train chip hides under the open grid")
 				T.truthy(not coversChips or not BoostView.chipsVisible(true, false, true), label .. ": the boost chips hide under it")
-				T.truthy(refs.Gui.DisplayOrder > train.Chip.DisplayOrder, label .. ": the open grid above the HUD")
+				T.truthy(refs.Gui.DisplayOrder > BoostView.buildChips().Gui.DisplayOrder, label .. ": the open grid above the chips")
 				SideMenuView.setExpanded(refs, false)
 				T.eq(refs.Gui.DisplayOrder, SideMenuView.Order, label .. ": under the HUD again once shut")
-				T.truthy(TrainView.chipVisible(true, false, false), label .. ": the train chip back once shut")
 				T.truthy(BoostView.chipsVisible(true, false, false), label .. ": the boost chips back once shut")
 			end
 		end
 	end)
 
-	T.test("side menu: the open touch grid hides the TRAIN chip and the boost chips (MenuPanels.gridOpen)", function()
+	T.test("side menu: the open touch grid hides the boost chips (MenuPanels.gridOpen)", function()
 		local MenuPanels = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.MenuPanels")
 		local seen: { boolean } = {}
 		MenuPanels.onGridChanged(function(on: boolean)
@@ -316,9 +303,6 @@ return function(T, Loader)
 		local fs = require("@lune/fs")
 		local menu = fs.readFile("src/client/Controllers/SideMenuController.luau")
 		T.truthy(menu:find("MenuPanels.setGridOpen(view.Expanded == true)", 1, true), "setExpanded tells MenuPanels")
-		local train = fs.readFile("src/client/Controllers/TrainController.luau")
-		T.truthy(train:find("TrainView.chipVisible(hudShown, panelOpen, MenuPanels.gridOpen())", 1, true), "the train chip reads it")
-		T.truthy(train:find("MenuPanels.onGridChanged", 1, true), "and follows it")
 		local boost = fs.readFile("src/client/Controllers/BoostController.luau")
 		T.truthy(boost:find("BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen())", 1, true), "the boost chips read it")
 		T.truthy(boost:find("MenuPanels.onGridChanged", 1, true), "and follow it")

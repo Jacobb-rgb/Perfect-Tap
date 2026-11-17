@@ -46,7 +46,7 @@ local Net = require(Shared.Net)
 local HudView = require(script.Parent.Parent.UI.HudView)
 local HudBubble = require(script.Parent.Parent.UI.HudBubble)
 local TutorialView = require(script.Parent.Parent.UI.TutorialView)
-local TrainView = require(script.Parent.Parent.UI.TrainView)
+local ChipSlot = require(script.Parent.Parent.UI.ChipSlot)
 local BoostView = require(script.Parent.Parent.UI.BoostView)
 local Motion = require(script.Parent.Parent.UI.Motion)
 local Sfx = require(script.Parent.Parent.Effects.Sfx)
@@ -466,10 +466,10 @@ function HudController.init()
 		warn(`[HudController] no real screen size yet (first {first}, then {final}): built for an unknown size, refits when it comes`)
 	end
 	refs = HudView.build()
-	-- the light HUD: the TRAIN chip (and the boost chips beside it) under its menu tiles (the
-	-- round look: as wide as them, stacked on a mouse or a TV)
+	-- the light HUD: the chip slot under its menu tiles, where the TRAIN chip stood (the boost
+	-- chips sit in it now: ChipSlot)
 	if type(refs.Gui:GetAttribute("ChipTop")) == "number" then
-		TrainView.useHud(refs.Gui)
+		ChipSlot.useHud(refs.Gui)
 	end
 	refs.Gui:SetAttribute("TerraForge", true)
 	refs.Gui.Parent = player:WaitForChild("PlayerGui")

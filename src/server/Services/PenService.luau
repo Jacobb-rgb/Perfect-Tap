@@ -11,9 +11,8 @@
 	- Over capacity (#Storage > capacity, after a rescue or a smaller pen):
 	  the pen takes nothing new from the player or their automation, all
 	  with ONE reason code, PenService.OverReason ("PenOver"): throwing ore
-	  in and Put In bounce / refuse with OverText, the train's cargo waits
-	  at the station (TrainService: Train.WaitReason "PenOver"), a podium's
-	  Remove is refused (PodiumService), the sinks and the Iron Box keep
+	  in and Put In bounce / refuse with OverText, a podium's Remove is
+	  refused (PodiumService), the sinks and the Iron Box keep
 	  route (store / hasRoom) refuse. Take, Sell and Send still work, so the
 	  player can always get back under it. The State shows it: PenOver =
 	  true next to StorageCount / PenCapacity (PenView turns red).
@@ -35,12 +34,11 @@
 	  Checks: types (Guard), ItemData.parseKey, your own plot, standing within
 	  Range (+ slack) of your pen gate (StopSend and AutoSort: anywhere).
 	- Send (step 3, WP-Belts, docs/plans/STEP3_PLAN.md): every player has a
-	  send queue with two lanes, one per Source chute (BaseLayout.Chutes):
-	    Pen    "Send" from the pen panel, and the sorting billboard
-	    Train  the train's Direct Unload (straight from the train, below)
-	  A lane holds INTENTS only ({ Key, Left } or { Filter, Left }, or the
-	  Train lane's Cargo intent), never items: every item stays where it is
-	  (data.Storage, or the train's TripCargo) until the step that spawns it,
+	  send queue with one lane, the PEN Source chute's (BaseLayout.Chutes):
+	  "Send" from the pen panel, and the sorting billboard (the TRAIN chute's
+	  lane, the train's Direct Unload, went with the train 2026-11-17).
+	  A lane holds INTENTS only ({ Key, Left } or { Filter, Left }), never
+	  items: every item stays where it is (data.Storage) until the step that spawns it,
 	  which takes it out of that list and puts it onto the chute's belt
 	  (ConveyorService.spawnAtSource) with no yield in between; when nothing
 	  spawned it goes straight back to the same index. One item per lane
@@ -61,7 +59,7 @@
 	- Sorting billboard (Upgrades.PenAutomation >= EconomyConfig.PenAutomation.Billboard,
 	  while data.AutoSort ~= false; PenAction "AutoSort" switches it, the pen
 	  panel has the button): items a player brings to the pen (thrown in, Put
-	  In, a train delivery: arrived()) that MachineData.keeps doesn't keep
+	  In: arrived()) that MachineData.keeps doesn't keep
 	  (data.KeepMode / KeepList: dirty ore, crushed ore, ingots and the clean
 	  ore the player doesn't keep) get a Pen-lane intent at once (marked Auto:
 	  switching auto-sort off drops those), while a belt feeds from the PEN
@@ -77,20 +75,8 @@
 	  with PenService.store (it refuses at the pen's capacity: then their
 	  item waits), or
 	  the billboard would send their items out again in a loop.
-	- Direct Unload (PenAutomation >= EconomyConfig.PenAutomation.DirectUnload,
-	  TrainService): with a belt feeding from the TRAIN chute, the arrived
-	  train keeps its dirty ore on board (TripCargo, saved) and stands at
-	  your stop while the Train lane's Cargo intent pours it out onto that
-	  belt, one item every SendInterval, never through the pen (a full pen
-	  doesn't matter); only its other items go into the pen. TrainService
-	  registers where that cargo is (setTrainCargo) and adds the intent
-	  (unloadTrain); the intent ends when no dirty ore is left on board or
-	  the train stops unloading that way (belt gone: the rest goes into the
-	  pen as without the upgrade).
-	- StateService gets PenCapacity, PenOver (true while over capacity), AutoSort and PenSend = { Pen, Train
-	  (items still to send per lane), PenWait?, TrainWait? (why that lane
-	  waits, a line for the player) }; TrainService puts the Train lane's
-	  reason (laneWait) into its Train snapshot (UnloadWait) for TrainView.
+	- StateService gets PenCapacity, PenOver (true while over capacity), AutoSort and PenSend = { Pen
+	  (items still to send), PenWait? (why the lane waits, a line for the player) }.
 	Prompts are made for every plot once; the client shows them only on your
 	own pen ("Put In" only while you carry something), the server checks again.
 ]]
@@ -127,28 +113,14 @@ type ItemRecord = ItemService.ItemRecord
 type SourceWait = ConveyorService.SourceWait
 export type PodiumPlacer = (player: Player, slot: number, key: string) -> (boolean, string?)
 export type SendFilter = "Dirty" | "Unkept" | "All"
-export type SendLane = "Pen" | "Train" -- = the Source chute it spawns on (BaseLayout.Chutes)
+export type SendLane = "Pen" -- = the Source chute it spawns on (BaseLayout.Chutes)
 -- Where items reach the pen from, for arrived() (nothing else may call it: header).
-export type ArrivalSource = "Pen" | "Train"
---[[
-	Direct Unload (TrainService registers it with setTrainCargo):
-	  list(player, data)  the train's cargo while it stands at your stop
-	                      pouring its dirty ore onto the TRAIN chute's
-	                      belt (data.Train.TripCargo), else nil
-	  sent(player, ok)    one of its items just rode out (ok), or spawning
-	                      one failed for good (not ok: unload the rest the
-	                      old way); TrainService finishes the unload
-]]
-export type TrainCargo = {
-	list: (player: Player, data: { [string]: any }) -> { Desc }?,
-	sent: (player: Player, ok: boolean) -> (),
-}
+export type ArrivalSource = "Pen"
 -- one send intent: that many of one storage key, or of a filter; Auto =
--- queued by the sorting billboard; Cargo = the Train lane's Direct Unload
--- (the train's dirty ore, as long as there is any; Left unused)
-type Intent = { Key: string?, Filter: SendFilter?, Left: number, Auto: boolean?, Cargo: boolean? }
+-- queued by the sorting billboard
+type Intent = { Key: string?, Filter: SendFilter?, Left: number, Auto: boolean? }
 type Lane = { Intents: { Intent }, NextAt: number, Wait: SourceWait? }
-type Queue = { Pen: Lane, Train: Lane }
+type Queue = { Pen: Lane }
 type Board = { Model: Model, Title: TextLabel, Body: TextLabel, Status: TextLabel }
 
 PenService.Range = 24 -- studs from your pen gate (PenView closes beyond this)
@@ -177,7 +149,7 @@ PenService.QueueFullText = "Your send queue is full: some ore stays in your Ore 
 PenService.AutoFirstText = "Auto-sort is sending ore you don't keep out of your PEN chute. You can switch it off in your Ore Pen."
 local SEND_TICK = 0.1
 local SEND_RETRY = 0.25 -- a waiting lane looks again this often
-local LANES: { SendLane } = { "Pen", "Train" }
+local LANES: { SendLane } = { "Pen" }
 local CHUTE_PLACE = "(the blue plate on the back row of your build grid)"
 
 local lastFullToast: { [Player]: number } = {}
@@ -186,10 +158,20 @@ local lastForeignToast: { [Player]: number } = {}
 local lastQueueToast: { [Player]: number } = {}
 local autoTold: { [Player]: boolean } = {} -- the first auto-sort toast of the session
 local podiumPlacer: PodiumPlacer? = nil
-local trainCargo: TrainCargo? = nil
 local queues: { [Player]: Queue } = {}
 local boards: { [number]: Board } = {}
 local boardDirty: { [number]: boolean } = {}
+
+-- Stats.OresStored: the ores a player brought into their pen (thrown in, Put In; the quests
+-- "Put N ores in your Ore Pen", owner 2026-11-17 in place of the train's), not what machines,
+-- the Cleaning Station's overflow or the wheel put there.
+local function countStored(data: { [string]: any }, n: number)
+	local stats = data.Stats
+	if type(stats) == "table" then
+		local before = stats.OresStored
+		stats.OresStored = (if type(before) == "number" and before == before then before else 0) + n
+	end
+end
 
 ---------------------------------------------------------------- capacity
 
@@ -399,6 +381,7 @@ local function onIntake(plotId: number, record: ItemRecord)
 	local position = record.Body.CFrame.Position
 	local desc = ItemService.absorb(record)
 	table.insert(data.Storage, desc)
+	countStored(data, 1)
 	DataService.changed(owner)
 	Net.fire("Fx", owner, "PenIn", position)
 	PenService.arrived(owner, { desc }, "Pen")
@@ -437,6 +420,7 @@ local function putIn(player: Player, plotId: number): string?
 		table.insert(data.Storage, desc)
 	end
 	if #stored > 0 then
+		countStored(data, #stored)
 		DataService.changed(player)
 		Net.fire("Fx", player, "PenIn", PenService.gateCFrame(plotId).Position + Vector3.new(0, 1, 0))
 		PenService.arrived(player, stored, "Pen")
@@ -557,19 +541,15 @@ function PenService.autoSortOn(data: { [string]: any }): boolean
 end
 
 --[[
-	Does this entry (of data.Storage, or of the train's cargo for a Cargo
-	intent) belong to the intent? Only entries that can become an item
+	Does this entry (of data.Storage) belong to the intent? Only entries that can become an item
 	(ConveyorService.spawnable) ever match, so a broken one never blocks.
 	The billboard's (Auto) intents only take what is still unkept right now:
 	ore the player has marked Keep since then stays.
 ]]
 local function matches(intent: Intent, entry: any, data: { [string]: any }): boolean
-	-- a SECRET ore never goes onto the belts (no machine takes it): it waits in the pen / the train
+	-- a SECRET ore never goes onto the belts (no machine takes it): it waits in the pen
 	if not ConveyorService.spawnable(entry) or MachineData.refuses(entry) then
 		return false
-	end
-	if intent.Cargo then
-		return entry.K == "Raw"
 	end
 	local key = intent.Key
 	if key then
@@ -587,17 +567,9 @@ local function matches(intent: Intent, entry: any, data: { [string]: any }): boo
 	return filter == "All"
 end
 
--- The list an intent takes from: the pen, or (Cargo) the unloading train's cargo.
-local function listOf(player: Player, data: { [string]: any }, intent: Intent): { any }?
-	if not intent.Cargo then
-		return data.Storage
-	end
-	local source = trainCargo
-	if not source then
-		return nil
-	end
-	local ok, list = pcall(source.list, player, data)
-	return if ok and type(list) == "table" then list else nil
+-- The list an intent takes from: the pen.
+local function listOf(data: { [string]: any }): { any }?
+	return data.Storage
 end
 
 local function countMatching(data: { [string]: any }, intent: Intent): number
@@ -617,14 +589,14 @@ end
 local function queueOf(player: Player): Queue
 	local queue = queues[player]
 	if not queue then
-		queue = { Pen = newLane(), Train = newLane() }
+		queue = { Pen = newLane() }
 		queues[player] = queue
 	end
 	return queue
 end
 
-local function laneOf(queue: Queue, name: SendLane): Lane
-	return if name == "Train" then queue.Train else queue.Pen
+local function laneOf(queue: Queue, _name: SendLane): Lane
+	return queue.Pen
 end
 
 --[[
@@ -669,16 +641,15 @@ local function addIntent(
 end
 
 --[[
-	How many items each lane will still send: the intents in order, each
+	How many items the lane will still send: the intents in order, each
 	taking from what is in the pen right now (an item counts once, even when
-	two intents could send it); the Train lane counts the dirty ore still on
-	the unloading train.
+	two intents could send it).
 ]]
-function PenService.sendCounts(player: Player): (number, number)
+function PenService.sendCounts(player: Player): number
 	local queue = queues[player]
 	local data = DataService.get(player)
 	if not queue or not data then
-		return 0, 0
+		return 0
 	end
 	local available: { [string]: number } = {}
 	local sample: { [string]: Desc } = {}
@@ -692,15 +663,6 @@ function PenService.sendCounts(player: Player): (number, number)
 	local function lane(l: Lane): number
 		local total = 0
 		for _, intent in l.Intents do
-			if intent.Cargo then
-				local list: { any } = listOf(player, data, intent) or {}
-				for _, entry in list do
-					if matches(intent, entry, data) then
-						total += 1
-					end
-				end
-				continue
-			end
 			local need = intent.Left
 			for key, n in available do
 				if need <= 0 then
@@ -716,8 +678,7 @@ function PenService.sendCounts(player: Player): (number, number)
 		end
 		return total
 	end
-	local pen = lane(queue.Pen)
-	return pen, lane(queue.Train)
+	return lane(queue.Pen)
 end
 
 -- Why a lane waits right now (nil: it has nothing queued or doesn't wait).
@@ -746,22 +707,8 @@ local function markBoard(player: Player)
 	end
 end
 
--- Tells TrainService how its Direct Unload went (never breaks the lane).
-local function tellTrain(player: Player, ok: boolean)
-	local source = trainCargo
-	if source then
-		local fine, err = pcall(function()
-			source.sent(player, ok)
-		end)
-		if not fine then
-			warn(`[PenService] Direct Unload of {player.Name}: {err}`)
-		end
-	end
-end
-
 --[[
-	One step of a lane: at most one item leaves its list (the pen, or the
-	unloading train) onto its chute's belt. Returns true when the lane's
+	One step of a lane: at most one item leaves the pen onto its chute's belt. Returns true when the lane's
 	state changed without a pen change (the caller pushes the State once);
 	a sent item pushes it itself.
 ]]
@@ -769,19 +716,7 @@ local function stepLane(player: Player, data: { [string]: any }, plotId: number,
 	if #lane.Intents == 0 then
 		return false
 	end
-	-- Direct Unload ends as soon as the train doesn't unload that way any more
 	local changed = false
-	for i = #lane.Intents, 1, -1 do
-		local intent = lane.Intents[i]
-		if intent.Cargo and not listOf(player, data, intent) then
-			table.remove(lane.Intents, i)
-			changed = true
-		end
-	end
-	if #lane.Intents == 0 then
-		lane.Wait = nil
-		return changed
-	end
 	if now < lane.NextAt then
 		return changed
 	end
@@ -796,23 +731,13 @@ local function stepLane(player: Player, data: { [string]: any }, plotId: number,
 	end
 	while #lane.Intents > 0 do
 		local intent = lane.Intents[1]
-		local list = listOf(player, data, intent)
+		local list = listOf(data)
 		local index: number? = nil
 		if list then
-			if intent.Cargo then
-				-- the train unloads front to back
-				for i = 1, #list do
-					if matches(intent, list[i], data) then
-						index = i
-						break
-					end
-				end
-			else
-				for i = #list, 1, -1 do
-					if matches(intent, list[i], data) then
-						index = i
-						break
-					end
+			for i = #list, 1, -1 do
+				if matches(intent, list[i], data) then
+					index = i
+					break
 				end
 			end
 		end
@@ -840,23 +765,15 @@ local function stepLane(player: Player, data: { [string]: any }, plotId: number,
 			end
 			table.remove(lane.Intents, 1)
 			changed = true
-			if intent.Cargo then
-				tellTrain(player, false)
-			end
 			continue
 		end
-		if not intent.Cargo then
-			intent.Left -= 1
-			if intent.Left <= 0 then
-				table.remove(lane.Intents, 1)
-			end
+		intent.Left -= 1
+		if intent.Left <= 0 then
+			table.remove(lane.Intents, 1)
 		end
 		lane.NextAt = now + PenService.SendInterval
 		lane.Wait = nil
 		DataService.changed(player)
-		if intent.Cargo then
-			tellTrain(player, true)
-		end
 		return false
 	end
 	lane.Wait = nil
@@ -884,7 +801,7 @@ function PenService.tickSend(now: number)
 				changed = true
 			end
 		end
-		if #queue.Pen.Intents == 0 and #queue.Train.Intents == 0 and queues[player] == queue then
+		if #queue.Pen.Intents == 0 and queues[player] == queue then
 			queues[player] = nil
 			changed = true
 		end
@@ -895,7 +812,6 @@ function PenService.tickSend(now: number)
 end
 
 -- Drops every send intent of the pen (nothing to put back: intents only).
--- The train's Direct Unload goes on (it is the train unloading, not a send).
 function PenService.stopSend(player: Player): boolean
 	local queue = queues[player]
 	if not queue or #queue.Pen.Intents == 0 then
@@ -903,43 +819,20 @@ function PenService.stopSend(player: Player): boolean
 	end
 	table.clear(queue.Pen.Intents)
 	queue.Pen.Wait = nil
-	if #queue.Train.Intents == 0 then
-		queues[player] = nil
-	end
-	return true
-end
-
---[[
-	Direct Unload: TrainService registers where its unloading cargo is (see
-	TrainCargo; nil removes it) and calls unloadTrain while its train pours
-	dirty ore out of the TRAIN chute (once is enough: true when the Cargo
-	intent was added now).
-]]
-function PenService.setTrainCargo(source: TrainCargo?)
-	trainCargo = source
-end
-
-function PenService.unloadTrain(player: Player): boolean
-	local lane = queueOf(player).Train
-	for _, intent in lane.Intents do
-		if intent.Cargo then
-			return false
-		end
-	end
-	table.insert(lane.Intents, { Left = 0, Cargo = true })
+	queues[player] = nil
 	return true
 end
 
 --[[
 	A player brought items into the pen: `source` "Pen" (thrown in or Put
-	In) or "Train" (a train delivery). With the sorting billboard switched
+	In). With the sorting billboard switched
 	on, the ones the player doesn't keep get a Pen-lane intent (marked
 	Auto), while a belt feeds from the PEN chute (the header). The items
 	stay in the pen until sent. Only these sources: sinks and machines
 	store with PenService.store (header), anything else is ignored here.
 ]]
 function PenService.arrived(player: Player, descs: { Desc }, source: ArrivalSource)
-	if source ~= "Pen" and source ~= "Train" then
+	if source ~= "Pen" then
 		return
 	end
 	local data = DataService.get(player)
@@ -1378,12 +1271,9 @@ local function provide(player: Player, data: { [string]: any }, snapshot: { [str
 	snapshot.PenCapacity = PenService.capacityOf(data)
 	snapshot.PenOver = PenService.isOver(data)
 	snapshot.AutoSort = PenService.autoSortOn(data)
-	local pen, train = PenService.sendCounts(player)
 	snapshot.PenSend = {
-		Pen = pen,
-		Train = train,
+		Pen = PenService.sendCounts(player),
 		PenWait = waitLine(player, "Pen"),
-		TrainWait = waitLine(player, "Train"),
 	}
 end
 
@@ -1410,7 +1300,6 @@ PenService._test = {
 		table.clear(lastQueueToast)
 		table.clear(autoTold)
 		table.clear(queues)
-		trainCargo = nil
 		for _, board in boards do
 			board.Model:Destroy()
 		end
@@ -1441,7 +1330,7 @@ function PenService.init()
 		lastForeignToast[player] = nil
 		lastQueueToast[player] = nil
 		autoTold[player] = nil
-		-- intents only: nothing to put back (the train's cargo is saved on the train)
+		-- intents only: nothing to put back
 		queues[player] = nil
 	end)
 end

@@ -3,7 +3,7 @@
 	brown panels) in the game's current look, the dark "Store card" style
 	(owner 2026-10-20, Config/BubbleTheme + Config/CardTheme), without
 	touching the window's code or layout. Used while UIConfig.lightUI() is
-	on by the older windows (SellView, TechShopView, TrainView, IronBoxView,
+	on by the older windows (SellView, TechShopView, IronBoxView,
 	CleaningView, the steps 6-7 windows, MenuPanel windows).
 
 	  backgrounds  the brown panels become dark slate; the button colours
@@ -278,8 +278,6 @@ LightSkin.BandRoles = {
 	TerraForgeGearShop = "Gear",
 	TerraForgeSell = "Shop",
 	TerraForgeTechShop = "Build",
-	TerraForgeTrain = "Lobby",
-	TerraForgeTrainPanel = "Lobby",
 	TerraForgeIronBox = "Settings",
 	TerraForgePen = "Backpack",
 } :: { [string]: string }

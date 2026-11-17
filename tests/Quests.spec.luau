@@ -120,7 +120,7 @@ return function(T, Loader)
 
 	T.test("Quests: progress is a delta from when the quest was given", function()
 		local record: any = { Day = 0, Daily = {}, Week = 0, Weekly = {} }
-		local stats = { OresMined = 500, RocksBroken = 200, OresCleaned = 30, ItemsSold = 90, TrainTrips = 12, WheelSpins = 3 }
+		local stats = { OresMined = 500, RocksBroken = 200, OresCleaned = 30, ItemsSold = 90, WheelSpins = 3 }
 		T.truthy(QuestLogic.refresh(record, ctx({ Stats = stats })))
 		T.falsy(QuestLogic.refresh(record, ctx({ Stats = stats, Now = NOW + 60 })), "same day: unchanged")
 		for _, e in record.Daily do
@@ -414,7 +414,7 @@ return function(T, Loader)
 	local function sampleView(): any
 		local record: any = {}
 		local stats =
-			{ OresMined = 0, RocksBroken = 0, OresCleaned = 0, ItemsSold = 0, TrainTrips = 0, PodiumEarned = 0, CapsulesOpened = 0 }
+			{ OresMined = 0, RocksBroken = 0, OresCleaned = 0, ItemsSold = 0, PodiumEarned = 0, CapsulesOpened = 0 }
 		QuestLogic.refresh(record, ctx({ Level = 4, Income = 1840, Stats = stats }))
 		local more = table.clone(stats)
 		local first = record.Daily[1]

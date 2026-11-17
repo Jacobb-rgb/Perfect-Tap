@@ -6,7 +6,7 @@
 
 	It reads the real config (OreData, BlasterData, ItemData, MachineData,
 	EconomyConfig, BackpackData (the backpacks: capacity and coin price per
-	pack, owner 2026-10-24; a walk to the train carries a backpack's worth), TrainConfig, MachineData power rules) and reads the mine
+	pack, owner 2026-10-24; a walk to the train carries a backpack's worth), the old train's numbers (frozen below: no train since 2026-11-17), MachineData power rules) and reads the mine
 	floors straight from MineFloors.List (Ores / CrystalOres weights,
 	MinBlaster gates, ViaElevator), the rock mix (SpawnChance, Seconds,
 	OreCount: the floor's weakest blaster breaks a rock in ~4.5 s, ~3.3 ores
@@ -57,7 +57,32 @@ local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")
 local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 local DropperConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.DropperConfig")
 local BackpackData = Loader.requirePath("ReplicatedStorage.Shared.Config.BackpackData")
-local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
+-- The ore train went 2026-11-17 (owner: "completely remove this system"); the ore now goes home in
+-- the backpack (BASE, Put In). Until the model is redone for that, it keeps the old train's numbers
+-- here (the old TrainConfig, frozen) so its earlier results can still be compared.
+local TrainConfig = {
+	Capacity = {
+		{ Value = 8, Price = 0 },
+		{ Value = 12, Price = 2000 },
+		{ Value = 18, Price = 15000 },
+		{ Value = 26, Price = 120000 },
+		{ Value = 36, Price = 900000 },
+		{ Value = 50, Price = 6e6 },
+		{ Value = 65, Price = 40e6 },
+		{ Value = 80, Price = 250e6 },
+		{ Value = 100, Price = 1.5e9 },
+		{ Value = 120, Price = 10e9 },
+	},
+	Speed = {
+		{ Value = 30, Price = 0 },
+		{ Value = 25, Price = 3000 },
+		{ Value = 21, Price = 25000 },
+		{ Value = 17, Price = 200000 },
+		{ Value = 14, Price = 1.5e6 },
+		{ Value = 12, Price = 10e6 },
+	},
+	ReturnSeconds = 6,
+}
 local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
 local GearConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GearConfig")

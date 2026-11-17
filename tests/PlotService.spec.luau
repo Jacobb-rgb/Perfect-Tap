@@ -115,14 +115,15 @@ return function(T, Loader)
 		return WorldLayout.plotCFrame(plot):PointToObjectSpace(world.Position)
 	end
 
-	T.test("Yard: every plot has the pen, 5 podiums and train stop (no Foundry), named for the services", function()
+	T.test("Yard: every plot has the pen and 5 podiums (no Foundry, no train stop), named for the services", function()
 		for _, plot in WorldLayout.Plots do
 			local model = buildPlot(plot)
 			local yard = model:FindFirstChild("Yard")
 			T.truthy(yard, "Yard")
-			for _, name in { "Ground", "Fence", "Pen", "TrainStop" } do
+			for _, name in { "Ground", "Fence", "Pen" } do
 				T.truthy(yard:FindFirstChild(name), `plot {plot.Id} {name}`)
 			end
+			T.eq(yard:FindFirstChild("TrainStop"), nil, `plot {plot.Id}: no train stop (owner 2026-11-17)`)
 			T.eq(yard:FindFirstChild("Foundry"), nil, `plot {plot.Id}: no Foundry (owner 2026-10-24)`)
 			-- the whole yard is the Ore Pen's tile floor (owner 2026-10-25: "no green at all"):
 			-- one walkable pad over the yard with painted tile seams, no lawn, no gravel paths
@@ -331,7 +332,6 @@ return function(T, Loader)
 		local back = PlotBuilder.BackWallZ
 		local chamfer = PlotBuilder.YardChamfer
 		local gate = BaseLayout.YardGate
-		local stopHalf = BaseLayout.TrainStop.Size.X / 2
 		local samples = 0
 		local function check(x: number, z: number, label: string)
 			samples += 1
@@ -347,7 +347,8 @@ return function(T, Loader)
 			for x = gate.Width / 2 + 0.6, line, 1 do
 				check(gate.CenterX + s * x, line, "pad/yard")
 			end
-			for x = stopHalf + 1, line - chamfer, 1 do
+			-- (closed all along since the train stop's opening went, 2026-11-17)
+			for x = 0, line - chamfer, 1 do
 				check(s * x, back, "back")
 			end
 			-- the back corner is cut at 45 degrees (brick-wall-curve-small): closed all along

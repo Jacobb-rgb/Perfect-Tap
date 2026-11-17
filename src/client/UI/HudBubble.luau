@@ -28,7 +28,10 @@
 	Rebirth, Golems, Ride, Build, Elevator, Trade, More; behind More: Index,
 	Settings, Daily, Spin, Boosts, RoundMoreOrder; the Inventory is the
 	GOLD button at the bottom since 2026-11-11: goldFace), two a row
-	in a tall block with the TRAIN chip under it as wide as it (owner
+	in a tall block with the chip slot under it as wide as it (the TRAIN
+	chip's until the train went, owner 2026-11-17: the slot keeps its room
+	so nothing else moves, and the boost chips sit in it, ChipSlot; "the
+	TRAIN chip" below means that slot) (owner
 	2026-10-28: "the block tall, not wide"; fitRound sizes it for the
 	screen: a full block with no hole, his pick A of 2026-11-11, two a row
 	and four rows on a mouse or a TV, four a row on touch screens, at the
@@ -197,7 +200,7 @@ HudBubble.NarrowWidth = 600 -- points; like TeleportView.NarrowWidth
 HudBubble.TenFootSafe = 0.05 -- a TV's title-safe band (TutorialView.TenFootSafe)
 
 -- Is this a touch-first device (a phone or a tablet; with a keyboard too, but no mouse)? The test
--- MenuPanels.isTouch, TrainController and BoostController use. false in Lune.
+-- MenuPanels.isTouch and BoostController use. false in Lune.
 function HudBubble.isTouch(): boolean
 	local ok, touch = pcall(function()
 		local input = game:GetService("UserInputService")
@@ -1628,7 +1631,7 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 		Position = m.Origin,
 		Size = UDim2.fromOffset(m.Width, m.Height),
 	}, gui)
-	-- where the TRAIN chip goes (TrainView.useHud, HudController): placeMenu below
+	-- where the chip slot goes (ChipSlot.useHud, HudController): placeMenu below
 	-- the green Shop pill: on big screens over the money (the owner's phone photo: Shop
 	-- above the money, bottom-left); on phones and tablets the left column is full
 	-- (tiles, the TRAIN chip, the money) and the top-right holds the tutorial bubble
@@ -1716,9 +1719,9 @@ function HudBubble.buildGame(uiScale: number?, screenWidth: number?, touch: bool
 end
 
 --[[
-	Puts the game menu's tiles where `layout` says and tells the TRAIN chip its
+	Puts the game menu's tiles where `layout` says and tells the chip slot its
 	place (gui attributes ChipTop, ChipLeft, ChipWidth, ChipStack, ChipTenFoot:
-	TrainView.useHud). buildGame does it once; HudController again when the
+	ChipSlot.useHud). buildGame does it once; HudController again when the
 	screen changes size (the round look's grid is fitted to it: fitRound).
 ]]
 function HudBubble.placeMenu(gui: Instance, menu: Frame, layout: Layout)
@@ -1743,7 +1746,7 @@ function HudBubble.placeMenu(gui: Instance, menu: Frame, layout: Layout)
 		end
 	end
 	gui:SetAttribute("ChipTop", HudBubble.chipTop(layout))
-	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: TrainView.ChipLeft)
+	gui:SetAttribute("ChipLeft", HudBubble.chipLeft(layout)) -- (nil: ChipSlot.Left)
 	-- (the round look: under the tiles the chip is as wide as them, stacked on a mouse or a TV)
 	gui:SetAttribute("ChipWidth", HudBubble.chipWidth(layout))
 	gui:SetAttribute("ChipStack", layout.ChipStack == true)

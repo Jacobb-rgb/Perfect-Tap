@@ -976,15 +976,13 @@ function EggPanelController.screenInput(camera: Camera): EggPanel.ScreenInput
 		local at = safeGui.AbsolutePosition - origin
 		safe = { Min = at, Max = at + safeGui.AbsoluteSize }
 	end
-	-- the HUD's buttons: the teleport bar, the left tiles, the TRAIN chip (ScreenGuis: over the panel)
+	-- the HUD's buttons: the teleport bar, the left tiles (ScreenGuis: over the panel)
 	local blocks: { EggPanel.Box } = {}
 	local playerGui = player:WaitForChild("PlayerGui")
 	local hud = HudController.refs()
-	local train = playerGui:FindFirstChild("TerraForgeTrain")
-	local chip = if train and train:IsA("ScreenGui") and train.Enabled then train:FindFirstChild("TrainChip", true) else nil
 	local hudShown = hud ~= nil and hud.Gui.Enabled
 	for _, object in
-		{ if hudShown then hud.Gui:FindFirstChild("TopBar") else nil, if hudShown then hud.Gui:FindFirstChild("Menu") else nil, chip }
+		{ if hudShown then hud.Gui:FindFirstChild("TopBar") else nil, if hudShown then hud.Gui:FindFirstChild("Menu") else nil }
 	do
 		if object and object:IsA("GuiObject") and object.Visible and object.AbsoluteSize.X > 0 then
 			table.insert(blocks, boxOf(object, origin))

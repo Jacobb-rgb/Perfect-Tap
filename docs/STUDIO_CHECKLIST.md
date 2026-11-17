@@ -47,7 +47,7 @@ command bar.
 
 ### B. Tutorial 1-10 (a new player)
 1. Join as a new player: the loading screen first, then the tutorial bubble.
-2. Follow it: 1 To the mine! → 2 Blast a rock → 3 Load the train → 4 Off it goes! → 5 Clean your ore →
+2. Follow it: 1 To the mine! → 2 Blast a rock → 3 Take it home → 4 Clean your ore (straight from the backpack) →
    6 Show it off (podium) → 7 Grow your forge → 8 A stronger blaster → 9 Golem helpers (GOT IT) → 10 A free spin
    (GOT IT). Finishing pays 250 coins; skipping pays nothing.
 3. Open the CODEX or GOLEMS during the tutorial: the bubble hides and comes back when you close it.
@@ -86,7 +86,7 @@ command bar.
    ARTIFACTS book and the yard museum.
 3. Buy a Restoration Table (Tech shop, 75K, it needs power), give it a relic (Clean Relic prompt or a belt):
    about 20 s later the relic is clean and in your collection, no minigame.
-4. A relic can't be sold, stored in the pen, put on a podium or loaded on the train.
+4. A relic can't be sold, stored in the pen or put on a podium.
 
 ### G. Platforms, Belt Lift and Slide
 1. Buy a Platform, a Belt Lift, a Slide and belts (Tech shop). Place the platform, then a belt and a Brick
@@ -100,7 +100,7 @@ command bar.
 ### H. Rebirth (STAR FORGE)
 1. With blaster LV 8: the REBIRTH tile shows its badge. Open it: YOU LOSE / YOU KEEP / YOU GET, "a rebirth now pays
    ⭐ 6"; REBIRTH! asks SURE?, the second press plays the moment and sends you home.
-2. After it: coins 0, blaster LV 1, the factory still stands (machines empty), pen / podiums / Foundry / train empty;
+2. After it: coins 0, blaster LV 1, the factory still stands (machines empty), pen / podiums / Foundry empty;
    golems, artifacts, relics, hoverboards and Robux items are still yours; a gold star over your name.
 3. STAR SHOP: buy Golden Touch, Deep Pockets, Express Rails, Head Start and Podium Keeper and check each one works.
 4. Phone 568 x 320 and 667 x 375: the window fits.
@@ -120,7 +120,7 @@ command bar.
 
 ### K. Network numbers with 8 players
 1. Test → Clients and Servers: Local Server, **8 players**, Start (a strong PC helps).
-2. In each client window build a busy factory (machines, belts, ore riding) and keep a train running.
+2. In each client window build a busy factory (machines, belts, ore riding) and keep ore riding the belts.
 3. Open the Network stats in one client window (View tab → the Stats group → Network) and write down **data
    received (KB/s)** after two minutes. The goal is well under **50 KB/s** per player.
 4. On the server window: View → Script Performance (or the MicroProfiler, Ctrl+F6): no script stays red.
@@ -137,8 +137,8 @@ command bar.
 ### M. Prompts on E, Grab on F, the stock Roblox prompt (owner 2026-10-20)
 1. PC: every prompt (the shops, the Sell counter, the vault, the wheel chest, the codex, machines, the pen, the
    podiums, the elevator) shows Roblox's own grey prompt and opens with **E**. Controller: the same prompts on **Y**.
-2. The Mine Station: Load Train (E), Send Train (G) and Train (T) stand one under the other, never on top of each
-   other. Same at the pen gate (Put In E, Open Pen G) and the Foundry (Put In E, Open Foundry G).
+2. Prompts on one spot stand one under the other, never on top of each other: the pen gate (Put In E, Open Pen G)
+   and the Foundry (Put In E, Open Foundry G).
 3. Pick-up is **F** now (controller X stays): stand next to a podium or a machine with an ore on the ground, press F:
    you pick the ore up and no prompt fires. The item hint says "[F] Pick up".
 4. The stock prompt has no dark outlines on its text (the light UI skin leaves it alone), also while it fades in

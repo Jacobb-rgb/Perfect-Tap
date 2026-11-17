@@ -6,7 +6,7 @@
 ]]
 
 local DataTemplate = {
-	Version = 17, -- Data/Migrations brings older saves up to this (4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate; 15: the one belt's level; 16: the Ore Feeder; 17: floors bought one by one)
+	Version = 18, -- Data/Migrations brings older saves up to this (18: no train; 4: the 16-cell build grid; 5: the player LEVEL; 6: one Furnace; 7: five podiums; 8: no Foundry; 9: the backpack; 10: the secret ores; 11: the golems' auto-delete; 12: the HUGE golems; 13: the rarer golems' auto-delete flags go once; 14: Night Shift's crate; 15: the one belt's level; 16: the Ore Feeder; 17: floors bought one by one)
 
 	Coins = 0, -- may hold fractions (podium income per second)
 	-- the part of Coins bought with Robux and not spent yet (always <= Coins; spent
@@ -30,8 +30,8 @@ local DataTemplate = {
 		ExtraSlots = 0, -- machine slot upgrades bought
 		PenLevel = 0, -- Ore Pen capacity level (EconomyConfig.Pen)
 		-- pen automation (EconomyConfig.PenAutomation): 0 none, 1 the sorting
-		-- billboard at the pen, 2 = 1 + the train's Direct Unload onto the TRAIN chute
-		-- (readers use >= levels: a newer server may add more)
+		-- billboard at the pen (2 was the train's Direct Unload: no train since Version 18;
+		-- readers use >= levels: a newer server may add more)
 		PenAutomation = 0,
 		-- the elevator floors bought (ElevatorService, owner 2026-11-15): { [floor Id] = true },
 		-- each for MineFloors.priceOf coins; floors 1-3 are free, floors 4-6 are reachable only by
@@ -78,18 +78,6 @@ local DataTemplate = {
 	-- os.time() of the last moment the podiums were paying (offline earnings)
 	LastSeen = 0,
 
-	-- your ore train (TrainConfig): Cargo waits at the station; TripCargo is on
-	-- the moving train (saved, so leaving mid-trip never loses ore); trip times
-	-- are os.time() seconds (0 = no trip)
-	Train = {
-		CapacityLevel = 0,
-		SpeedLevel = 0,
-		Cargo = {},
-		TripCargo = {},
-		TripDepartAt = 0,
-		TripArriveAt = 0,
-	},
-
 	-- steps 6-7 (rules in Shared/Config: GearConfig, EnchantConfig, BoostConfig,
 	-- GolemConfig, WheelConfig, ArtifactConfig); Migrations keeps them sane
 	-- gear levels 0..GearConfig.MaxLevel, bought at the Gear shop
@@ -128,13 +116,13 @@ local DataTemplate = {
 		OresMined = 0,
 		RocksBroken = 0,
 		OresCleaned = 0,
+		OresStored = 0, -- ores a player brought into their Ore Pen (thrown in, Put In: PenService; the quests)
 		FlawlessCleans = 0,
 		IngotsSmelted = 0,
 		BlastersForged = 0,
 		BlastersBought = 0, -- blaster cases bought at the Blaster Vault (VaultService)
 		ItemsSold = 0,
 		PodiumEarned = 0,
-		TrainTrips = 0, -- trains unloaded into the Ore Pen (TrainService)
 		PlaySeconds = 0,
 		ArtifactsFound = 0, -- every artifact find, duplicates too (the ARTIFACTS board)
 		CapsulesOpened = 0, -- golems woken from capsules (also free ones)

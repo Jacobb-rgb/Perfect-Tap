@@ -99,7 +99,7 @@ ShopService.PromptName = "TechShopPrompt"
 ShopService.PointName = "TechShopPromptPoint"
 
 -- the pen automation steps by level (EconomyConfig.PenAutomation), for the toasts
-ShopService.AutomationNames = { "Auto-Sort Billboard", "Train Direct Unload" }
+ShopService.AutomationNames = { "Auto-Sort Billboard" }
 
 local PROMPT_DISTANCE = 12
 local MAX_ITEM_LENGTH = 64
@@ -254,9 +254,7 @@ function ShopService.boughtText(player: Player?, bought: Bought, place: Place?):
 	end
 	-- as PenService runs them (and TechShopView.Automation says)
 	local step = ShopService.AutomationNames[level] or "Pen automation"
-	if level == EconomyConfig.PenAutomation.DirectUnload then
-		return `{step} unlocked: your train's dirty ore now pours out of the TRAIN chute!`
-	elseif level == EconomyConfig.PenAutomation.Billboard then
+	if level == EconomyConfig.PenAutomation.Billboard then
 		return `{step} unlocked: what you don't keep now rides out of your PEN chute!`
 	end
 	return `{step} unlocked at your Ore Pen!`

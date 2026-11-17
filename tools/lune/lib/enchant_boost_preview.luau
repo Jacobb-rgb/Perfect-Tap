@@ -3,10 +3,10 @@
 	tools/lune/export_scene.luau: the world; shots in
 	tools/preview/enchant_boost_shots.json at the rune table and in Deep
 	Hollow). Everything is drawn with the game's own code (EnchantView,
-	BoostView, HudView, TrainView's chip) from a mid-game State snapshot:
+	BoostView, HudView) from a mid-game State snapshot:
 	blaster level 5, Power II and Lucky I in the two open slots, Twin Drop
-	I owned, Triple Lucky running. Every HUD shows the train chip and a
-	"+$X" popup under the coins, with the boost chips under the train chip.
+	I owned, Triple Lucky running. Every HUD shows a "+$X" popup under the
+	coins, with the boost chips in the chip slot (ChipSlot).
 	UI overlays (build/preview/<name>.json):
 	  ui_enchant_lucky     PC: Lucky picked, its new odds in Deep Hollow
 	  ui_enchant_star      PC: Starbreaker (1T coins or "20 R$ • SOON" until
@@ -25,7 +25,7 @@
 	  ui_boost_phone       phone: Hexa Lucky
 	  ui_boost_small       small phone: Triple Lucky (the short card)
 	  ui_boost_tv          1080p TV: Hexa Lucky, the gamepad row
-	  ui_hud_chips         PC HUD: the two running boosts under the train chip
+	  ui_hud_chips         PC HUD: the two running boosts in the chip slot
 	                       ([clover] TRIPLE 3:42, [gem] HEXA 1h 05m)
 	  ui_hud_launcher      phone HUD: the BOOSTS launcher (no boost running; only in a game without the side menu)
 	Every view gets what this build says is coming soon (Preview.soon: the
@@ -69,7 +69,6 @@ function Preview.build(Loader: any): { [string]: any }
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local EnchantView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.EnchantView")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
-	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
 	local UIKit = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.UIKit")
 	local UDim2 = Loader.roblox.UDim2
 
@@ -87,8 +86,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local SMALL: Screen = { Scale = smallScale, Compact = true, Width = 1600 / smallScale, Height = (900 - smallInset) / smallScale }
 	local TV: Screen = { Scale = tvScale, Compact = true, Width = 1600 / tvScale, Height = (900 - 36 * 900 / 1080) / tvScale }
 
-	-- the HUD with a "+$X" popup under the coins, the train chip (as
-	-- TrainController shows it) and the boost chips under it (as
+	-- the HUD with a "+$X" popup under the coins and the boost chips in the chip slot (as
 	-- BoostController places them)
 	local function hud(screen: Screen, state: any, launcher: boolean): { any }
 		local refs = HudView.build()
@@ -99,20 +97,11 @@ function Preview.build(Loader: any): { [string]: any }
 		HudView.setBackpack(refs, 0, 5)
 		refs.Toasts:ClearAllChildren()
 		HudView.floater(refs.Floaters, "+" .. Format.money(18400))
-		local train = TrainView.build(screen.Compact)
-		train.Chip.Scale.Scale = screen.Scale
-		train.Gui.Scale.Scale = screen.Scale
-		TrainView.layout(train, screen.Compact, screen.Width, screen.Height)
-		train.ChipKey.Visible = not screen.Compact
-		local snapshot = TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 })
-		TrainView.setStatus(train, TrainView.status(snapshot, NOW, nil))
-		train.Gui.Enabled = false
-		train.Chip.Enabled = TrainView.chipVisible(true, false)
 		local chips = BoostView.buildChips()
 		chips.Gui.Scale.Scale = screen.Scale
-		BoostView.placeChips(chips, BoostView.chipsTop(train.ChipFrame, screen.Compact))
+		BoostView.placeChips(chips, BoostView.chipsTop(screen.Compact))
 		BoostView.setChips(chips, BoostView.chips(state, NOW), launcher)
-		return { refs.Gui, train.Chip, chips.Gui }
+		return { refs.Gui, chips.Gui }
 	end
 
 	-- the renderer draws no images: a lettered stand-in for each gamepad glyph

@@ -26,7 +26,7 @@
 	  top level" instead of asking to buy.
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
 	  counter, the counter streaming out, respawning or another panel (Pen,
-	  Sell, Train, Tech shop...) opening. Other prompts are hidden while it
+	  Sell, Tech shop...) opening. Other prompts are hidden while it
 	  is open.
 ]]
 

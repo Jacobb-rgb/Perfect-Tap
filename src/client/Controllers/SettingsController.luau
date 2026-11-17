@@ -21,8 +21,8 @@
 	    Sfx    -> the SoundGroup SettingsConfig.SfxGroup ("TerraForgeSfx",
 	              created here at start, Effects/Sfx plays through it); every
 	              Sound without a group under SoundService or the client
-	              sound folders (SfxFolders: Sfx's 3D pool, the machine hums,
-	              the trains) joins it, so the slider reaches every game sound
+	              sound folders (SfxFolders: Sfx's 3D pool, the machine hums)
+	              joins it, so the slider reaches every game sound
 	    Shake  -> Effects/CameraShake.setEnabled
 	    Rumble -> MiningController.setRumble; turning it off also stops the
 	              gamepad motors at once (a vibration already running). The
@@ -68,8 +68,8 @@ local CLOSE_PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local TICK = 0.25
 
 -- Workspace folders whose ungrouped Sounds join the SfxGroup (Effects/Sfx's
--- 3D pool, MachineFxController's hums, TrainController's voices).
-SettingsController.SfxFolders = { ClientSfx = true, ClientMachineFx = true, ClientTrains = true } :: { [string]: boolean }
+-- 3D pool, MachineFxController's hums).
+SettingsController.SfxFolders = { ClientSfx = true, ClientMachineFx = true } :: { [string]: boolean }
 
 local player = Players.LocalPlayer
 local current: SettingsConfig.Settings = SettingsConfig.sanitize(nil)

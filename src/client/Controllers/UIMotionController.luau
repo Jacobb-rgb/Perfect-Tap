@@ -66,7 +66,6 @@ UIMotionController.Skip = {
 	TerraForgeCleaning = true,
 	TerraForgeFreeSpin = true,
 	TerraForgeBoostChips = true,
-	TerraForgeTrain = true,
 	TerraForgeSideMenu = true,
 	TerraForgeArtifactBanner = true,
 	TerraForgeCrateOpening = true,

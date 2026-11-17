@@ -23,8 +23,8 @@
 	  count() / capacity() / isFull()
 	  onChanged(callback)             callback() on every State push and every
 	                                  CarryCount / CarryCapacity change
-	Predicates for the prompt rules: anything, notRelic (the train, the
-	pen), podiumOre (EconomyConfig.Podiums.Kinds), cleanable (Raw or Relic).
+	Predicates for the prompt rules: anything, notRelic (the pen),
+	podiumOre (EconomyConfig.Podiums.Kinds), cleanable (Raw or Relic).
 ]]
 
 local Players = game:GetService("Players")
@@ -201,7 +201,7 @@ function BackpackState.anything(_desc: Desc): boolean
 	return true
 end
 
--- The train's "Load Train" and the pen's "Put In": everything but dusty relics (cleaned, never shipped or stored).
+-- The pen's "Put In": everything but dusty relics (cleaned, never stored).
 function BackpackState.notRelic(desc: Desc): boolean
 	return desc.K ~= "Relic"
 end

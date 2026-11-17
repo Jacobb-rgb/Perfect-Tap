@@ -22,12 +22,28 @@ return function(T, Loader)
 	end
 	local HudBubble = ui("HudBubble")
 	local BoostView = ui("BoostView")
-	local TrainView = ui("TrainView")
 	local QuestView = ui("QuestView")
 	local StoreView = ui("StoreView")
 	local BackpackView = ui("BackpackView")
 	local CodexView = ui("CodexView")
 	local BackpackState = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.Util.BackpackState")
+
+	-- the chip slot under the tiles (the TRAIN chip's until the train went, owner 2026-11-17: the HUD
+	-- keeps its room and the boost chips sit in it): its size from the HUD's attributes, as the
+	-- old chip measured it (HudBubble's StackChipHeight / TouchChipHeight / TouchChipWidth)
+	local function slotSize(gui: any, compact: boolean): any
+		local stack = gui:GetAttribute("ChipStack") == true
+		local tv = gui:GetAttribute("ChipTenFoot") == true
+		local w, h = 330, 66
+		if stack then
+			w = if tv then 161 else 150
+			h = if tv then HudBubble.StackChipHeightTv else HudBubble.StackChipHeight
+		elseif compact then
+			w, h = HudBubble.TouchChipWidth, HudBubble.TouchChipHeight
+		end
+		local width = gui:GetAttribute("ChipWidth")
+		return Vector2.new(if type(width) == "number" then width else w, h)
+	end
 
 	-- the round look with the light UI (the tests restore both)
 	local function inRound(fn: () -> ())
@@ -63,10 +79,9 @@ return function(T, Loader)
 				T.truthy(right < width / 2 - refs.TopBar.Size.X.Offset / 2, where .. ": the tiles left of the top row")
 				local grid = menu:FindFirstChildOfClass("UIGridLayout") :: any
 				T.truthy(grid.CellSize.X.Offset * scale >= 44, where .. ": the tiles a thumb wide")
-				-- the TRAIN chip under them (touch: TrainController's compact chip), also above the zone
+				-- the chip slot under them (touch: the compact one), also above the zone
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
-				local chip = TrainView.chipSize(true)
-				T.eq(chip.Y, HudBubble.TouchChipHeight, "the HUD knows the touch chip's height")
+				local chip = slotSize(refs.Gui, true)
 				local chipBottom = chipTop + chip.Y
 				T.truthy(chipBottom <= height / 3, `{where}: the TRAIN chip above the zone ({chipBottom} <= {height / 3})`)
 				-- the toasts start under the chip (its gui draws over the HUD's)
@@ -82,9 +97,7 @@ return function(T, Loader)
 				-- 2026-11-07 a smaller tablet has no room above the zone: beside them, as on a phone)
 				local chipLeft = refs.Gui:GetAttribute("ChipLeft")
 				if chipLeft == menu.Position.X.Offset then
-					TrainView.useHud(refs.Gui)
-					T.eq(TrainView.chipSize(true).X, menu.Size.X.Offset, where .. ": the chip as wide as the tiles")
-					TrainView.useHud(nil)
+					T.eq(slotSize(refs.Gui, true).X, menu.Size.X.Offset, where .. ": the slot as wide as the tiles")
 				else
 					T.truthy(chipLeft >= right, where .. ": the chip beside the tiles")
 					T.truthy(chipTop >= bar.Position.Y.Offset + bar.Size.Y.Offset, where .. ": under the top row")
@@ -161,11 +174,8 @@ return function(T, Loader)
 				local chipLeft, chipTop = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
 				T.eq(chipLeft, refs.Menu.Position.X.Offset, where .. ": under the tiles' left edge")
 				T.eq(refs.Gui:GetAttribute("ChipStack"), true, where .. ": the stacked chip")
-				TrainView.useHud(refs.Gui)
-				local chip = TrainView.chipSize(false)
-				TrainView.useHud(nil)
+				local chip = slotSize(refs.Gui, false)
 				T.eq(chip.X, refs.Menu.Size.X.Offset, where .. ": as wide as the tiles")
-				T.eq(chip.Y, HudBubble.StackChipHeight, where .. ": the HUD knows the stacked chip's height")
 				-- (two a row since the owner's left menu, 2026-11-07; eight tiles, two a row and four rows
 				-- since 2026-11-11, his pick A)
 				T.eq(refs.Menu:GetAttribute("Columns"), 2, where .. ": the block, two a row")
@@ -364,9 +374,7 @@ return function(T, Loader)
 			local small = HudBubble.scaleFor(Vector2.new(1280, 720))
 			local layout = HudBubble.layout(small, 1280, false, false, 720 - 58)
 			HudBubble.placeMenu(refs.Gui, refs.Menu, layout)
-			TrainView.useHud(refs.Gui)
-			local chip = TrainView.chipSize(false)
-			TrainView.useHud(nil)
+			local chip = slotSize(refs.Gui, false)
 			local height = (720 - 58) / small
 			local chipBottom = refs.Gui:GetAttribute("ChipTop") + chip.Y
 			T.truthy(chipBottom <= HudBubble.roundFloor(layout, height), `the chip above the floaters ({chipBottom})`)
@@ -374,40 +382,6 @@ return function(T, Loader)
 			T.eq(grid.CellSize.X.Offset, layout.Tile, "the tiles took the new size")
 			T.eq(refs.Menu.Size.Y.Offset, HudBubble.menuMetrics(layout, #HudBubble.gameMenu()).Height, "the block took the new height")
 			T.eq(refs.Gui:GetAttribute("ChipWidth"), refs.Menu.Size.X.Offset, "the chip as wide as the block again")
-			refs.Gui:Destroy()
-		end)
-	end)
-
-	-- (review 2026-10-29) a TV's stacked chip keeps its words 18 px at 1080p: the line on two rows, not smaller
-	T.test("RoundReview: a TV's stacked TRAIN chip keeps its line big (two rows)", function()
-		inRound(function()
-			local scale = HudBubble.scaleFor(Vector2.new(1920, 1080))
-			local refs = HudBubble.buildGame(scale, 1920, false, true, 1080 - 58) :: any
-			T.eq(refs.Gui:GetAttribute("ChipStack"), true, "stacked on a TV")
-			TrainView.useHud(refs.Gui)
-			T.eq(TrainView.chipSize(false).Y, HudBubble.StackChipHeightTv, "the HUD knows the TV chip's height")
-			local train = TrainView.build(false)
-			TrainView.layout(train, false, 1920 / scale, (1080 - 58) / scale)
-			TrainView.useHud(nil)
-			local line = train.ChipLine :: any
-			local fit = line:FindFirstChildOfClass("UITextSizeConstraint") :: any
-			T.truthy(fit and fit.MinTextSize * scale >= 18, "the line never under 18 px")
-			T.truthy(line.TextWrapped and line.Size.Y.Offset >= 2 * fit.MinTextSize, "two rows for a long line")
-			-- (review 2026-10-29) and the name: "TRAIN" / "120/180" on two rows across the chip, never under 18 px
-			local title = train.ChipTitle :: any
-			local titleFit = title:FindFirstChildOfClass("UITextSizeConstraint") :: any
-			T.truthy(titleFit and titleFit.MinTextSize * scale >= 18, "the name never under 18 px")
-			T.truthy(title.TextWrapped and title.Size.Y.Offset >= 2 * titleFit.MinTextSize, "two rows for the name")
-			T.truthy(title.Size.X.Offset >= 7 * titleFit.MinTextSize, "room for 120/180 at that size")
-			-- (review 2026-10-29) the rows never overlap: the name, the bar, the line, SEND
-			local bar = train.ChipBar :: any
-			local send = (train.ChipSend :: any).Parent
-			T.truthy(bar.Position.Y.Offset >= title.Position.Y.Offset + title.Size.Y.Offset, "the bar under the name")
-			T.truthy(line.Position.Y.Offset >= bar.Position.Y.Offset + bar.Size.Y.Offset, "the line under the bar")
-			T.truthy(send.Position.Y.Offset >= line.Position.Y.Offset + line.Size.Y.Offset, "SEND under the line")
-			T.truthy(send.Position.Y.Offset + send.Size.Y.Offset <= HudBubble.StackChipHeightTv, "SEND inside the chip")
-			train.Gui:Destroy()
-			train.Chip:Destroy()
 			refs.Gui:Destroy()
 		end)
 	end)
@@ -437,9 +411,7 @@ return function(T, Loader)
 					local gui = Vector2.new(size[1], size[2] - inset)
 					local w, h = gui.X / scale, gui.Y / scale
 					local refs = HudBubble.buildGame(scale, size[1], true, false, gui.Y) :: any
-					TrainView.useHud(refs.Gui)
-					local chip = TrainView.chipSize(true)
-					TrainView.useHud(nil)
+					local chip = slotSize(refs.Gui, true)
 					local x0, y0 = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
 					local chipRect = { x0, y0, x0 + chip.X, y0 + chip.Y }
 					local small = math.min(size[1], size[2]) <= 500
@@ -452,20 +424,6 @@ return function(T, Loader)
 						if size[1] >= 568 then
 							T.falsy(overlap(chipRect, r), `{where}: the chip clear of {b.Name}`)
 						end
-					end
-					-- (review 2026-10-29) where it reaches the floaters' band over the money or the toasts'
-					-- column, it draws under the HUD: those stay readable over it
-					local column = BoostView.ToastColumn
-					local toasts = { w / 2 - column.Width / 2, column.Top, w / 2 + column.Width / 2, column.Top + column.Height }
-					local layout = HudBubble.layout(scale, size[1], true, false, gui.Y)
-					if chipRect[4] > HudBubble.roundFloor(layout, h) or overlap(chipRect, toasts) then
-						TrainView.useHud(refs.Gui)
-						local train = TrainView.build(true)
-						TrainView.layout(train, true, w, h)
-						TrainView.useHud(nil)
-						T.truthy(train.Chip.DisplayOrder < refs.Gui.DisplayOrder, `{where}: the chip under the HUD's toasts and floaters`)
-						train.Gui:Destroy()
-						train.Chip:Destroy()
 					end
 					-- the money under it
 					local moneyTop = h + refs.CoinsPanel.Position.Y.Offset - refs.CoinsPanel.Size.Y.Offset

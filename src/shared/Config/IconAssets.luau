@@ -537,6 +537,8 @@ IconAssets.ShopItems = {
 	Cell = 256,
 	Columns = 3,
 	Preview = true,
+	-- (the train's cell stays, so the hoverboard keeps its own: no item shows it since the train
+	-- went, owner 2026-11-17)
 	Icons = { "podium", "train", "board_TerraForgeCustom" },
 } :: StickerSheet
 

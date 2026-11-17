@@ -8,7 +8,7 @@
 -- shows the boosted odds in numbers (Hexa: every ore of a zone, Triple:
 -- every golem of a capsule; rarest first), its layouts (phone buttons
 -- >= 44 pt, no overlaps, the gamepad row on phones / TVs), the HUD chips
--- (under the train chip and the "+$X" popups) and "Coming soon" for a boost
+-- (in the chip slot under the "+$X" popups) and "Coming soon" for a boost
 -- whose package isn't in the game yet. Save data, players and Net are small
 -- fakes; EconomyService runs for real.
 return function(T, Loader)
@@ -33,7 +33,7 @@ return function(T, Loader)
 	local BoostService = Loader.requirePath("ServerScriptService.Server.Services.BoostService")
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
 	local TechShopView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TechShopView")
-	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+	local ChipSlot = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ChipSlot")
 
 	local NOW = 1_800_000_000
 	local boost = BoostService._test
@@ -783,20 +783,26 @@ return function(T, Loader)
 		T.eq(refs.Launcher.Size.Y.Offset, BoostView.ChipHit)
 		T.truthy(BoostView.ChipHit * 0.62 >= 44, "44 pt")
 		T.eq(refs.Gui:GetAttribute("TerraForge"), true, "scaled with the HUD")
-		-- in the left column under the train chip (PC and phone sizes), which sits
-		-- under the coins (16..90) and their "+$X" popups (96..156)
+		-- in the left column's chip slot, where the TRAIN chip stood (owner 2026-11-17: no train), under
+		-- the coins (16..90) and their "+$X" popups (96..156); on touch layouts under the slot's row,
+		-- where the side menu's MENU button sits
+		ChipSlot.useHud(nil)
 		for _, compact in { false, true } do
-			local train = TrainView.build(compact)
-			TrainView.layout(train, compact, 1600, 800)
-			local chip = train.ChipFrame
-			local bottom = chip.Position.Y.Offset + chip.Size.Y.Offset
-			T.eq(chip.Size.Y.Offset, BoostView.TrainChipHeight[if compact then "Compact" else "Normal"], "TrainView's chip height")
-			local top = BoostView.chipsTop(chip, compact)
-			T.eq(top, BoostView.chipsTop(nil, compact), "the fallback is where TrainView puts it")
-			T.truthy(top >= bottom + BoostView.ChipGap, "under the train chip")
-			T.truthy(top >= BoostView.FloatersBottom, "under the +$X popups")
-			T.truthy(BoostView.ChipLeft == TrainView.ChipLeft, "lined up with the train chip")
+			local top = BoostView.chipsTop(compact)
+			T.truthy(top >= BoostView.FloatersBottom + BoostView.ChipGap, "under the +$X popups")
+			if compact then
+				T.truthy(top >= ChipSlot.Top + ChipSlot.RowHeight.Compact, "under the MENU row")
+			end
+			T.eq(BoostView.chipsLeft(compact), BoostView.ChipLeft, "lined up with the coins")
 		end
+		-- the light HUD: in its chip slot, under the tiles
+		local hudGui = roblox.Instance.new("ScreenGui")
+		hudGui:SetAttribute("ChipTop", 400)
+		hudGui:SetAttribute("ChipLeft", 10)
+		ChipSlot.useHud(hudGui)
+		T.eq(BoostView.chipsTop(false), 400, "the light HUD's slot top")
+		T.eq(BoostView.chipsLeft(false), 10, "the light HUD's slot left")
+		ChipSlot.useHud(nil)
 		BoostView.placeChips(refs, 240)
 		T.eq(refs.Row.Position.Y.Offset, 240)
 		-- the pill sits at the top of its touch area: the touch area only reaches down

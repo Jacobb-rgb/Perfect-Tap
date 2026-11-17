@@ -7,7 +7,6 @@ return function(T, Loader)
 	local Vector3 = (require("@lune/roblox") :: any).Vector3
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 
 	-- the plan's numbers (build/reviews/bigger_plots_plan.md, option B)
 	local GOLDEN = {
@@ -69,10 +68,7 @@ return function(T, Loader)
 		-- the town core is untouched
 		T.eq(WorldLayout.Plaza.Center, Vector3.new(0, 0, 0))
 		T.eq(WorldLayout.Quarry.RampFrom, Vector3.new(0, 0, -112))
-		-- the trains, the build range, the surface zones and the south outcrops follow
-		T.eq(TrainConfig.CoastEast[1], Vector3.new(want.RailX, 0, want.SouthPortalZ), "coast line start")
-		T.eq(TrainConfig.CoastWest[1], Vector3.new(-want.RailX, 0, want.SouthPortalZ), "coast line start (west)")
-		T.eq(TrainConfig.SouthPortalZ, want.SouthPortalZ, "south portal")
+		-- the build range, the surface zones and the south outcrops follow (the trains went 2026-11-17)
 		T.eq(GameConfig.BuildRange, want.BuildRange, "build range")
 		for _, id in { "Emberfall", "Outcrops" } do
 			local zone = WorldLayout.ZoneById[id]

@@ -336,12 +336,9 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- the train panel, the Blaster Vault and the Star Forge wear the Pop look (owner
-	-- 2026-10-21): never the LightSkin recolouring; the same refs, every touch target
-	-- still >= 44 pt on phones, the BUY states as before
-	T.test("LightUI: the Pop windows (train, vault, star forge) keep their behaviour", function()
-		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
-		local TrainView = ui("TrainView")
+	-- the Blaster Vault and the Star Forge wear the Pop look (owner 2026-10-21): never the
+	-- LightSkin recolouring; the same refs, every touch target still >= 44 pt on phones
+	T.test("LightUI: the Pop windows (vault, star forge) keep their behaviour", function()
 		local VaultView = ui("VaultView")
 		local RebirthView = ui("RebirthView")
 		local MenuPanel = ui("MenuPanel")
@@ -364,7 +361,6 @@ return function(T, Loader)
 		end
 		for name, gui in
 			{
-				Train = TrainView.build(false).Gui,
 				Vault = VaultView.build().Gui,
 				Rebirth = RebirthView.build().Gui,
 			}
@@ -372,38 +368,6 @@ return function(T, Loader)
 			T.falsy(gui:GetAttribute("PopSkin"), "switch off: today's " .. name)
 		end
 		withLight(function()
-			-- the train panel (the HUD chip keeps the light skin)
-			local train = TrainView.build(true)
-			T.truthy(train.Gui:GetAttribute("PopSkin"), "Pop train panel")
-			T.falsy(train.Gui:GetAttribute("LightSkin"), "no LightSkin on the train panel")
-			T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the HUD chip")
-			T.truthy(train.Chip:GetAttribute("PopSkin"), "the HUD chip in the pixel look")
-			T.truthy(train.Card:FindFirstChild("Picture"), "the live locomotive")
-			for _, screen in { { 667, 375 }, { 568, 320 } } do
-				TrainView.layout(train, true, screen[1] / PHONE, (screen[2] - 58) / PHONE)
-				for _, target in TrainView.touchTargets(train) do
-					bigEnough(`train {screen[1]}x{screen[2]}`, target)
-				end
-			end
-			local capacity = train.Rows.Capacity
-			TrainView.setUpgrades(train, TrainView.read({ Cargo = 8, Capacity = 8, CapacityLevel = 1 }), 100)
-			T.eq(capacity.Buy.BackgroundColor3, Theme.PanelLight, "can't afford: greyed (the state colour)")
-			TrainView.setUpgrades(train, TrainView.read({ Cargo = 8, Capacity = 8, CapacityLevel = 1 }), 1e9)
-			T.eq(capacity.Buy.Text, "BUY")
-			local face = capacity.Buy:FindFirstChild("PopFace") :: any
-			T.truthy(face and face.Visible, "the gold coin and the price on BUY")
-			T.eq(face:FindFirstChild("Amount").Text, capacity.Price.Text, "the row's price")
-			-- the controller's states: "BOUGHT!" (greyed) and "…" show as words
-			capacity.Buy.Text = "BOUGHT!"
-			TrainView.style(capacity.Buy, false, Theme.Good, Theme.GoodDark)
-			T.eq(capacity.Buy.TextTransparency, 0, "BOUGHT! shows")
-			T.falsy(face.Visible, "no price on BOUGHT!")
-			T.eq(capacity.Buy.BackgroundColor3, Theme.PanelLight, "BOUGHT! is greyed")
-			T.eq(train.Express.Buy.Text, "SOON", "Express is a placeholder")
-			local robux = train.Express.Buy:FindFirstChild("PopFace") :: any
-			T.truthy(robux and robux.Visible, "the green Robux button")
-			T.eq(robux:FindFirstChild("Amount").Text, tostring(TrainView.ExpressPrice))
-
 			-- the Blaster Vault
 			local vault = VaultView.build()
 			T.truthy(vault.Gui:GetAttribute("PopSkin"), "Pop vault")
@@ -489,11 +453,25 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- (review #16) the Shop pill never sits under the TRAIN chip (its own gui, under the
-	-- Roblox top bar, drawn over the HUD) nor on the menu tiles, on PC screens and phones
-	T.test("LightUI: the Shop pill clear of the TRAIN chip and the menu", function()
+	-- (review #16) the Shop pill never sits under the chip slot (the TRAIN chip's until the train
+	-- went, owner 2026-11-17: the HUD keeps its room, the boost chips sit in it) nor on the menu
+	-- tiles, on PC screens and phones
+	T.test("LightUI: the Shop pill clear of the chip slot and the menu", function()
 		local HudBubble = ui("HudBubble")
-		local TrainView = ui("TrainView")
+		-- the slot's size from the HUD's attributes, as the old chip measured it
+		local function slotSize(gui: any, compact: boolean): any
+			local stack = gui:GetAttribute("ChipStack") == true
+			local tv = gui:GetAttribute("ChipTenFoot") == true
+			local w, h = 330, 66
+			if stack then
+				w = if tv then 161 else 150
+				h = if tv then HudBubble.StackChipHeightTv else HudBubble.StackChipHeight
+			elseif compact then
+				w, h = HudBubble.TouchChipWidth, HudBubble.TouchChipHeight
+			end
+			local width = gui:GetAttribute("ChipWidth")
+			return Vector2.new(if type(width) == "number" then width else w, h)
+		end
 		withLight(function()
 			for _, screen in
 				{
@@ -521,11 +499,10 @@ return function(T, Loader)
 				local pill = refs.Gui:FindFirstChild("ShopPill") :: any
 				-- the HUD and the TRAIN gui share one frame (CoreUISafeInsets: under Roblox's top bar)
 				height -= screen[3] / scale
-				local compact = touch or scale <= 0.75 -- (TrainController's compact chip)
+				local compact = touch or scale <= 0.75 -- (the compact chip slot, as BoostController picks it)
 				local chipTop = refs.Gui:GetAttribute("ChipTop")
-				T.truthy(type(chipTop) == "number", "the HUD says where the TRAIN chip goes")
-				TrainView.useHud(refs.Gui) -- (HudController: the chip's place and size from the HUD)
-				local chipBottom = chipTop + TrainView.chipSize(compact).Y
+				T.truthy(type(chipTop) == "number", "the HUD says where the chip slot goes")
+				local chipBottom = chipTop + slotSize(refs.Gui, compact).Y
 				if PopTheme.round() then
 					-- the round look: the Shop leads the top row (not on the smallest phones: the
 					-- Store tile), the Server Luck line over the money
@@ -574,8 +551,8 @@ return function(T, Loader)
 					T.truthy(grid.CellSize.X.Offset * scale >= 44 - 1e-6, `the tiles >= 44 pt at {screen[1]} x {screen[2]} (touch)`)
 					local TutorialView = ui("TutorialView")
 					local bubble = TutorialView.layout(scale, Vector2.new(screen[1], screen[2] - screen[3]), true)
-					local size = TrainView.chipSize(compact)
-					local x0 = if type(chipLeft) == "number" then chipLeft else TrainView.ChipLeft
+					local size = slotSize(refs.Gui, compact)
+					local x0 = if type(chipLeft) == "number" then chipLeft else 16
 					local chipRect = { x0, chipTop, x0 + size.X, chipTop + size.Y }
 					local bx = bubble.Position.X - bubble.Width
 					local bubbleRect = { bx, bubble.Position.Y, bubble.Position.X, bubble.Position.Y + bubble.Height }
@@ -588,7 +565,7 @@ return function(T, Loader)
 				if type(chipLeft) == "number" and chipLeft == menu.Position.X.Offset then
 					-- (the round look, owner 2026-10-28: under the tiles, as wide as them, "ending like them")
 					T.eq(chipLeft, menu.Position.X.Offset, `the TRAIN chip under the tiles' left edge at {screen[1]} x {screen[2]}`)
-					T.eq(TrainView.chipSize(compact).X, menu.Size.X.Offset, `as wide as the tiles at {screen[1]} x {screen[2]}`)
+					T.eq(slotSize(refs.Gui, compact).X, menu.Size.X.Offset, `as wide as the tiles at {screen[1]} x {screen[2]}`)
 					T.truthy(chipTop >= menuBottom, `the TRAIN chip under the menu tiles at {screen[1]} x {screen[2]}`)
 				elseif type(chipLeft) == "number" then
 					-- (the round look on the smallest screens: beside the tiles' last row, clear of them)
@@ -604,7 +581,6 @@ return function(T, Loader)
 				local menuRight = menu.Position.X.Offset + menu.Size.X.Offset
 				local tabsLeft = (screen[1] / scale) / 2 - refs.TopBar.Size.X.Offset / 2
 				T.truthy(menuRight < tabsLeft, `the tiles left of the tabs at {screen[1]} x {screen[2]}`)
-				TrainView.useHud(nil)
 			end
 		end)
 	end)
@@ -1087,31 +1063,13 @@ return function(T, Loader)
 		end)
 	end)
 
-	-- the HUD chips (TRAIN, the boost timers, FREE SPIN) in the pixel reels' look
-	-- (owner 2026-10-22): never LightSkin's recolouring, the same parts, SEND still greys
-	T.test("LightUI: the TRAIN and boost chips wear the pixel look with the switch on", function()
-		local TrainView = ui("TrainView")
+	-- the HUD chips (the boost timers, FREE SPIN) in the pixel reels' look (owner 2026-10-22):
+	-- never LightSkin's recolouring, the same parts (the TRAIN chip went with the train, 2026-11-17)
+	T.test("LightUI: the boost chips wear the pixel look with the switch on", function()
 		local BoostView = ui("BoostView")
-		local Theme = Loader.requirePath("ReplicatedStorage.Shared.Config.UITheme")
 		local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
-		T.falsy(TrainView.build(false).Chip:GetAttribute("PopSkin"), "switch off: today's train chip")
 		T.falsy(BoostView.buildChips().Gui:GetAttribute("PopSkin"), "switch off: today's boost chips")
 		withLight(function()
-			for _, compact in { false, true } do
-				local train = TrainView.build(compact)
-				T.truthy(train.Chip:GetAttribute("PopSkin"), "the pixel train chip")
-				T.falsy(train.Chip:GetAttribute("LightSkin"), "no LightSkin on the train chip")
-				T.truthy(train.ChipFrame:FindFirstChild("Paint") and train.ChipFrame:FindFirstChild("Lattice"), "a painted face")
-				T.truthy(train.ChipFrame:FindFirstChild("IconSquare"), "the locomotive in a painted square")
-				local send = train.ChipSend.Parent :: any
-				T.truthy(send:GetAttribute("Pop"), "SEND is a painted button")
-				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 0, Capacity = 8 }), 0, nil))
-				T.eq(train.ChipSend.BackgroundColor3, Theme.PanelLight, "empty: SEND greyed (the state colour)")
-				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Gray.Top, "a grey face")
-				TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 8, Capacity = 8 }), 0, nil))
-				T.eq(send:FindFirstChild("Paint").Color.Keypoints[1].Value, PopTheme.Paints.Green.Top, "full: a green face")
-				T.eq(train.ChipFrame.Size.Y.Offset, BoostView.TrainChipHeight[if compact then "Compact" else "Normal"], "the chip's height")
-			end
 			local chips = BoostView.buildChips()
 			T.truthy(chips.Gui:GetAttribute("PopSkin"), "the pixel boost chips")
 			T.falsy(chips.Gui:GetAttribute("LightSkin"), "no LightSkin on the boost chips")

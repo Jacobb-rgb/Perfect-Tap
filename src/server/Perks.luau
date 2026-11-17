@@ -4,7 +4,7 @@
 	player owns or buys a pass.
 	Perk ids: "StrongBack" (2x carry), "ForgeVip" (Glimmer Grotto), "Workshop" (extra slots),
 	"Podiums" (podiums 4 and 5), "OfflineExtension" (Night Shift at 50 % for 12 h, not 25 % for 8),
-	"TrainExpress" (step 2), "DoubleMoney" (the 2x Money pass: podium income and sell value x2,
+	"DoubleMoney" (the 2x Money pass: podium income and sell value x2,
 	Bonuses.moneyMult). The big pass grants Podiums + OfflineExtension + more.
 ]]
 

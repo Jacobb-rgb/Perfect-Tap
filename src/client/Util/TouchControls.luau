@@ -3,7 +3,7 @@
 	so they never cover its buttons on phones. follow(gui): while gui is
 	enabled and in the PlayerGui the controls stay hidden; they come back once
 	no followed window is open. Used by the light UI's windows that don't hide
-	them themselves (Sell, Tech Shop, Train, Iron Box, Ore Pen).
+	them themselves (Sell, Tech Shop, Iron Box, Ore Pen).
 ]]
 
 local GuiService = game:GetService("GuiService")

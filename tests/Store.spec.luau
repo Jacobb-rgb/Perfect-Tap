@@ -110,7 +110,6 @@ return function(T, Loader)
 				"Podiums",
 				"OfflineExtension",
 				"DoubleMoney",
-				"TrainExpress",
 				"HoverboardCustom",
 				"CoinsSmall",
 				"CoinsMedium",

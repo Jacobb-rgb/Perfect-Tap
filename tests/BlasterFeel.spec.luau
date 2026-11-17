@@ -437,8 +437,6 @@ return function(T, Loader)
 			"UIClick",
 			"UIDeny",
 			"Discovery",
-			"TrainChuff",
-			"TrainWhistle",
 			"CaseLand",
 			"CaseCharge",
 			"CaseBurst",
@@ -454,7 +452,7 @@ return function(T, Loader)
 		for _, key in keys do
 			T.truthy(SoundConfig[key], "key " .. key)
 		end
-		for _, key in { "BlasterHum", "Scrape", "MachineHum", "TrainChuff", "TrainWhistle", "CaseCharge" } do
+		for _, key in { "BlasterHum", "Scrape", "MachineHum", "CaseCharge" } do
 			T.truthy(SoundConfig[key].Looped, key .. " loops")
 		end
 		for _, key in { "BlasterShot", "BlasterZap", "BlastHit", "BlastThud", "NodeShatter", "RockBreak" } do

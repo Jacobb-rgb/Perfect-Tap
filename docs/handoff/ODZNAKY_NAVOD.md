@@ -19,7 +19,6 @@ odznak ten den stojí 100 Robux).
 | FirstLegendary | Legend Found | Discover a Legendary ore. |
 | FirstMythic | Mythic Find | Discover a Mythic ore. |
 | Collector | Ore Collector | Discover 15 different ores. |
-| TrainMaster | All Aboard | Bring 25 ore trains home. |
 | Tycoon | Tycoon | Earn 1,000,000 coins in total. |
 | MaxBlaster | Ultimate Blaster | Reach blaster level 10. |
 

@@ -26,20 +26,19 @@
 
 	Where it goes (SideMenuView.layout). The left column under the coins has
 	ONE order, so nothing in it covers anything else: the coins (16..90),
-	their "+$X" popups, the TRAIN chip (TrainView, at ChipTop), the running
-	boost chips (BoostView.chipsTop, a ChipHit-tall touch area), then this
+	their "+$X" popups, the running boost chips (BoostView.chipsTop, a
+	ChipHit-tall touch area, in ChipSlot where the TRAIN chip stood), then this
 	menu (SideMenu.spec intersects the rects on PC, 667 x 375 and 568 x 320):
 	  mouse   one column below the boost chips' touch area (TopMin), centred
 	          in the room under them; two columns (or more) when one
 	          doesn't fit (SideMenuView.Fits)
 	  touch   (MenuPanels.isTouch, or uiScale <= CompactScale) one MENU
 	          button (a 44 pt square: the screen stays the game's) first in
-	          the train chip's row, which starts right of it on these layouts
-	          (TrainView.chipLeft: MenuSlot); a tap opens the grid of buttons
+	          the chip slot's row (ChipSlot); a tap opens the grid of buttons
 	          next to and under it (setExpanded; the badges add up on MENU
-	          while it is shut). The open grid takes the place of the train
-	          and boost chips: they hide while it is open (MenuPanels.
-	          gridOpen; TrainView.chipVisible, BoostView.chipsVisible), so it
+	          while it is shut). The open grid takes the place of the boost
+	          chips: they hide while it is open (MenuPanels.gridOpen;
+	          BoostView.chipsVisible), so it
 	          never covers them half-way, and come back when it shuts; the
 	          grid still draws above the HUD (DisplayOrder OpenOrder).
 	          The bottom-left corner belongs to Roblox's movement thumbstick
@@ -63,7 +62,7 @@ local UIConfig = require(Shared.Config.UIConfig)
 local Theme = require(Shared.Config.UITheme)
 local UIKit = require(script.Parent.UIKit)
 local BoostView = require(script.Parent.BoostView)
-local TrainView = require(script.Parent.TrainView)
+local ChipSlot = require(script.Parent.ChipSlot)
 
 local SideMenuView = {}
 
@@ -187,16 +186,16 @@ end
 SideMenuView.MinTouch = 44 -- points
 SideMenuView.Left = 12 -- design units from the left edge
 SideMenuView.ChipsGap = 8 -- between the boost chips' touch area and the mouse column
--- mouse: below the train chip and the boost chips' touch area under it
-SideMenuView.TopMin = BoostView.chipsTop(nil, false) + BoostView.ChipHit + SideMenuView.ChipsGap
+-- mouse: below the boost chips' touch area
+SideMenuView.TopMin = BoostView.chipsTop(false) + BoostView.ChipHit + SideMenuView.ChipsGap
 SideMenuView.TopTight = 98 -- nothing of the menu ever goes above this (the coins panel ends at 90)
 SideMenuView.BottomMargin = 12
 -- the HUD's right-side menu (RIDE, BUILD: 84 wide, 14 from the edge) and a gap:
 -- the open touch grid never reaches it
 SideMenuView.RightReserve = 14 + 84 + 8
 -- the ScreenGui's DisplayOrder: under the HUD (5) while shut, its "+$X"
--- popups and toasts on top; the open touch grid draws over the train and
--- boost chips (6) until it shuts
+-- popups and toasts on top; the open touch grid draws over the boost chips (6)
+-- until it shuts
 SideMenuView.Order = 4
 SideMenuView.OpenOrder = 7
 -- TVs: the labels and SOON chips at least this big (18 px at the 1.25 HUD scale),
@@ -261,31 +260,26 @@ export type Refs = {
 
 -- The tries, in order: { columns, the lowest top }; the first that fits wins.
 -- Mouse: one column under the boost chips, then two, three, four (never
--- higher: the train and boost chips own the column above TopMin).
+-- higher: the boost chips own the column above TopMin).
 SideMenuView.Fits = { { 1, SideMenuView.TopMin }, { 2, SideMenuView.TopMin }, { 3, SideMenuView.TopMin }, { 4, SideMenuView.TopMin } }
--- Touch (the open grid, MENU in its first cell, in the train chip's row):
+-- Touch (the open grid, MENU in its first cell, in the chip slot's row):
 -- must end above TouchBottom; narrower before wider; one row of every cell
 -- as the last resort (the top comes from touchTop), its buttons narrowed to
 -- reach no further than the right-side menu allows (never under 44 pt: the
 -- smallest phones with nine buttons).
 SideMenuView.TouchFits = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 }, { 16 } }
 
--- The touch layout's top: MENU (`h` tall) centred on the compact train
--- chip's row (TrainView.ChipTop), the badges' Drop above it.
+-- The touch layout's top: MENU (`h` tall) centred on the chip slot's
+-- compact row (ChipSlot), the badges' Drop above it.
 function SideMenuView.touchTop(h: number): number
-	local row = TrainView.chipSize(true).Y
-	return math.max(SideMenuView.TopTight, math.floor(TrainView.ChipTop + (row - h) / 2) - SideMenuView.Drop)
+	local row = ChipSlot.RowHeight.Compact
+	return math.max(SideMenuView.TopTight, math.floor(ChipSlot.Top + (row - h) / 2) - SideMenuView.Drop)
 end
 
--- The train chip's box on a layout (compact = touch) and the boost chips'
--- row under it at its widest (design units): the column stays clear of both.
-function SideMenuView.trainRect(compact: boolean): Rect
-	local size = TrainView.chipSize(compact)
-	return { X = TrainView.chipLeft(compact), Y = TrainView.ChipTop, W = size.X, H = size.Y }
-end
-
+-- The boost chips' row at its widest on a layout (compact = touch, design units): the
+-- column stays clear of it.
 function SideMenuView.chipsRect(compact: boolean): Rect
-	return { X = BoostView.ChipLeft, Y = BoostView.chipsTop(nil, compact), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
+	return { X = BoostView.chipsLeft(compact), Y = BoostView.chipsTop(compact), W = BoostView.chipsWidth(), H = BoostView.ChipHit }
 end
 
 -- Where the buttons go for a uiScale and the screen's height in design
@@ -327,7 +321,7 @@ function SideMenuView.layout(uiScale: number, designHeight: number, options: Opt
 	if touch and left + columns * w + (columns - 1) * m.Gap > right then
 		w = math.max(math.ceil(minSide), math.floor((right - left - (columns - 1) * m.Gap) / columns))
 	end
-	-- mouse: centred in the room under the boost chips; touch: in the train chip's row
+	-- mouse: centred in the room under the boost chips; touch: in the chip slot's row
 	local top = if touch then topMin else math.max(topMin, math.floor((designHeight - height) / 2))
 	local width = columns * w + (columns - 1) * m.Gap
 	return {
@@ -577,7 +571,7 @@ function SideMenuView.apply(refs: Refs, layout: Layout)
 	local toggleHolder = refs.Toggle.Parent :: Frame
 	toggleHolder.Visible = layout.Toggle
 	local open = not layout.Toggle or refs.Expanded
-	-- the open touch grid draws over the train and boost chips
+	-- the open touch grid draws over the boost chips
 	refs.Gui.DisplayOrder = if layout.Toggle and refs.Expanded then SideMenuView.OpenOrder else SideMenuView.Order
 	local function place(holder: Frame, cell: number)
 		local col = cell % layout.Columns

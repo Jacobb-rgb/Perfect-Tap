@@ -645,11 +645,11 @@ return function(T, Loader)
 		T.truthy(card and card:find("HoverboardView.setRideWord(view, HoverboardController.isRiding())", 1, true), "a picked card too")
 	end)
 
-	-- (review 2026-11-07) a TV reporting 1280 x 720: the tiles and the TRAIN chip keep off the money
-	T.test("TileWiring: a small TV (1280 x 720 and under) keeps the tiles and the TRAIN chip off the money", function()
+	-- (review 2026-11-07) a TV reporting 1280 x 720: the tiles and the chip slot under them (the TRAIN
+	-- chip's until the train went, 2026-11-17: the boost chips sit in it) keep off the money
+	T.test("TileWiring: a small TV (1280 x 720 and under) keeps the tiles and the chip slot off the money", function()
 		inRound(function()
 			local HudBubble = Loader.requirePath(C .. "UI.HudBubble")
-			local TrainView = Loader.requirePath(C .. "UI.TrainView")
 			local function overlap(a: { number }, b: { number }): boolean
 				return a[1] < b[3] and b[1] < a[3] and a[2] < b[4] and b[2] < a[4]
 			end
@@ -663,9 +663,14 @@ return function(T, Loader)
 					local y = height * object.Position.Y.Scale + object.Position.Y.Offset - object.AnchorPoint.Y * object.Size.Y.Offset
 					return { x, y, x + object.Size.X.Offset, y + object.Size.Y.Offset }
 				end
-				TrainView.useHud(refs.Gui)
-				local chip = TrainView.chipSize(refs.Gui:GetAttribute("ChipStack") == true)
-				TrainView.useHud(nil)
+				-- the slot's size from the HUD's attributes (as the old chip measured it)
+				local tv = refs.Gui:GetAttribute("ChipTenFoot") == true
+				local stack = refs.Gui:GetAttribute("ChipStack") == true
+				local slotWidth = refs.Gui:GetAttribute("ChipWidth")
+				local chip = Vector2.new(
+					if type(slotWidth) == "number" then slotWidth elseif stack then (if tv then 161 else 150) else 330,
+					if stack then (if tv then HudBubble.StackChipHeightTv else HudBubble.StackChipHeight) else 66
+				)
 				local left, top = refs.Gui:GetAttribute("ChipLeft"), refs.Gui:GetAttribute("ChipTop")
 				local chipRect = { left, top, left + chip.X, top + chip.Y }
 				local money = rectOf(refs.CoinsPanel)

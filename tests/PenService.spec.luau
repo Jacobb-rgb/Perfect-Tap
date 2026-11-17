@@ -376,6 +376,29 @@ return function(T, Loader)
 		T.eq(#w.data.Storage, before, "nothing changed")
 	end)
 
+	-- (owner 2026-11-17: the quests "Put %s ores in your Ore Pen" count Stats.OresStored, in place
+	-- of the train's trips) only what the player brings counts: thrown in or Put In
+	withWorld("PenService: Put In and a throw-in count Stats.OresStored, a machine's overflow doesn't", function(w)
+		T.eq(w.data.Stats.OresStored, 0, "a new save")
+		w.carry({ K = "Raw", O = "Copper" }, 3)
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 3, "Put In: three")
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 4, "thrown in: one more")
+		-- someone else's ore bounces: nothing for anyone
+		w.zone.Handler(itemInPen(w, OTHER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 4, "a stranger's ore counts nothing")
+		T.eq(w.otherData.Stats.OresStored, 0)
+		-- a machine (the Cleaning Station's overflow, the Iron Box) stores with PenService.store
+		local stored = PenService.store(w.player, { K = "Clean", O = "Gold", G = "Pristine" })
+		T.truthy(stored, "stored")
+		T.eq(w.data.Stats.OresStored, 4, "a machine's store is not the player bringing ore")
+		-- a broken counter starts again from 0 (never NaN)
+		w.data.Stats.OresStored = 0 / 0
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 1, "a broken counter starts over")
+	end)
+
 	withWorld("PenService: Open Pen only opens your own pen", function(w)
 		pen.open(w.player, PLOT)
 		local open = lastNote(w, "OpenUI")
@@ -538,7 +561,7 @@ return function(T, Loader)
 		end
 	end
 
-	-- the State's PenSend { Pen, Train, PenWait?, TrainWait? }
+	-- the State's PenSend { Pen, PenWait? }
 	local function sendState(w: any): any
 		local snapshot: any = {}
 		pen.provide(w.player, w.data, snapshot)
@@ -891,109 +914,8 @@ return function(T, Loader)
 		T.eq(told(), 1, "the first ore sent on: told where to switch it off")
 		T.truthy(PenService.AutoFirstText:find("switch it off", 1, true), "says how to stop it")
 		w.zone.Handler(itemInPen(w, USER, copper))
-		PenService.arrived(w.player, { { K = "Raw", O = "Coal" } }, "Train")
+		PenService.arrived(w.player, { { K = "Raw", O = "Coal" } }, "Pen")
 		T.eq(told(), 1, "only once")
-	end)
-
-	withWorld("PenService: the TRAIN lane pours a train's dirty ore straight from its cargo, never through the pen", function(w)
-		-- a fake unloading train: TrainService registers the real one (TrainService spec)
-		local cargo: { any } = {
-			{ K = "Raw", O = "Gold" },
-			{ K = "Clean", O = "Copper", G = "Rough" }, -- not for the chute: stays for the pen
-			{ K = "Raw", O = "Coal" },
-			{ K = "Raw", O = "Unobtainium" }, -- a broken entry: never taken
-			{ K = "Raw", O = "Iron" },
-		}
-		local unloading = true
-		local sent, failed = 0, 0
-		PenService.setTrainCargo({
-			list = function(p, data)
-				T.truthy(p == w.player and data == w.data, "asked for the owner")
-				return if unloading then cargo else nil
-			end,
-			sent = function(_, ok)
-				if ok then
-					sent += 1
-				else
-					failed += 1
-				end
-			end,
-		})
-		-- a full pen doesn't matter: nothing goes through it
-		w.data.Upgrades.PenLevel = 0
-		fill(w, GOLD, PenService.capacity(w.player))
-		local penBefore = #w.data.Storage
-		local function census2(): number
-			return #w.data.Storage + #cargo + #ItemService.ownedBy(USER)
-		end
-		local total = census2()
-		local trainBelt = chuteBelt(w, "Train", 0)
-		T.truthy(PenService.unloadTrain(w.player), "Cargo intent added")
-		T.falsy(PenService.unloadTrain(w.player), "only once")
-		local queue = pen.queue(w.player)
-		T.eq(#queue.Train.Intents, 1, "one Cargo intent")
-		T.eq(#queue.Pen.Intents, 0, "nothing for the pen's lane")
-		T.eq(select(2, PenService.sendCounts(w.player)), 3, "three spawnable dirty ores to go")
-		PenService.tickSend(1)
-		T.eq(#looseOn(trainBelt), 1, "one on the TRAIN chute's belt")
-		T.eq(looseOn(trainBelt)[1].OreId, "Gold", "front to back")
-		T.eq(#cargo, 4, "taken off the train")
-		T.eq(#w.data.Storage, penBefore, "the pen never saw it")
-		T.eq(sent, 1, "TrainService told")
-		T.eq(census2(), total, "moved, not copied")
-		-- 2 per second: not before SendInterval
-		rideAway(trainBelt)
-		PenService.tickSend(1 + PenService.SendInterval / 2)
-		T.eq(#cargo, 4, "one item every SendInterval")
-		-- the belt is jammed: the item stays on the train, same place
-		local blocker =
-			ItemService.spawnDesc({ K = "Raw", O = "Copper" }, USER, trainBelt.Model:GetPivot() * CFrame.new(0, 1.5, 0), nil, true)
-		total += 1
-		PenService.tickSend(2)
-		T.eq(#cargo, 4, "jammed: nothing taken")
-		T.truthy(sendState(w).TrainWait:find("TRAIN chute", 1, true), "the State says why, for the train's lane")
-		T.eq(sendState(w).PenWait, nil, "the pen's lane isn't the one waiting")
-		T.eq(PenService.laneWait(w.player, "Train"), "Jammed", "TrainService reads the reason (UnloadWait)")
-		T.eq(PenService.laneWait(w.player, "Pen"), nil, "nothing for the pen")
-		blocker.Model:PivotTo(CFrame.new(0, 500, 0))
-		PenService.tickSend(3)
-		T.eq(#cargo, 3, "the next one")
-		T.eq(looseOn(trainBelt)[1].OreId, "Coal", "the coal")
-		T.eq(cargo[1].K, "Clean", "the clean ore stays on board for the pen")
-		T.eq(census2(), total, "still nothing lost")
-		-- StopSend is the pen's: the train goes on
-		pen.action(w.player, "StopSend", nil)
-		T.truthy(pen.queue(w.player) and #pen.queue(w.player).Train.Intents == 1, "the train's unload goes on")
-		rideAway(trainBelt)
-		PenService.tickSend(4)
-		T.eq(#cargo, 2, "the iron")
-		T.eq(cargo[2].O, "Unobtainium", "the broken entry is never taken")
-		rideAway(trainBelt)
-		PenService.tickSend(5)
-		T.eq(pen.queue(w.player), nil, "no dirty ore left that can spawn: done")
-		T.eq(sent, 3, "three sent")
-		T.eq(failed, 0, "no failure")
-		T.eq(census2(), total, "every item in exactly one place")
-		-- the train stops unloading that way (belt gone, trip over): the intent just ends
-		table.insert(cargo, { K = "Raw", O = "Gold" })
-		PenService.unloadTrain(w.player)
-		unloading = false
-		PenService.tickSend(6)
-		T.eq(pen.queue(w.player), nil, "dropped")
-		T.eq(#cargo, 3, "still on the train")
-		-- spawning that fails for good: the item stays, TrainService hears it
-		unloading = true
-		PenService.unloadTrain(w.player)
-		local original = ItemService.spawnDesc
-		rawset(ItemService, "spawnDesc", function()
-			error("broken")
-		end)
-		local ok, err = pcall(PenService.tickSend, 7)
-		rawset(ItemService, "spawnDesc", original)
-		assert(ok, err)
-		T.eq(#cargo, 3, "kept on the train")
-		T.eq(failed, 1, "TrainService told it failed")
-		T.eq(pen.queue(w.player), nil, "and the lane is free")
 	end)
 
 	withWorld("PenService: broken pen entries never block a lane, and spawning that breaks keeps the count", function(w)
@@ -1109,7 +1031,7 @@ return function(T, Loader)
 			local ore = OreData.List[i]
 			table.insert(descs, { K = "Ingot", O = ore.Id, G = "Clean" })
 		end
-		PenService.arrived(w.player, descs, "Train")
+		PenService.arrived(w.player, descs, "Pen")
 		T.eq(#pen.queue(w.player).Pen.Intents, PenService.MaxIntents, "capped")
 		T.eq(lastNote(w, "Notify").A.Text, PenService.QueueFullText, "told the queue is full")
 	end)
@@ -1300,7 +1222,7 @@ return function(T, Loader)
 		PenView.setHeader(refs, 44, 40)
 		T.eq(refs.Header.Text, "44 / 40", "over count")
 		T.eq(refs.Status.Text, PenView.OverText, "the status line says why")
-		PenView.setSending(refs, { Pen = 2, Train = 0 }, false, 0)
+		PenView.setSending(refs, { Pen = 2 }, false, 0)
 		PenView.setHeader(refs, 44, 40)
 		T.truthy(refs.Status.Text:find("Sending", 1, true), "a running send keeps its line")
 		PenView.setSending(refs, nil, false, 0)
@@ -1346,27 +1268,24 @@ return function(T, Loader)
 	T.test("PenView: the send toolbar, SEND on every row, both layouts", function()
 		local idle = PenView.SendIdleText
 		T.eq((PenView.sendText(nil)), idle, "no State yet")
-		local text, waiting, total = PenView.sendText({ Pen = 3, Train = 2 })
+		local text, waiting, total = PenView.sendText({ Pen = 3 })
 		T.eq(text, "Sending 3…", "the pen's own sends")
 		T.falsy(waiting, "not waiting")
-		T.eq(total, 5, "total")
-		text, waiting = PenView.sendText({ Pen = 2, Train = 0, PenWait = "Put a conveyor on your PEN chute" })
+		T.eq(total, 3, "total")
+		text, waiting = PenView.sendText({ Pen = 2, PenWait = "Put a conveyor on your PEN chute" })
 		T.eq(text, "2 waiting: Put a conveyor on your PEN chute", "why it waits")
 		T.truthy(waiting, "waiting")
-		-- the train's lane waiting never reads as the pen's sends being stuck
-		text, waiting = PenView.sendText({ Pen = 3, Train = 4, TrainWait = "The belt at your TRAIN chute is full" })
-		T.eq(text, "Sending 3…", "the pen sends fine")
-		T.falsy(waiting, "not the pen waiting")
+		-- an old snapshot's train fields mean nothing now (the train went 2026-11-17)
 		text, waiting = PenView.sendText({ Pen = 0, Train = 4, TrainWait = "The belt at your TRAIN chute is full" })
-		T.eq(text, "Train unloading 4…", "only the train: says so (its wait shows in the train panel)")
+		T.eq(text, idle, "no train line")
 		T.falsy(waiting, "not the pen waiting")
-		T.eq((PenView.sendText({ Pen = 0, Train = 0, PenWait = "x" })), idle, "nothing queued: no wait line")
-		T.eq((PenView.sendText({ Pen = "3", Train = 0 / 0 })), idle, "junk counts")
+		T.eq((PenView.sendText({ Pen = 0, PenWait = "x" })), idle, "nothing queued: no wait line")
+		T.eq((PenView.sendText({ Pen = "3" })), idle, "junk counts")
 		T.eq(select(3, PenView.sendText({ Pen = math.huge })), 0, "no infinity")
 
 		local refs = PenView.build()
 		T.truthy(refs.Toolbar.Visible, "toolbar in pen mode")
-		PenView.setSending(refs, { Pen = 2, Train = 0 }, false, 3)
+		PenView.setSending(refs, { Pen = 2 }, false, 3)
 		T.truthy(refs.StopSend.Parent.Visible, "STOP while sending")
 		T.falsy(refs.SendUnkept.Parent.Visible, "no billboard: no SEND UNKEPT")
 		T.eq(refs.Status.Text, "Sending 2…", "status")
@@ -1416,11 +1335,10 @@ return function(T, Loader)
 		T.eq(PenView.sendButtonText(4), "ALL x4?", "armed: the whole stack")
 		T.eq(PenView.sendButtonText(1), "SEND", "a stack of one has nothing more to send")
 		local refs = PenView.build()
-		-- only the train unloads: nothing for STOP to stop
-		PenView.setSending(refs, { Pen = 0, Train = 4 }, true, 0)
-		T.falsy(refs.StopSend.Parent.Visible, "no STOP for the train's Direct Unload")
-		T.eq(refs.Status.Text, "Train unloading 4…", "but it says what goes out")
-		PenView.setSending(refs, { Pen = 2, Train = 4 }, true, 0)
+		-- nothing queued: nothing for STOP to stop
+		PenView.setSending(refs, { Pen = 0 }, true, 0)
+		T.falsy(refs.StopSend.Parent.Visible, "no STOP while nothing goes out")
+		PenView.setSending(refs, { Pen = 2 }, true, 0)
 		T.truthy(refs.StopSend.Parent.Visible, "STOP for the pen's sends")
 		-- the switch: only with the billboard, in pen mode, never over the bar
 		PenView.setAutoSort(refs, false, true)

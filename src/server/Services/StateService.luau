@@ -9,8 +9,8 @@
 	  (0.5 s). A change after a quiet spell (a buy, a golem equip, the first
 	  push after a join) goes out at once (next resumption); changes that
 	  come within PushSeconds of the last push wait for the rest of it and
-	  go out together. The answer to a player's own press (a train sent, a
-	  train upgrade bought) skips that wait once: StateService.pushNow.
+	  go out together. The answer to a player's own press skips that wait
+	  once: StateService.pushNow.
 	- Only the top-level sections whose content changed since the last push
 	  to that player go out (compared by fingerprint). A section the client
 	  already has is left out: the client (StateController) keeps its copy,
@@ -19,7 +19,7 @@
 	  A section that disappeared is listed in snapshot.Removed; the first
 	  push after a join is whole and says snapshot.Full = true.
 	- A changed flat section (string keys, plain values: the Storage,
-	  Stats, Train, Build...) whose keys mostly stayed the
+	  Stats, Build...) whose keys mostly stayed the
 	  same goes as a patch instead: snapshot.Patch[section] = { Set = {key =
 	  value}, Clear = {keys} }. One ore into the pen sends one count, not the
 	  whole pen.
@@ -521,8 +521,7 @@ end
 
 --[[
 	Pushes at the next resumption, whatever the throttle says (once): the
-	answer to a player's own press (TrainService: a train sent, a train
-	upgrade bought) must not wait up to PushSeconds for a window that other
+	answer to a player's own press must not wait up to PushSeconds for a window that other
 	changes opened. A push already waiting goes out with this one (its
 	changes are in it); the pushes after it are throttled from it as usual.
 	Only for presses the server limits itself (a rate limit, a price or a

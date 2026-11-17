@@ -17,7 +17,6 @@ return function(T, Loader)
 	local Life = Loader.requirePath("ServerScriptService.Server.World.Lobby.Plaza.Life")
 	local Stream = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Stream")
 	local FloraKit = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Kit")
-	local Railway = Loader.requirePath("ServerScriptService.Server.World.Railway")
 
 	local map = WorldBuilder.build(roblox.Instance.new("DataModel"):GetService("Workspace"))
 	local lobby = map.Emberfall.Lobby
@@ -112,7 +111,11 @@ return function(T, Loader)
 		T.truthy(stream, "Flora.Stream is built")
 		T.eq(Land.RimNotch.X0, Stream.Notch.X0, "rim notch start matches the stream")
 		T.eq(Land.RimNotch.X1, Stream.Notch.X1, "rim notch end matches the stream")
-		local lines = Railway.visibleLines()
+		-- (where the railway ran until 2026-11-17: the strip behind the yards stays clear)
+		local lines = {
+			{ Vector3.new(-182, 0, 182), Vector3.new(-182, 0, -100) },
+			{ Vector3.new(182, 0, 182), Vector3.new(182, 0, -100) },
+		}
 		for _, part in parts(stream) do
 			local lo, hi = bounds(part)
 			local c = (lo + hi) / 2

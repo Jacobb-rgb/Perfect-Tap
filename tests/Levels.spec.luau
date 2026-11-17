@@ -16,7 +16,6 @@ return function(T, Loader)
 			Upgrades = { Bellows = 0, Floors = {} },
 			MachineUpgrades = {},
 			Gear = { Boots = 0 },
-			Train = { CapacityLevel = 0, SpeedLevel = 0 },
 			Enchants = { Owned = {} },
 			BlasterLevel = 1,
 			Rebirths = 0,

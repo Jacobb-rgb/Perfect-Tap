@@ -36,7 +36,7 @@
 	  coming soon). Gamepads start on the open tab, never on an offer (A
 	  is also jump); the selection stays inside the panel.
 	- Closes with the X button, B, Backspace, L again, respawning, the HUD
-	  going away or another panel (shops, pen, train...) opening.
+	  going away or another panel (shops, pen...) opening.
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -150,19 +150,11 @@ local function hudShown(): boolean
 	return hud == nil or (hud.Gui.Enabled and hud.Gui:GetAttribute("Building") ~= true)
 end
 
--- The HUD's layout for the train chip (as TrainController picks it).
+-- The HUD's compact layout (touch, small scales: the chip slot's row holds the MENU button).
 local function compactHud(): boolean
 	local camera = Workspace.CurrentCamera
 	local size = if camera then camera.ViewportSize else Vector2.new(1280, 720)
 	return isTouch() or HudController.uiScale() <= 0.75 or size.Y < 520
-end
-
--- The train chip's frame (TrainView: ScreenGui "TerraForgeTrain", frame "TrainChip").
-local function trainChip(): GuiObject?
-	local playerGui = player:FindFirstChildOfClass("PlayerGui")
-	local gui = if playerGui then playerGui:FindFirstChild("TerraForgeTrain") else nil
-	local frame = if gui then gui:FindFirstChild("TrainChip") else nil
-	return if frame and frame:IsA("GuiObject") then frame else nil
 end
 
 -- A frame's left edge, top and bottom in design units from its ScreenGui's top-left
@@ -206,14 +198,6 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 	if hud and offers and offers:IsA("GuiObject") and offers.Visible then
 		offersRect = rectIn(hud.Gui, offers, scale)
 	end
-	-- (the round look's TRAIN chip beside the tiles on the smallest phones: the corner keeps off it)
-	local trainGui = if playerGui then playerGui:FindFirstChild("TerraForgeTrain") else nil
-	local trainChip = if trainGui then trainGui:FindFirstChild("TrainChip", true) else nil
-	local chipRect: BoostView.ChipRect? = nil
-	if trainGui and trainGui:IsA("ScreenGui") and trainGui.Enabled and trainChip and trainChip:IsA("GuiObject") and trainChip.Visible then
-		local r = rectIn(trainGui, trainChip, scale)
-		chipRect = { Left = r.Left, Top = r.Top or r.Bottom, Right = r.Left + trainChip.AbsoluteSize.X / scale, Bottom = r.Bottom }
-	end
 	local right, bottom, stacked, spot = BoostView.cornerSpot({
 		Screen = screen,
 		Gui = gui,
@@ -225,7 +209,6 @@ local function cornerSpot(chips: BoostView.ChipRefs, count: number): (number, nu
 		Bubble = bubbleRect,
 		Pill = pillRect,
 		Avoid = offersRect,
-		Chip = chipRect,
 	})
 	return right, bottom, stacked, spot
 end
@@ -331,7 +314,7 @@ end
 -- The chips hide with the HUD, while a panel is open (a wide panel would
 -- cut them off; the Boosts panel shows the same timers) and while the touch
 -- side menu's grid is open in their place (BoostView.chipsVisible). They stay
--- under the train chip, whatever size it has. The light build's corner also
+-- in the left column's chip slot (ChipSlot). The light build's corner also
 -- waits while the touch tutorial's bubble shows and no spot clears it (the
 -- smallest phones with two boosts: "OverBubble" would cover its SKIP).
 local function refreshChips()
@@ -352,8 +335,8 @@ local function refreshChips()
 		covering = spot == "OverBubble"
 		BoostView.placeCorner(chips, right, bottom, stacked)
 	else
-		local train = trainChip()
-		BoostView.placeChips(chips, BoostView.chipsTop(train, compactHud()), BoostView.chipsLeft(train))
+		local compact = compactHud()
+		BoostView.placeChips(chips, BoostView.chipsTop(compact), BoostView.chipsLeft(compact))
 	end
 	chips.Gui.Enabled = BoostView.chipsVisible(hudShown(), panelOpen(), MenuPanels.gridOpen()) and next(holds) == nil and not covering
 	BoostView.setChips(chips, running, launcherOn)

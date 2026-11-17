@@ -313,11 +313,9 @@ end
 
 --[[
 	The send toolbar's status line for the State's PenSend (pure): the pen's
-	own sends ("Sending 3…", or why they wait: PenWait), else the train's
-	Direct Unload ("Train unloading 4…"; why that waits shows in the train
-	panel, TrainWait), or a short how-to. Also returns whether the pen's
-	sends wait, how many items are still to go (both lanes) and how many of
-	them the pen sends (STOP).
+	sends ("Sending 3…", or why they wait: PenWait), or a short how-to. Also
+	returns whether the pen's sends wait, how many items are still to go and
+	how many of them the pen sends (STOP: the same number).
 ]]
 PenView.SendIdleText = "SEND puts ore on your belts at the PEN chute"
 function PenView.sendText(send: any): (string, boolean, number, number)
@@ -327,15 +325,12 @@ function PenView.sendText(send: any): (string, boolean, number, number)
 	local function count(v: any): number
 		return if type(v) == "number" and v == v and v < math.huge then math.max(0, math.floor(v)) else 0
 	end
-	local pen, train = count(send.Pen), count(send.Train)
-	local total = pen + train
+	local pen = count(send.Pen)
 	local wait = if type(send.PenWait) == "string" and send.PenWait ~= "" then send.PenWait else nil
 	if pen > 0 and wait then
-		return `{Format.big(pen)} waiting: {wait}`, true, total, pen
+		return `{Format.big(pen)} waiting: {wait}`, true, pen, pen
 	elseif pen > 0 then
-		return `Sending {Format.big(pen)}…`, false, total, pen
-	elseif train > 0 then
-		return `Train unloading {Format.big(train)}…`, false, total, 0
+		return `Sending {Format.big(pen)}…`, false, pen, pen
 	end
 	return PenView.SendIdleText, false, 0, 0
 end
@@ -1234,7 +1229,7 @@ function PenView.setSending(refs: Refs, send: any, canUnkept: boolean, dirty: nu
 	local text, waiting, _, pen = PenView.sendText(send)
 	refs.Status.Text = text
 	refs.Status.TextColor3 = if waiting then Theme.Accent else SOFT
-	-- STOP stops the pen's sends (the train's Direct Unload goes on)
+	-- STOP stops the pen's sends
 	local stop = refs.StopSend.Parent :: Frame
 	stop.Visible = pen > 0
 	local unkept = refs.SendUnkept.Parent :: Frame

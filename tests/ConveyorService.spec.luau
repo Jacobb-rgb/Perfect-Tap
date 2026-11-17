@@ -768,11 +768,10 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- the PEN plaque is right behind its cell; the TRAIN one (on the gate post)
-		-- points at its cell, which is on the right as seen from the grid (+X is left)
+		-- the PEN plaque is right behind its cell (the TRAIN chute went with the train, 2026-11-17)
 		local markers = conv.markers(PLOT)
 		T.eq(markers.Pen.Line.Text, ConveyorService.SignLines.Pen, "PEN: no arrow")
-		T.eq(markers.Train.Line.Text, ConveyorService.SignLines.Train .. " >", "TRAIN: arrow toward its cell")
+		T.eq(markers.Train, nil, "no TRAIN plaque")
 		T.eq(folder:FindFirstChild("Foundry"), nil, "no FOUNDRY plaque (owner 2026-10-24)")
 		-- built once per plot
 		conv.buildMarkers(PLOT)
@@ -793,9 +792,5 @@ return function(T, Loader)
 		MachineService.move(m, px, pz, 3)
 		conv.onLayout(w.player, PLOT)
 		T.eq(line.Text, ConveyorService.SignLines.Pen, "back to normal")
-		local tx, tz = BaseLayout.chuteCell("Train")
-		belt(w, tx, tz, BaseLayout.SinkRotation)
-		conv.onLayout(w.player, PLOT)
-		T.eq(markers.Train.Line.Text, ConveyorService.YardSign .. " >", "the TRAIN plaque warns too, still pointing")
 	end)
 end

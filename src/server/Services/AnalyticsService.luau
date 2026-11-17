@@ -87,12 +87,6 @@ AnalyticsService.Funnel = {
 		end,
 	},
 	{
-		Name = "FirstTrainTrip",
-		Done = function(data: Data): boolean
-			return stat(data, "TrainTrips") >= 1
-		end,
-	},
-	{
 		Name = "FirstBlasterForged",
 		Done = function(data: Data): boolean
 			return stat(data, "BlastersForged") >= 1 or number(data, "BlasterLevel") >= 2

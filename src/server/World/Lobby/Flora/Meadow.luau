@@ -44,7 +44,6 @@ local StreetLampPlan = require(script.Parent.Parent.Plaza.StreetLampPlan)
 local RoadFence = require(script.Parent.Parent.Plaza.RoadFence)
 local Kit = require(script.Parent.Kit)
 local Town = require(script.Parent.Town)
-local Railway = require(script.Parent.Parent.Parent.Railway)
 local Planets = require(script.Parent.Parent.Sky.Planets)
 
 local C = Style.C
@@ -365,41 +364,30 @@ local function zoned(p: Vector3, margin: number, zones: { { Min: Vector3, Max: V
 	return false
 end
 
--- The visible railway lines as flat segments and the tunnel mouths (cached).
-local railSegments: { { Vector3 } }? = nil
-local railMouths: { Vector3 } = {}
--- (the portals' slopes and walls reach this far round a mouth: 2026-10-25, a
+-- Where the railway's visible lines and tunnel mouths were (the owner took the railway out
+-- 2026-11-17). The meadow keeps off them as before, so every tree, tuft and flower keeps its
+-- place: the strips stay plain lawn.
+local railSegments: { { Vector3 } } = {
+	{ Vector3.new(-182, 0, 182), Vector3.new(-182, 0, -100) }, -- the west coast line
+	{ Vector3.new(182, 0, 182), Vector3.new(182, 0, -100) }, -- the east coast line
+	{ Vector3.new(-66, -12, -156), Vector3.new(66, -12, -156) }, -- the quarry line
+}
+local railMouths: { Vector3 } = {
+	Vector3.new(-182, 0, 182),
+	Vector3.new(182, 0, 182),
+	Vector3.new(66, 0, -156),
+	Vector3.new(-66, 0, -156),
+}
+-- (the portals' slopes and walls reached this far round a mouth: 2026-10-25, a
 -- lawn tuft that the re-rolled meadow put by the south-east portal)
 local MOUTH_CLEAR = 12
 local function nearRail(p: Vector3, r: number): boolean
-	if not railSegments then
-		local list: { { Vector3 } } = {}
-		local ok, lines = pcall(function()
-			return Railway.visibleLines()
-		end)
-		if ok then
-			for _, points in lines do
-				for i = 1, #points - 1 do
-					table.insert(list, { points[i], points[i + 1] })
-				end
-			end
-		end
-		railSegments = list
-		local found, mouths = pcall(function()
-			return Railway.portalMouths()
-		end)
-		if found then
-			for _, mouth in mouths do
-				table.insert(railMouths, Vector3.new(mouth.Position.X, 0, mouth.Position.Z))
-			end
-		end
-	end
 	for _, mouth in railMouths do
 		if (Vector3.new(p.X, 0, p.Z) - mouth).Magnitude < r + MOUTH_CLEAR then
 			return true
 		end
 	end
-	for _, seg in railSegments :: { { Vector3 } } do
+	for _, seg in railSegments do
 		local a = Vector3.new(seg[1].X, 0, seg[1].Z)
 		local b = Vector3.new(seg[2].X, 0, seg[2].Z)
 		local q = Vector3.new(p.X, 0, p.Z)

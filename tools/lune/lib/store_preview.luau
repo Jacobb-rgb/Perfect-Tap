@@ -227,25 +227,18 @@ function Preview.build(Loader: any): { [string]: any }
 
 	-- the HUD alone (the Shop button and the offers it opens the window from)
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
-	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
-	local function chips(renderScale: number, compact: boolean, designW: number, designH: number, hudGui: any): { any }
-		-- the light HUD puts the chip under its tiles (HudController does this in the game)
-		TrainView.HudChipTop = hudGui:GetAttribute("ChipTop")
-		local train = TrainView.build(compact)
-		train.Chip.Scale.Scale = renderScale
-		train.Gui.Scale.Scale = renderScale
-		TrainView.layout(train, compact, designW, designH)
-		train.ChipKey.Visible = not compact
-		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), 1.7e9, nil))
-		train.Gui.Enabled = false
-		train.Chip.Enabled = true
+	local ChipSlot = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ChipSlot")
+	local function chips(renderScale: number, compact: boolean, _designW: number, _designH: number, hudGui: any): { any }
+		-- the light HUD puts the chip slot under its tiles (HudController does this in the game)
+		ChipSlot.useHud(hudGui)
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
-		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
+		BoostView.placeChips(boost, BoostView.chipsTop(compact), BoostView.chipsLeft(compact))
 		local state = { Boosts = { TripleLuckyUntil = 1.7e9 + 222, HexaLuckyUntil = 1.7e9 + 3900 } }
 		BoostView.setChips(boost, BoostView.chips(state, 1.7e9), false)
 		boost.Gui.Enabled = true
-		return { train.Chip, boost.Gui }
+		ChipSlot.useHud(nil)
+		return { boost.Gui }
 	end
 	local function hudWithChips(uiScale: number, compact: boolean, w: number, h: number): { any }
 		local refs = hud(uiScale)

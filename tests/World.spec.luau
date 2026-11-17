@@ -125,7 +125,7 @@ return function(T, Loader)
 			{ name = "DeepHollow", box = caves.DeepHollow, model = "MineFloor3" },
 			{ name = "Grotto", box = caves.Grotto, model = "Grotto" },
 		}
-		-- (a cave's own model, or a Mine Lift standing in its cave: Railway)
+		-- (a cave's own model, or a Mine Lift standing in its cave: none since 2026-11-14)
 		local function insideModel(part, name, own)
 			local node = part.Parent
 			while node do

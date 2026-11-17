@@ -476,10 +476,6 @@ local function resolve(target: Target, from: Vector3): Vector3?
 		end
 		currentRock = rock
 		return if rock then pointOf(rock) else TutorialConfig.layoutPoint(target, plotId)
-	elseif target == "Hopper" then
-		local hopper = nearestTagged(TutorialConfig.Tags.Hopper, from, always)
-		local at = if hopper then pointOf(hopper) else nil
-		return at or TutorialConfig.layoutPoint(target, plotId)
 	elseif target == "Cleaning" then
 		local machine = nearestTagged(TutorialConfig.Tags.Cleaning, from, function(m: Instance): boolean
 			return m:GetAttribute("Owner") == player.UserId and m:GetAttribute("MachineId") == "CleaningStation"

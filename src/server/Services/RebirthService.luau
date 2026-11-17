@@ -18,8 +18,7 @@
 	                           makes more during the run), and the plot comes
 	                           back up from the
 	                           save (the machines spawn with empty queues).
-	                           Then the train starts over (TrainService.
-	                           resetRun), the podiums redraw, DataService.
+	                           Then the podiums redraw, DataService.
 	                           changed + saveNow, and after MomentSeconds the
 	                           character goes home (the client's moment plays
 	                           meanwhile).
@@ -79,7 +78,6 @@ local StateService = require(script.Parent.StateService)
 local ItemService = require(script.Parent.ItemService)
 local PlotService = require(script.Parent.PlotService)
 local PodiumService = require(script.Parent.PodiumService)
-local TrainService = require(script.Parent.TrainService)
 local PlotGlow = require(script.Parent.Parent.World.PlotGlow)
 local LobbyLayout = require(Shared.Config.LobbyLayout)
 local ElevatorService = require(script.Parent.ElevatorService)
@@ -241,9 +239,6 @@ end
 -- hides the rebirth that already happened.
 local function afterRebirth(player: Player, data: { [string]: any })
 	local steps: { () -> () } = {
-		function()
-			TrainService.resetRun(player)
-		end,
 		function()
 			local plotId = PlotService.plotOf(player)
 			if plotId then

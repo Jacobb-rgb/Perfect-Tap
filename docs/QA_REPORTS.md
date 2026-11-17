@@ -1243,3 +1243,40 @@ What to test in Studio:
 4. Floors 3, 4, 5 and 6: a little darker than before, the ground and walls show their colours and texture, the
    crystals glow without flaring; floors 1 and 2 exactly as before.
 5. The self-test place again: every scenario PASS (hands off: a click skips).
+
+## No train (owner 2026-11-17 "completely remove this system", branch feat/train-removal)
+What changed:
+- The railway is gone: the quarry line and its two wall tunnels, the Mine Station (hopper, canopy, sign,
+  prompts), the coastal lines with their south tunnels and buffer stops, every yard's TRAIN STOP and the
+  Mine Lifts (taken out 2026-11-14 already, cherry-picked from art/meshy-models 7e7d26d8). Map v74.
+- Where the Mine Station stood, east of the quarry ramp's foot, the red locomotive with two loaded ore
+  wagons stands still on a plain flagstone platform (World/TrainDisplay): no rails, no prompts, no sound,
+  no scripts; invisible boxes keep players out of the wagons.
+- Every train system is gone: TrainService, TrainController, TrainView (the TRAIN chip and the train
+  panel), TrainConfig, Net's TrainAction / TrainTrip / TrainResult, the train's sounds, the Express
+  Train pass (its id was never made: nobody owned it), the Tech shop's "Train Direct Unload" (pen level 2)
+  and the TRAIN chute at every base, the Star Shop's Express Rails, the "All Aboard" badge (no id yet),
+  the train's level XP and the analytics step. The "Bring home N trains" quests became "Put N ores in your
+  Ore Pen" (daily and weekly, Stats.OresStored: thrown in or Put In).
+- The dirty ore goes home in the backpack (BASE on the top bar) and is cleaned straight out of it at the
+  yard's Cleaning Station (owner 2026-11-17: "keeps it in the backpack and cleans it right away"); "Put In"
+  at the pen stores it as before. The tutorial: To the mine! -> Blast a rock -> Take it home (done at your
+  yard) -> Clean your ore (from the backpack) -> ... (one step fewer: save v18 moves a player's step down
+  past the two old train steps, so nobody skips one).
+- The left column: the TRAIN chip's slot stays (ChipSlot), the boost chips sit in it; the tiles, the money
+  and the side menu keep their places. The yard's back fence is closed where the stop's opening was.
+- Save v18: a save's train goes on its first load: the ore on it (waiting or on the way) into the pen,
+  the coins its capacity and speed levels cost back, once the coins of pen level 2 (Direct Unload) back
+  (level 1 kept) and the Forge Stars of Express Rails back.
+What to test in Studio:
+1. Quarry: no rails, tunnels or station; the train stands on its platform east of the ramp's foot, you
+   walk round it (not through it), no prompt anywhere near it.
+2. The coast behind the bases: no rails, tunnels or TRAIN STOP; each yard's back fence is closed.
+3. HUD: no TRAIN chip; a running boost shows where the chip was (round look: under the tiles); the side
+   menu, tiles and money as before. PC, phone and controller.
+4. Mine, fill the backpack, press BASE, "Put In" at your pen: the ore is in the pen. Tech shop: AUTOMATION
+   shows only the Auto-Sort Billboard. The Robux store has no Express Train.
+5. A new player: Take it home passes at your yard, then Clean your ore cleans straight from the backpack.
+   A daily or weekly "Put N ores in your Ore Pen" counts ore thrown in or put in with Put In.
+6. An old save with ore on the train and bought train levels: after joining the ore is in the pen and the
+   coins are higher by what the levels cost.
