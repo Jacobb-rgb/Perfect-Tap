@@ -776,7 +776,18 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		end
 		veil:SetAttribute("Inside", presetAt(pos + inward * Diorama.PortalProbe))
 		veil:SetAttribute("Outside", presetAt(pos - inward * Diorama.PortalProbe))
-		veil:SetAttribute("PlaneZ", if kind[o.Side] == "thin" then -(Diorama.ThinWall / 2 + 0.01 + Diorama.VeilThickness / 2) else 0)
+		-- (the wall's middle, from where its slab stands, along the veil's own Z = outward)
+		local wallMid = if kind[o.Side] == "thin"
+			then Diorama.ThinWall / 2
+			else (behind(o.Side) + (if Diorama.meshWalls(look, o.Side) then Diorama.MeshSlabGap else 0.3)) / 2
+		veil:SetAttribute("PlaneZ", (line + outward * wallMid - c) * outward)
+		-- and the whole wall round it, its face for the portal (a camera seen through the wall beside
+		-- the opening is out there too)
+		local a0 = if alongX then lo.X - behind("W") else lo.Y - behind("N")
+		local a1 = if alongX then hi.X + behind("E") else hi.Y + behind("S")
+		local cy = (vy0 + vy1) / 2
+		veil:SetAttribute("FaceX", math.max(math.abs(a0 - mid), math.abs(a1 - mid)))
+		veil:SetAttribute("FaceY", math.max(cy - Diorama.WallBottom, wallTop(o.Side) - cy))
 		veil:AddTag(Diorama.PortalTag)
 	end
 
