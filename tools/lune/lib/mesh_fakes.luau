@@ -4,16 +4,17 @@
 	name) and Placeholder = true. Mounted at ReplicatedStorage.Shared.Assets.MeshAssets unless the
 	owner's real templates are already there (force = true replaces them).
 
-	  require("./lib/mesh_fakes")(Loader, force?, importYaw?)
+	  require("./lib/mesh_fakes")(Loader, force?, importYaw?, except?)
 	  require("./lib/mesh_fakes").unmount(Loader)
 	importYaw: the stand-ins carry ImportYaw like a real upload (MeshKit turns their clones back).
+	except: { [name]: true } models left out, as if not uploaded yet (e.g. the quarry's newest set).
 ]]
 
 local roblox = require("@lune/roblox") :: any
 
 local Fakes = {}
 
-local function make(Loader: any, force: boolean?, importYaw: number?)
+local function make(Loader: any, force: boolean?, importYaw: number?, except: { [string]: boolean }?)
 	local MeshKit = Loader.requirePath("ReplicatedStorage.Shared.Builders.MeshKit")
 	local Catalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog")
 	local shared = Loader.find("ReplicatedStorage.Shared")
@@ -24,6 +25,9 @@ local function make(Loader: any, force: boolean?, importYaw: number?)
 	local folder = roblox.Instance.new("Folder")
 	folder.Name = "MeshAssets"
 	for name, entry in Catalog.Assets do
+		if except and except[name] then
+			continue
+		end
 		local p = roblox.Instance.new("MeshPart")
 		p.Name = name
 		p.Size = entry.Box
@@ -48,7 +52,7 @@ function Fakes.unmount(Loader: any)
 end
 
 return setmetatable(Fakes, {
-	__call = function(_, Loader: any, force: boolean?, importYaw: number?)
-		make(Loader, force, importYaw)
+	__call = function(_, Loader: any, force: boolean?, importYaw: number?, except: { [string]: boolean }?)
+		make(Loader, force, importYaw, except)
 	end,
 })

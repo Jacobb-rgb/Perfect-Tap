@@ -139,6 +139,15 @@ Diorama.Floors = {
 		Light = Color3.fromRGB(255, 236, 214),
 		Brightness = 0.8,
 	},
+	-- (owner 2026-11-17, his model of the quarry: "finish it and smooth it exactly like on this
+	-- model") the quarry's newest tiles (MeshCatalog.FloorsNext) are his whole model with its own
+	-- cliffs all round, grass on top: no rock walls of ours round it (the mossy cliff he called
+	-- cubes); Floor1Quarry holds its edges with invisible bodies and lays smooth grass round it
+	QuarryNext = {
+		ElevatorWidth = 8,
+		Light = Color3.fromRGB(255, 236, 214),
+		Brightness = 0.8,
+	},
 	EmberCaves = {
 		Walls = { "N", "E", "W" },
 		Thin = { "S" },
@@ -228,6 +237,21 @@ Diorama.Floors = {
 		Brightness = 1.7, -- (2026-11-15: was 2.4)
 	},
 } :: { [string]: Look }
+
+-- The look floor `index` is built with: its newest tile set's (Floors.<FloorId>Next) while the
+-- floor is built from that set (MineFloors.usesNextSet), else its own.
+function Diorama.look(index: number): Look
+	local floor = MineFloors.ByIndex[index]
+	local plain: Look = { Light = Color3.new(1, 1, 1), Brightness = 0.8 }
+	if not floor then
+		return plain
+	end
+	local nextLook = Diorama.Floors[floor.Id .. "Next"]
+	if nextLook and MineFloors.usesNextSet(index) then
+		return nextLook
+	end
+	return Diorama.Floors[floor.Id] or plain
+end
 
 Diorama.ElevatorWidth = 12 -- the tower's width on a 16-stud elevator spot (tools/meshy/floors/config.json)
 Diorama.WallGap = 0.6 -- the room's walls stand this far outside the diorama's own outline
@@ -465,8 +489,7 @@ end
 	it to close the corners) in front of a neighbouring floor's wall.
 ]]
 function Diorama.lines(index: number): (Vector2, Vector2)
-	local floor = MineFloors.ByIndex[index]
-	local look: Look = Diorama.Floors[floor.Id] or { Light = Color3.new(1, 1, 1), Brightness = 0.8 }
+	local look: Look = Diorama.look(index)
 	local kind: { [string]: string } = {}
 	local walls: { string } = look.Walls or {}
 	local thin: { string } = look.Thin or {}
@@ -832,7 +855,7 @@ end
 function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	local floor = MineFloors.ByIndex[index]
 	local data = Diorama.data(index)
-	local look: Look = Diorama.Floors[floor.Id] or { Light = Color3.new(1, 1, 1), Brightness = 0.8 }
+	local look: Look = Diorama.look(index)
 	local closed = MineFloors.CeilingFloors[index] == true
 	local model = Instance.new("Model")
 	model.Name = "MineFloor" .. index

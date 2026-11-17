@@ -178,11 +178,25 @@ return function(T, Loader)
 		end
 	end)
 
-	T.test("diorama floors: contract, spawns on the ground, markers and budgets", function()
-		Fakes(Loader, true)
+	-- Every floor from its sharper set (the quarry with our mossy walls round it), or, newest, only
+	-- the quarry from its newest set (the owner's whole model, 2026-11-17: its smooth surroundings).
+	local function contract(newest: boolean)
+		local except: { [string]: boolean } = {}
+		if not newest then
+			for _, list in MeshCatalog.FloorsNext do
+				for _, tile in list do
+					except[tile] = true
+				end
+			end
+		end
+		Fakes(Loader, true, nil, except)
 		-- (the stand-ins come off even when a check fails: the specs after this one build part looks)
 		local ok, err = pcall(function()
 			for index, name in MODULES do
+				if newest and index ~= 1 then
+					continue
+				end
+				T.eq(MineFloors.usesNextSet(index), newest, name .. " from its newest set")
 				local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. name)
 				T.truthy(Diorama.has(index), name .. " is its diorama")
 				local folder = roblox.Instance.new("Folder")
@@ -330,7 +344,7 @@ return function(T, Loader)
 				end
 				T.eq(ramps, #data.Ramps / 7 - skipped, label .. " every path ramp")
 				-- the quarry's extras round the diorama; no rim part left in front of the side walls' slab
-				if index == 1 then
+				if index == 1 and not newest then
 					local function box(d)
 						local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
 						for _, sx in { -1, 1 } do
@@ -465,6 +479,110 @@ return function(T, Loader)
 					end
 					T.eq(standing, 0, label .. " no rim part in front of the side walls' slab")
 				end
+				-- (owner 2026-11-17, his model of the quarry: "finish it and smooth it exactly like on this
+				-- model") from its newest set the quarry has no walls of ours, no old rim, hills, track
+				-- cover or fills: a smooth lawn out to the mountains, the east bank over the old grotto
+				-- hollow, invisible walls on the model's west, east and back edges
+				if index == 1 and newest then
+					for _, gone in { "Room", "QuarryRim", "CornerHills", "TrackCover", "Fill" } do
+						T.eq(model:FindFirstChild(gone), nil, label .. " no " .. gone)
+					end
+					for _, d in model:GetDescendants() do
+						if d:HasTag(Diorama.CameraTag) then
+							error(label .. " a mossy cliff chunk " .. d:GetFullName(), 0)
+						end
+					end
+					local around = model:FindFirstChild("QuarrySurround")
+					T.truthy(around ~= nil, label .. " its smooth surroundings")
+					local k = Floor.Smooth
+					local fpLo, fpHi = Diorama.footprint(1)
+					local function bounds(d: any): (any, any)
+						local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+						for _, sx in { -1, 1 } do
+							for _, sy in { -1, 1 } do
+								for _, sz in { -1, 1 } do
+									local c = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(V3.new(sx, sy, sz) * d.Size / 2))
+									mn, mx = mn:Min(c), mx:Max(c)
+								end
+							end
+						end
+						return mn, mx
+					end
+					local turfs, bodies, slopes = 0, 0, 0
+					local walls: { { any } } = {}
+					for _, d in around:GetChildren() do
+						if not d:IsA("BasePart") then
+							continue
+						end
+						T.truthy(d:HasTag("NoStuds"), label .. " smooth, no studs: " .. d.Name)
+						local mn, mx = bounds(d)
+						T.le(k.Back - 0.01, mn.Z, label .. " nothing past the Ember Caves' wall: " .. d.Name)
+						if d.Name == "Turf" then
+							turfs += 1
+							T.near(mx.Y, k.TurfTop, 0.01, label .. " the lawn's grass at the town's level")
+							T.eq(d.Material, roblox.Enum.Material.Grass, label .. " the lawn is grass")
+							local near = math.min(math.abs(mn.X), math.abs(mx.X))
+							T.lt(near, math.min(-fpLo.X, fpHi.X), label .. " the lawn runs in under the model's side")
+							T.le(80, math.max(math.abs(mn.X), math.abs(mx.X)), label .. " the lawn runs out under the mountains")
+							T.le(mx.Z, k.TownEdge + 0.01, label .. " the lawn stops at the town's ground")
+						elseif d.Name == "Body" then
+							bodies += 1
+							T.eq(d.Transparency, 1, label .. " a wall nobody sees")
+							T.truthy(d.CanCollide and not d.CanQuery, label .. " a wall nobody walks through")
+							T.le(28 + 7, mx.Y, label .. " a wall over the model's tallest cliff and a jump")
+							local inPit = mn.X > fpLo.X + 0.01 and mx.X < fpHi.X - 0.01 and mn.Z > fpLo.Y + 0.01 and mx.Z < fpHi.Y - 0.01
+							T.falsy(inPit, label .. " a wall on the model's outline, never in the pit")
+							T.truthy(mx.X <= -k.Portal + 0.01 or mn.X >= k.Portal - 0.01, label .. " the DEPTHS portal's block stays open")
+							table.insert(walls, { mn, mx })
+						elseif d.Name == "BankSlope" then
+							slopes += 1
+							T.truthy(d:IsA("WedgePart") and d.Material == roblox.Enum.Material.Grass, label .. " a grass slope")
+						end
+					end
+					T.eq(turfs, 2, label .. " a lawn either side")
+					T.eq(bodies, 4, label .. " the walls: west, east, the back either side of the portal")
+					T.eq(slopes, 3, label .. " the east bank's three slopes")
+					-- the outline closed from the ground up over the tallest cliff: just outside the model's
+					-- west and east edges all along, and its back either side of the portal
+					local function walled(p: any): boolean
+						for _, w in walls do
+							local mn, mx = w[1], w[2]
+							if
+								p.X >= mn.X - 0.01
+								and p.X <= mx.X + 0.01
+								and p.Y >= mn.Y
+								and p.Y <= mx.Y
+								and p.Z >= mn.Z - 0.01
+								and p.Z <= mx.Z + 0.01
+							then
+								return true
+							end
+						end
+						return false
+					end
+					local samples = 0
+					for _, y in { 1, 14, 30 } do
+						for z = math.ceil(fpLo.Y), math.floor(fpHi.Y), 2 do
+							samples += 2
+							T.truthy(walled(V3.new(fpLo.X - 0.5, y, z)), label .. " west edge closed at y " .. y .. ", z " .. z)
+							T.truthy(walled(V3.new(fpHi.X + 0.5, y, z)), label .. " east edge closed at y " .. y .. ", z " .. z)
+						end
+						for x = math.ceil(fpLo.X), math.floor(fpHi.X), 2 do
+							if math.abs(x) > k.Portal + 0.5 then
+								samples += 1
+								T.truthy(walled(V3.new(x, y, fpLo.Y - 0.5)), label .. " back edge closed at y " .. y .. ", x " .. x)
+							end
+						end
+					end
+					T.lt(300, samples, label .. " outline samples")
+					-- every rock spawn in the pit, clear of the surroundings
+					for _, sp in data.Spawns do
+						T.truthy(
+							sp[1] > fpLo.X and sp[1] < fpHi.X and sp[3] > fpLo.Y and sp[3] < fpHi.Y,
+							label .. " a rock spawn in the pit"
+						)
+					end
+				end
 				-- budgets
 				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
 				T.le(count(model, "BasePart"), budget, label .. " parts")
@@ -488,7 +606,7 @@ return function(T, Loader)
 				-- floor's look walls is closed up to it but for Land's passages; the open quarry's walls
 				-- (owner: "you must not see behind them at all") up to their straight tops
 				local room = model:FindFirstChild("Room")
-				local look = Diorama.Floors[MineFloors.ByIndex[index].Id]
+				local look = Diorama.look(index)
 				local closed = MineFloors.CeilingFloors[index] == true
 				T.eq(room ~= nil, closed or look.Walls ~= nil, label .. " walls round the cave floors and the quarry")
 				if room then
@@ -911,5 +1029,13 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end
+
+	T.test("diorama floors: contract, spawns on the ground, markers and budgets", function()
+		contract(false)
+	end)
+
+	T.test("diorama floors: the quarry from its newest set (the owner's whole model): contract and its smooth surroundings", function()
+		contract(true)
 	end)
 end
