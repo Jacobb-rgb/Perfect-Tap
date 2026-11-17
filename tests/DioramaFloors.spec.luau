@@ -25,6 +25,24 @@ return function(T, Loader)
 		return n
 	end
 
+	T.test("diorama floors: the newest set and its walk data come in together", function()
+		-- with every model uploaded the quarry is its newest set (the whole model, 2026-11-17)
+		Fakes(Loader, true)
+		local ok, err = pcall(function()
+			local quarry = MineFloors.ByIndex[1]
+			T.truthy(MeshCatalog.FloorsNext[quarry.Id] ~= nil, "the quarry has a newest set")
+			T.truthy(MineFloors.usesNextSet(1), "uploaded: the quarry takes its newest set")
+			T.eq(MineFloors.floorTiles(1), MeshCatalog.FloorsNext[quarry.Id], "its tiles")
+			T.eq(Diorama.data(1), DioramaData[quarry.Id .. "Next"], "and their walk data")
+			T.falsy(MineFloors.usesNextSet(2), "a floor without one keeps its own")
+			T.eq(Diorama.data(2), DioramaData[MineFloors.ByIndex[2].Id], "with its own data")
+		end)
+		Fakes.unmount(Loader)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	T.test("diorama floors: no upload, no diorama (the part floors)", function()
 		Fakes.unmount(Loader)
 		for index = 1, 6 do
@@ -91,6 +109,15 @@ return function(T, Loader)
 			T.eq(#data.Boxes % 5, 0, floor.Id .. " boxes come in fives")
 			T.eq(#data.Ramps % 7, 0, floor.Id .. " ramps come in sevens")
 			T.le(#data.Ramps / 7, 40, floor.Id .. " at most 40 path ramps")
+			-- a newest set (the quarry whole, 2026-11-17) comes with its own walk data
+			local nextSet = MeshCatalog.FloorsNext[floor.Id]
+			if nextSet then
+				local nextData = DioramaData[floor.Id .. "Next"]
+				T.truthy(#nextSet >= 8 and nextData, floor.Id .. " newest tiles and their data")
+				T.eq(#nextData.Boxes % 5, 0, floor.Id .. " newest boxes come in fives")
+				T.eq(#nextData.Ramps % 7, 0, floor.Id .. " newest ramps come in sevens")
+				T.le(#nextData.Ramps / 7, 40, floor.Id .. " newest: at most 40 path ramps")
+			end
 		end
 	end)
 
@@ -154,10 +181,7 @@ return function(T, Loader)
 				T.truthy(tower, label .. " the elevator's tower")
 				local towerTop = tower.CFrame.Position.Y + tower.Size.Y / 2
 				local wantTop = origin.Y
-					+ math.min(
-						MineFloors.CeilingHeight,
-						if MineFloors.CeilingFloors[index] then math.huge else DioramaData[MineFloors.ByIndex[index].Id].Top
-					)
+					+ math.min(MineFloors.CeilingHeight, if MineFloors.CeilingFloors[index] then math.huge else Diorama.data(index).Top)
 				T.near(towerTop, wantTop, 0.05, label .. " the tower reaches the ceiling")
 				T.le(8, tower.Size.X, label .. " a wide tower")
 				local lamps = 0
@@ -184,7 +208,7 @@ return function(T, Loader)
 				end
 				-- the path ramps (owner 2026-11-13: walk from the elevator without a jump at every edge):
 				-- invisible solid wedges, one per DioramaData ramp, their high edge on the higher ground
-				local data = DioramaData[MineFloors.ByIndex[index].Id]
+				local data = Diorama.data(index)
 				local ramps = 0
 				for _, d in model.Ground:GetChildren() do
 					if d.Name == "Ramp" then
@@ -202,7 +226,25 @@ return function(T, Loader)
 				end
 				-- (the sharper tiles squash what stood in the way: no walk box stands above a flatten
 				-- box's floor inside it, and no path ramp leads up there)
-				local flats = Diorama.Floors[MineFloors.ByIndex[index].Id].Flatten or {}
+				-- (as Diorama.build: the sharper set squashes look.Flatten into the first set's walk data; a
+				-- newest set was measured on its own squashed tiles, its job's flatten boxes)
+				local floorId = MineFloors.ByIndex[index].Id
+				local tiles = MineFloors.floorTiles(index)
+				local look = Diorama.Floors[floorId]
+				local flats = if look and look.Flatten and tiles == MeshCatalog.FloorsHD[floorId] then look.Flatten else {}
+				local squashed = flats
+				if tiles and tiles == MeshCatalog.FloorsNext[floorId] then
+					local fs = require("@lune/fs")
+					local serde = require("@lune/serde")
+					local jobName = string.match(tiles[1], "^(.*)_%d+$")
+					squashed = {}
+					for _, job in serde.decode("json", fs.readFile("tools/meshy/jobs_2026-11-17.json")).jobs do
+						if job.name == jobName then
+							squashed = job.flatten or {}
+						end
+					end
+					T.truthy(#squashed > 0, label .. " the newest set's squashed spots")
+				end
 				local skipped = 0
 				for i = 1, #data.Ramps, 7 do
 					local x0, z0, x1, z1 = data.Ramps[i], data.Ramps[i + 1], data.Ramps[i + 2], data.Ramps[i + 3]
@@ -217,7 +259,7 @@ return function(T, Loader)
 					if d.Name == "Ground" then
 						local p = origin:PointToObjectSpace(d.CFrame.Position)
 						local h = d.Size / 2
-						for _, f in flats do
+						for _, f in squashed do
 							if
 								p.X - h.X >= f[1] - 1e-6
 								and p.X + h.X <= f[4] + 1e-6
@@ -330,7 +372,7 @@ return function(T, Loader)
 							c0.X <= fpLo.X and c0.Z <= fpLo.Y and c1.X >= fpHi.X and c1.Z >= fpHi.Y,
 							label .. " the ceiling covers the diorama"
 						)
-						local data = DioramaData[MineFloors.ByIndex[index].Id]
+						local data = Diorama.data(index)
 						T.le(data.Top, MineFloors.CeilingHeight, label .. " the diorama fits under the ceiling")
 					end
 					-- each side's wall top (open air: look.WallTops)

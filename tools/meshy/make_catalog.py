@@ -13,7 +13,10 @@ parts = sorted((p for v in m.values() for p in v["parts"]), key=lambda p: p["nam
 def v3(a):
     return "Vector3.new(%s)" % ", ".join(repr(round(x, 4)) for x in a)
 
-floors, floors_hd, ores, rocks, props = {}, {}, [], [], []
+floors, floors_hd, floors_next, ores, rocks, props = {}, {}, {}, [], [], []
+# a floor's newest set, re-processed from the owner's diorama with different cuts (2026-11-17: the
+# quarry whole, only the DEPTHS walk-through cut: Floor_QuarryCHD_*): a floor takes it first
+NEXT = {"QuarryC": "Quarry"}
 for p in parts:
     n = p["name"]
     t = re.match(r"^Floor_([A-Za-z]+)_(\d+)$", n)
@@ -24,6 +27,9 @@ for p in parts:
         hd = fid.endswith("HD")
         if hd:
             fid = fid[:-2]
+        if hd and fid in NEXT:
+            floors_next.setdefault(NEXT[fid], []).append(n)
+            continue
         fid = {"QuarryB": "Quarry"}.get(fid, fid)
         (floors_hd if hd else floors).setdefault(fid, []).append(n)
     elif n.startswith("Ore_") and not n.endswith("_Low"):
@@ -104,6 +110,17 @@ for f in sorted(floors_hd):
     L.append("\t},")
 L.append("} :: { [string]: { string } }")
 L.append("")
+L.append("-- A floor's newest set, its diorama re-processed with different cuts (the quarry whole, only the")
+L.append("-- DEPTHS walk-through, 2026-11-17): a floor takes it first, once every tile is uploaded, with its own")
+L.append("-- walk data (DioramaData.<FloorId>Next).")
+L.append("MeshCatalog.FloorsNext = {")
+for f in sorted(floors_next):
+    L.append("\t%s = {" % f)
+    for n in floors_next[f]:
+        L.append('\t\t"%s",' % n)
+    L.append("\t},")
+L.append("} :: { [string]: { string } }")
+L.append("")
 L.append("return MeshCatalog")
 open(out, "w").write("\n".join(L) + "\n")
-print("wrote", out, len(parts), "assets", len(ores), "ores", len(rocks), "rocks", len(props), "props", {k: len(v) for k, v in floors.items()}, "HD", {k: len(v) for k, v in floors_hd.items()})
+print("wrote", out, len(parts), "assets", len(ores), "ores", len(rocks), "rocks", len(props), "props", {k: len(v) for k, v in floors.items()}, "HD", {k: len(v) for k, v in floors_hd.items()}, "next", {k: len(v) for k, v in floors_next.items()})

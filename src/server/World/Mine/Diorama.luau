@@ -243,10 +243,27 @@ local GROUND = { CanTouch = false, CanQuery = true, CanCollide = true, CastShado
 local RAMP_TURN = { math.pi / 2, -math.pi / 2, 0, math.pi }
 local GLOW = { CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false, Transparency = 1 }
 
+--[[
+	Floor `index`'s walk data (DioramaData): its newest tile set's (MeshCatalog.FloorsNext, measured
+	on those tiles themselves: DioramaData.<FloorId>Next) while the floor is built from that set, else
+	the floor's own (measured on its first set; the sharper set squashes its look.Flatten boxes into it).
+]]
+function Diorama.data(index: number): any
+	local floor = MineFloors.ByIndex[index]
+	if not floor then
+		return nil
+	end
+	local nextData = (DioramaData :: any)[floor.Id .. "Next"]
+	if nextData and MineFloors.usesNextSet(index) then
+		return nextData
+	end
+	return DioramaData[floor.Id]
+end
+
 -- Whether floor `index` is built from its diorama (MineFloors.usesDiorama, and its layout exists).
 function Diorama.has(index: number): boolean
 	local floor = MineFloors.ByIndex[index]
-	return floor ~= nil and DioramaData[floor.Id] ~= nil and MineFloors.usesDiorama(index)
+	return floor ~= nil and Diorama.data(index) ~= nil and MineFloors.usesDiorama(index)
 end
 
 -- The world CFrame of a local point (x, y, z) of the floor.
@@ -301,7 +318,7 @@ end
 -- The diorama's outline on the ground (floor-local X and Z), from its tiles' boxes.
 function Diorama.footprint(index: number): (Vector2, Vector2)
 	local floor = MineFloors.ByIndex[index]
-	local data = DioramaData[floor.Id]
+	local data = Diorama.data(index)
 	local s = data.Scale
 	local x0, z0, x1, z1 = math.huge, math.huge, -math.huge, -math.huge
 	for _, name in MineFloors.floorTiles(index) or MeshCatalog.Floors[floor.Id] do
@@ -623,7 +640,7 @@ end
 
 function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	local floor = MineFloors.ByIndex[index]
-	local data = DioramaData[floor.Id]
+	local data = Diorama.data(index)
 	local look: Look = Diorama.Floors[floor.Id] or { Light = Color3.new(1, 1, 1), Brightness = 0.8 }
 	local closed = MineFloors.CeilingFloors[index] == true
 	local model = Instance.new("Model")

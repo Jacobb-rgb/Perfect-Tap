@@ -1,0 +1,72 @@
+{
+ "set": "3D_lom_uhlazeny_2026-11-17",
+ "manifest": "tools/meshy/manifest_2026-11-17.json",
+ "jobs": [
+  {
+   "mode": "tiles",
+   "name": "Floor_QuarryCHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_GreystoneQuarryDioram_1113171838_image-to-3d-texture.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_lom_uhlazeny_2026-11-17/Floor_QuarryCHD.glb",
+   "tris": 240000,
+   "cap": 19000,
+   "tex": 1024,
+   "normal": true,
+   "unit": 8.0,
+   "layout": {
+    "scale": 14.9063,
+    "ground_n": 0.04,
+    "center_n": [
+     0.0134,
+     0.006
+    ]
+   },
+   "cuts": [
+    [
+     -24,
+     0.6,
+     -62,
+     24,
+     40,
+     -44
+    ]
+   ],
+   "split": "kd",
+   "flatten": [
+    [
+     -3.0,
+     0.1,
+     -45.0,
+     1.8,
+     3.0,
+     -23.0
+    ],
+    [
+     -18.3,
+     0.1,
+     39.0,
+     -5.9,
+     13.0,
+     44.0
+    ],
+    [
+     -9.0,
+     0.1,
+     7.0,
+     9.0,
+     40.0,
+     19.5
+    ],
+    [
+     -15.0,
+     0.1,
+     44.0,
+     -9.0,
+     0.5,
+     47.0
+    ]
+   ],
+   "sharpen": 0.7,
+   "matte": true
+  }
+ ]
+}
