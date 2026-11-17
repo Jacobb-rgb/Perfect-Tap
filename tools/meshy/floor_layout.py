@@ -10,6 +10,9 @@ config.scale), with the floor's usual ground level at local y = 0 and its centre
           config's keep-clear circles (farthest-point spread), the back part "deep"
   giant   the most open flat spot in the back half (or config.giant)
 config: {"scale": s?, "keep": [[x, z, r], ...], "giant": [x, z]?, "spawns": n, "deep_z": z, "min_gap": d}
+  re-measured diorama keeping an earlier layout's places (2026-11-17, the quarry whole): "center_n"
+  [cx, cz] pins its centre, "spawns_at" / "lights_at" [[x, z], ...] its rock spawns and lights (their
+  heights from these samples)
 """
 import json, math, sys
 
@@ -32,7 +35,7 @@ for row in H:
             k = round(v / 0.02)
             hist[k] = hist.get(k, 0) + 1
 ground_n = max(hist.items(), key=lambda kv: kv[1])[0] * 0.02
-cx_n, cz_n = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
+cx_n, cz_n = cfg.get("center_n", [(lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2])
 
 def local_x(ix): return (lo[0] + (ix + 0.5) / per - cx_n) * scale
 def local_z(iz): return (lo[2] + (iz + 0.5) / per - cz_n) * scale
@@ -250,12 +253,18 @@ cands = [p for p in cands if giant is None or math.hypot(p[0] - giant[0], p[1] -
 cands = [p for p in cands if not any((p[0] - k[0]) ** 2 + (p[1] - k[1]) ** 2 < k[2] ** 2 for k in keep)]
 if "zone" in cfg:  # spawns only inside these rectangles [x0, z0, x1, z1]
     cands = [p for p in cands if any(r[0] <= p[0] <= r[2] and r[1] <= p[1] <= r[3] for r in cfg["zone"])]
-spawns = spread(cands, cfg.get("spawns", 28), cfg.get("min_gap", 9.0))
+if "spawns_at" in cfg:
+    spawns = [(x, z, height_at(x, z) or 0.0) for x, z in cfg["spawns_at"]]
+else:
+    spawns = spread(cands, cfg.get("spawns", 28), cfg.get("min_gap", 9.0))
 deep_z = cfg.get("deep_z", -size_z * 0.15)
 # lights: spread over the walkable ground (any height near the usual ground), farthest-point
 ground_pts = [(local_x(ix), local_z(iz), Y[iz][ix]) for iz in range(0, nz, 3) for ix in range(0, nx, 3)
               if Y[iz][ix] is not None and abs(Y[iz][ix]) <= max(LEVEL, 3)]
-lights = spread(ground_pts, cfg.get("lights", 10), cfg.get("light_gap", 26.0))
+if "lights_at" in cfg:
+    lights = [(x, z, height_at(x, z) or 0.0) for x, z in cfg["lights_at"]]
+else:
+    lights = spread(ground_pts, cfg.get("lights", 10), cfg.get("light_gap", 26.0))
 out = {
     "id": fid, "scale": round(scale, 4), "ground_n": round(ground_n, 4), "center_n": [round(cx_n, 4), round(cz_n, 4)],
     "cell": round(cell, 3), "boxes": boxes,

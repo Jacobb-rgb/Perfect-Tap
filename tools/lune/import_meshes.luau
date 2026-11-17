@@ -154,6 +154,9 @@ local function yawFromTiles(): (number?, number)
 	for _, tiles in Catalog.FloorsHD or {} do
 		table.insert(sets, tiles)
 	end
+	for _, tiles in Catalog.FloorsNext or {} do
+		table.insert(sets, tiles)
+	end
 	for _, tiles in sets do
 		local list = {}
 		for _, name in tiles do
@@ -234,7 +237,13 @@ if importYaw then
 	print(string.format("the importer turned the models by %d degrees (from %d floor tile pairs)", importYaw, yawPairs))
 else
 	importYaw = keptYaw or 180
-	print(string.format("no floor tiles in the file: the models take a turn of %d degrees (%s)", importYaw, if keptYaw then "the kept templates'" else "Studio's usual"))
+	print(
+		string.format(
+			"no floor tiles in the file: the models take a turn of %d degrees (%s)",
+			importYaw,
+			if keptYaw then "the kept templates'" else "Studio's usual"
+		)
+	)
 end
 local count = 0
 for name, part in found do

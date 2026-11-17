@@ -283,9 +283,10 @@ MineFloors.Dioramas = {
 MineFloors.CeilingHeight = 33.5
 MineFloors.CeilingFloors = { [2] = true, [3] = true, [4] = true, [5] = true } :: { [number]: boolean }
 
--- The tiles floor `index`'s diorama is built from: the sharper set (MeshCatalog.FloorsHD) once
--- every one of its tiles is uploaded, else the first set once all of those are; nil without a
--- diorama or before the upload.
+-- The tiles floor `index`'s diorama is built from: its newest set (MeshCatalog.FloorsNext: the
+-- quarry whole, only its DEPTHS walk-through cut, 2026-11-17) once every one of its tiles is
+-- uploaded, else the sharper set (MeshCatalog.FloorsHD), else the first set once all of those are;
+-- nil without a diorama or before the upload.
 function MineFloors.floorTiles(index: number): { string }?
 	local floor = MineFloors.ByIndex[index]
 	if not floor or not MineFloors.Dioramas[index] then
@@ -302,12 +303,24 @@ function MineFloors.floorTiles(index: number): { string }?
 		end
 		return true
 	end
+	local nextSet = MeshCatalog.FloorsNext[floor.Id]
+	if uploaded(nextSet) then
+		return nextSet
+	end
 	local hd = MeshCatalog.FloorsHD[floor.Id]
 	if uploaded(hd) then
 		return hd
 	end
 	local tiles = MeshCatalog.Floors[floor.Id]
 	return if uploaded(tiles) then tiles else nil
+end
+
+-- Whether floor `index` is built from its newest tile set (MeshCatalog.FloorsNext: the quarry whole,
+-- 2026-11-17): what goes round it (the quarry's walls and ground) changes with it.
+function MineFloors.usesNextSet(index: number): boolean
+	local floor = MineFloors.ByIndex[index]
+	local nextSet = if floor then MeshCatalog.FloorsNext[floor.Id] else nil
+	return nextSet ~= nil and MineFloors.floorTiles(index) == nextSet
 end
 
 -- Whether floor `index` is built from its diorama (its layout exists and its tiles are uploaded).
