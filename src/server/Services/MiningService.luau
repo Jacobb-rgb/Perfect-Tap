@@ -113,6 +113,8 @@ type Rock = {
 	Zone: WorldLayout.Zone,
 	Floor: number?, -- mine floor rocks (MineFloors); nil for the older zone rocks
 	Kind: string, -- MineFloors rock kind ("Small", "Crystal", "Giant", ...); "Zone" for older rocks
+	-- a zone rock in a floor's rock model (RockBuilder: the VIP caves' Meshy rocks), cracked as one
+	MeshLook: boolean?,
 	MinBlaster: number,
 	Stages: number, -- crack stages until the shatter (floor rocks: one per ore)
 	Damage: { [Player]: number }, -- per player (the Giant Crystal's reward)
@@ -366,7 +368,22 @@ local function spawnRock(marker: BasePart): Rock?
 	local seed = math.floor(random() * 1e9) + 1
 	local ground = marker.CFrame.Position - Vector3.new(0, marker.Size.Y / 2, 0)
 	local base = CFrame.new(ground) * CFrame.Angles(0, random() * math.pi * 2, 0)
-	local model = OreNodeBuilder.buildRock(zone.Id, ores, base, seed)
+	-- (owner 2026-11-17: "put the new ore in there") a marker may name a floor's rock model for its
+	-- zone rock (World/PlotCave: the VIP caves' Meshy rocks); the zone's name, ores and rules stay
+	local lookFloor, lookKind = marker:GetAttribute("RockFloor"), marker:GetAttribute("RockKind")
+	local meshLook = type(lookFloor) == "string"
+		and MineFloors.ById[lookFloor] ~= nil
+		and type(lookKind) == "string"
+		and RockBuilder.MeshSize[lookKind] ~= nil
+	local model = if meshLook
+		then RockBuilder.build(lookFloor :: string, lookKind :: any, ores, base, seed)
+		else OreNodeBuilder.buildRock(zone.Id, ores, base, seed)
+	if meshLook then
+		-- (the look only: no floor's name, label colour or artifact over it)
+		model:SetAttribute("Floor", nil)
+		model:SetAttribute("Kind", nil)
+		model:SetAttribute("Artifact", nil)
+	end
 	model.Name = "Rock"
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:AddTag(MiningService.RockTag)
@@ -394,6 +411,7 @@ local function spawnRock(marker: BasePart): Rock?
 		Zone = zone,
 		Floor = nil,
 		Kind = "Zone",
+		MeshLook = meshLook,
 		MinBlaster = zone.MinBlaster,
 		Stages = 3,
 		Damage = {},
@@ -527,7 +545,7 @@ end
 
 -- Crack visuals of a stage (the builders belong to the art packages: never let them break mining).
 local function crackVisual(rock: Rock, stage: number, from: Vector3)
-	local apply = if rock.Floor then RockBuilder.applyStage else OreNodeBuilder.applyStage
+	local apply = if rock.Floor or rock.MeshLook then RockBuilder.applyStage else OreNodeBuilder.applyStage
 	local ok, result = pcall(apply, rock.Model, stage, rock.Seed)
 	if ok then
 		if type(result) == "table" and #result > 0 then

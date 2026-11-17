@@ -143,7 +143,10 @@ LobbyLayout.Budget = {
 	-- (owner 2026-11-17: the VIP cave on every plot, all 8 inside the gateway's radius: 8 x 78 parts; the
 	-- railway that went the same day freed most of that room: the gateway measures 25,137 before the
 	-- caves, 25,761 with them, + ~30: 25,700 -> 25,790)
-	StreamParts = 25790,
+	-- (owner 2026-11-17 evening: "widen the VIP cave a bit": the rooms run past the island's edge,
+	-- Land's boundary wall split round a window behind each, +16 pieces: 25,794 measured, + ~30:
+	-- 25,790 -> 25,825)
+	StreamParts = 25825,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,

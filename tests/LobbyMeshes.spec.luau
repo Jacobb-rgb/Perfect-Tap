@@ -324,18 +324,25 @@ return function(T, Loader)
 	end)
 
 	T.test("lobby meshes: the moss rocks are the owner's mossy cliff, still pure decoration", function()
-		local rocks = 0
+		local function check(d: any)
+			local list = parts(d)
+			T.eq(#list, 1, d:GetFullName() .. " is one mesh")
+			local m = list[1]
+			T.eq(m:GetAttribute("Asset"), "Prop_MossyCliff", "the owner's mossy cliff")
+			T.falsy(m.CanCollide or m.CastShadow or m.CanTouch or m.CanQuery, m:GetFullName() .. " is pure decoration")
+		end
+		-- every one the wilds placed (how many is the wilds' draw over the free lawn: the VIP caves
+		-- behind the yards, 2026-11-17, took some of it and the draw now places none)
 		for _, d in lobby:GetDescendants() do
 			if d:IsA("Model") and d.Name == "MossRock" then
-				rocks += 1
-				local list = parts(d)
-				T.eq(#list, 1, d:GetFullName() .. " is one mesh")
-				local m = list[1]
-				T.eq(m:GetAttribute("Asset"), "Prop_MossyCliff", "the owner's mossy cliff")
-				T.falsy(m.CanCollide or m.CastShadow or m.CanTouch or m.CanQuery, m:GetFullName() .. " is pure decoration")
+				check(d)
 			end
 		end
-		T.truthy(rocks >= 1, `moss rocks ({rocks})`)
+		-- and the wilds' own moss rock piece, as it is placed
+		local Wilds = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Wilds")
+		local one = Wilds.Pieces.MossRock(roblox.Instance.new("Model"), Vector3.new(4, 0, -3), Rng.new("LobbyMeshesMossRock"))
+		T.eq(one.Name, "MossRock", "the wilds' moss rock")
+		check(one)
 	end)
 
 	T.test("lobby meshes: the lobby keeps its budgets with far fewer parts", function()

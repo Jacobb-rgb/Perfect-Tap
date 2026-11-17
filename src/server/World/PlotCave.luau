@@ -14,7 +14,12 @@
 	          (Preset "Grotto": the grotto's cave light, no weather inside)
 	  Falls   a waterfall either side of the door down the mound's front into a pool
 	  Sign    GLIMMER GROTTO over the door
+	  Rocks   5 spots of the Glimmer Grotto's ore, each with the owner's Meshy rock model for it
+	          (BaseLayout.VipCave.RockFloor / RockKinds: MiningService builds it with RockBuilder)
 	It stands outside the plot's model (the plot's part and see-through rules), in Map.VipCaves.
+	(owner 2026-11-17 evening: "widen it a bit, it's terribly narrow in there") The room runs back
+	past the island's edge: PlotCave.openEdge cuts a window into Land's boundary wall behind it and
+	lowers the coastal rocks inside it; the room's own walls and the mound close it.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,7 +35,7 @@ local Kit = require(script.Parent.Lobby.Backdrop.Kit)
 
 local PlotCave = {}
 
-export type Spawn = { Position: Vector3, Zone: string, PlotId: number }
+export type Spawn = { Position: Vector3, Zone: string, PlotId: number, RockFloor: string?, RockKind: string? }
 
 -- the room's violet rock (inside the rainbow, the cave's own colour) and its floor, light enough
 -- to read under the grotto's teal cave light
@@ -43,7 +48,7 @@ PlotCave.Hue = { Lane = 170, T0 = 0.45, T1 = 0.8 }
 -- the cave's light: a pale cyan, so the rocks' crusts and ores keep their own colours under it
 PlotCave.LightColor = Color3.fromRGB(200, 244, 255)
 PlotCave.Zone = "Grotto"
-PlotCave.MoundTop = 25 -- the mound's highest top: its colours run from the foot to here
+PlotCave.MoundTop = 27 -- the mound's highest top: its colours run from the foot to here
 PlotCave.RoomFront = 65.6 -- the room's inside runs from here back (the mound's front, the door's tunnel, before it)
 -- phones (tests/VipCave.spec.luau): a cave's parts and see-through parts (the falls and their pools);
 -- every plot has one, all inside the town's streaming radius (LobbyLayout.Budget)
@@ -57,26 +62,30 @@ PlotCave.Budget = { Parts = 80, SeeThrough = 10 }
 	its shell a stud thick round it).
 ]]
 PlotCave.Columns = {
-	-- (the front's tops 11.6 and up: their dirt bands start at the room's ceiling, none shows inside)
-	{ -18, 63.8, -4, 65.6, -2, 11.8 }, -- front, left of the door
-	{ 4, 63.8, 18, 65.6, -2, 12 }, -- front, right of the door
-	{ -4, 63.8, 4, 65.6, 7.6, 12.6 }, -- the lintel over the door
-	{ -24, 66.6, -18, 71, -2, 13.4 }, -- the left wing (its fall down the front)
-	{ 18, 66.6, 24, 71, -2, 14.2 }, -- the right wing
-	{ -24, 71, -18, 77, -2, 16 },
-	{ 18, 71, 24, 77, -2, 15.4 },
-	{ -18, 65.6, 0, 71, 11, 14.6 }, -- the roof over the room
-	{ 0, 65.6, 18, 71, 11, 13.8 },
-	{ -18, 71, 0, 75.8, 11, 18.4 },
-	{ 0, 71, 18, 75.8, 11, 17.2 },
-	{ -24, 77, -18, 84, -2, 20.6 }, -- the back
-	{ -18, 75.8, 6, 84, -2, 23.4 },
-	{ 6, 75.8, 24, 84, -2, 19.6 },
-	{ -4, 74, 3, 81, 18, PlotCave.MoundTop }, -- the peak
+	-- (the front's tops 13.6 and up: their dirt bands start at the room's ceiling, none shows inside)
+	{ -21, 63.8, -5, 65.6, -2, 13.8 }, -- front, left of the door
+	{ 5, 63.8, 21, 65.6, -2, 14 }, -- front, right of the door
+	{ -5, 63.8, 5, 65.6, 8.6, 14.6 }, -- the lintel over the door
+	-- (past the island's edge, z 76 on, the columns reach down into the coastal rocks)
+	{ -27, 66.6, -21, 76, -6, 15 }, -- the left wing (its fall down the front)
+	{ 21, 66.6, 27, 76, -6, 15.8 }, -- the right wing
+	{ -27, 76, -21, 86, -6, 18.6 },
+	{ 21, 76, 27, 86, -6, 17.8 },
+	{ -21, 65.6, 0, 74, 13, 16.6 }, -- the roof over the room
+	{ 0, 65.6, 21, 74, 13, 15.8 },
+	{ -21, 74, 0, 85, 13, 20.4 },
+	{ 0, 74, 21, 85, 13, 19.2 },
+	{ -27, 85, -8, 90, -8, 21.6 }, -- the back, over the coast
+	{ -8, 85, 10, 90, -8, 24.8 },
+	{ 10, 85, 27, 90, -8, 20.6 },
+	{ -5, 80, 4, 88, 19, PlotCave.MoundTop }, -- the peak
 }
 -- the falls: x along the back wall, the lip's height on the wing's front (z 66.6), width (their foot
 -- and pool behind the yard's back wall: no foam)
-PlotCave.Falls = { { -21, 13.2, 3.6 }, { 21, 14, 3.6 } }
+PlotCave.Falls = { { -24, 14.6, 3.6 }, { 24, 15.4, 3.6 } }
+-- The window cut into Land's boundary wall behind each cave (plot-local x across, up to y Top):
+-- the room and its side walls; above it the wall stays
+PlotCave.EdgeWindow = { X = 21, Top = 14 }
 
 local SOLID = Style.solid() -- (queryable: the camera stays inside the room)
 
@@ -145,7 +154,7 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 	for _, spot in { Vector3.new(rx0 + 1.6, 0, rz1 - 1.4), Vector3.new(rx1 - 1.6, 0, rz1 - 1.4) } do
 		Style.crystalCluster(m, cf * CFrame.new(spot), 4.2, Palette.Vip, rng, { Count = 1 })
 	end
-	Style.light(ceiling, PlotCave.LightColor, 26, 1.8)
+	Style.light(ceiling, PlotCave.LightColor, 30, 1.8)
 
 	-- the grotto's cave light inside (LightingController: a LightingZone part's box)
 	local zone = partIn(m, cf, rx0, 63.8, rx1, rz1, 0, ry1, PlotCave.RockColor, nil, Style.tiny({ Transparency = 1 }))
@@ -163,17 +172,144 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 	end
 
 	-- the name over the door
-	Props.sign(m, cf * CFrame.new(0, 10.1, 63.35), "GLIMMER GROTTO", 10, 1.7, Palette.HollowRockDark, Palette.Vip)
+	Props.sign(m, cf * CFrame.new(0, 11.6, 63.35), "GLIMMER GROTTO", 10, 1.7, Palette.HollowRockDark, Palette.Vip)
 
 	m.Parent = parent
 	local spawns: { Spawn } = {}
-	for _, p in cave.Rocks do
-		table.insert(spawns, { Position = cf:PointToWorldSpace(p), Zone = PlotCave.Zone, PlotId = plot.Id })
+	for i, p in cave.Rocks do
+		table.insert(spawns, {
+			Position = cf:PointToWorldSpace(p),
+			Zone = PlotCave.Zone,
+			PlotId = plot.Id,
+			RockFloor = cave.RockFloor,
+			RockKind = cave.RockKinds[i],
+		})
 	end
 	return m, spawns
 end
 
--- Every plot's cave (Map.VipCaves) and all their rock spots.
+-- A world box (min, max) of a plot-local one (plots turn by quarter turns: it stays a box).
+local function worldBox(cf: CFrame, lo: Vector3, hi: Vector3): (Vector3, Vector3)
+	local a, b = cf:PointToWorldSpace(lo), cf:PointToWorldSpace(hi)
+	return a:Min(b), a:Max(b)
+end
+
+local function partBox(part: BasePart): (Vector3, Vector3)
+	local lo, hi = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, sx in { -1, 1 } do
+		for _, sy in { -1, 1 } do
+			for _, sz in { -1, 1 } do
+				local p = part.CFrame:PointToWorldSpace(Vector3.new(sx, sy, sz) * part.Size / 2)
+				lo, hi = lo:Min(p), hi:Max(p)
+			end
+		end
+	end
+	return lo, hi
+end
+
+local function overlaps(aLo: Vector3, aHi: Vector3, bLo: Vector3, bHi: Vector3): boolean
+	return aLo.X < bHi.X and bLo.X < aHi.X and aLo.Y < bHi.Y and bLo.Y < aHi.Y and aLo.Z < bHi.Z and bLo.Z < aHi.Z
+end
+
+--[[
+	The rooms run back past the island's edge (BaseLayout.VipCave.Room to z 84; the island ends at
+	about 75 behind the yards): Land's boundary wall there (z 76 .. 78, Land.Bounds) gets a window
+	the room's width up to EdgeWindow.Top (the wall is split into pieces round it, above it it stays),
+	and the coastal rocks inside a room (Land.Cliffs: their tops at the ground, 0 .. 2) are lowered
+	under its floor or, wholly above it, taken away. The room's walls, floor and ceiling and the
+	mound round it close every window: nobody walks off the island through one.
+]]
+function PlotCave.openEdge(map: Instance)
+	local land = map:FindFirstChild("Land")
+	if not land then
+		return
+	end
+	local room = BaseLayout.VipCave.Room
+	local edge = PlotCave.EdgeWindow
+	local windows: { { Lo: Vector3, Hi: Vector3 } } = {}
+	local rooms: { { Cf: CFrame, Lo: Vector3, Hi: Vector3 } } = {}
+	for _, plot in WorldLayout.Plots do
+		local cf = WorldLayout.plotCFrame(plot)
+		local lo, hi = worldBox(cf, Vector3.new(-edge.X, -1000, 70), Vector3.new(edge.X, edge.Top, room.Max.Z + 1))
+		table.insert(windows, { Lo = lo, Hi = hi })
+		local rlo, rhi = worldBox(cf, Vector3.new(room.Min.X, -0.45, 63.8), Vector3.new(room.Max.X, room.Max.Y, room.Max.Z))
+		table.insert(rooms, { Cf = cf, Lo = rlo, Hi = rhi })
+	end
+	-- the boundary wall: each piece split along its long side round the windows it crosses
+	local bounds = land:FindFirstChild("Bounds")
+	if bounds then
+		for _, wall in bounds:GetChildren() do
+			if not wall:IsA("BasePart") then
+				continue
+			end
+			local lo, hi = partBox(wall)
+			local alongX = (hi.X - lo.X) >= (hi.Z - lo.Z)
+			local cuts: { { A: number, B: number, Top: number } } = {}
+			for _, w in windows do
+				if overlaps(lo, hi, w.Lo, w.Hi) then
+					local a = if alongX then math.max(lo.X, w.Lo.X) else math.max(lo.Z, w.Lo.Z)
+					local b = if alongX then math.min(hi.X, w.Hi.X) else math.min(hi.Z, w.Hi.Z)
+					table.insert(cuts, { A = a, B = b, Top = math.min(w.Hi.Y, hi.Y) })
+				end
+			end
+			if #cuts == 0 then
+				continue
+			end
+			table.sort(cuts, function(p, q)
+				return p.A < q.A
+			end)
+			local function piece(a: number, b: number, y0: number, y1: number)
+				if b - a < 0.01 or y1 - y0 < 0.01 then
+					return
+				end
+				local copy = wall:Clone()
+				local min = if alongX then Vector3.new(a, y0, lo.Z) else Vector3.new(lo.X, y0, a)
+				local max = if alongX then Vector3.new(b, y1, hi.Z) else Vector3.new(hi.X, y1, b)
+				copy.Size = max - min
+				copy.CFrame = CFrame.new((min + max) / 2)
+				copy.Parent = bounds
+			end
+			local from = if alongX then lo.X else lo.Z
+			for _, c in cuts do
+				piece(from, c.A, lo.Y, hi.Y)
+				piece(c.A, c.B, c.Top, hi.Y)
+				from = math.max(from, c.B)
+			end
+			piece(from, if alongX then hi.X else hi.Z, lo.Y, hi.Y)
+			wall:Destroy()
+		end
+	end
+	-- the coastal rocks inside a room: under its floor, or gone
+	local cliffs = land:FindFirstChild("Cliffs")
+	if cliffs then
+		local doomed: { Instance } = {}
+		for _, d in cliffs:GetDescendants() do
+			if not d:IsA("BasePart") then
+				continue
+			end
+			local lo, hi = partBox(d)
+			for _, r in rooms do
+				if overlaps(lo, hi, r.Lo, r.Hi) then
+					local floor = r.Lo.Y
+					local upright = d.CFrame.UpVector.Y > 0.999
+					if lo.Y < floor - 0.05 and upright then
+						local cut = hi.Y - floor
+						d.Size -= Vector3.new(0, cut, 0)
+						d.CFrame -= Vector3.new(0, cut / 2, 0)
+					else
+						table.insert(doomed, d)
+					end
+					break
+				end
+			end
+		end
+		for _, d in doomed do
+			d:Destroy()
+		end
+	end
+end
+
+-- Every plot's cave (Map.VipCaves) and all their rock spots; the island's edge opened behind them.
 function PlotCave.buildAll(map: Instance, rng: Rng.Rng): { Spawn }
 	local folder = Instance.new("Folder")
 	folder.Name = "VipCaves"
@@ -185,6 +321,7 @@ function PlotCave.buildAll(map: Instance, rng: Rng.Rng): { Spawn }
 			table.insert(spawns, s)
 		end
 	end
+	PlotCave.openEdge(map)
 	return spawns
 end
 

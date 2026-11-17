@@ -117,7 +117,13 @@ local function addNodes(parent, map)
 				end
 				local ground = marker.CFrame.Position - roblox.Vector3.new(0, marker.Size.Y / 2, 0)
 				local turn = roblox.CFrame.Angles(0, rng:next() * math.pi * 2, 0)
-				OreNodeBuilder.buildRock(zone.Id, ores, roblox.CFrame.new(ground) * turn, index).Parent = folder
+				-- (each spot's Meshy rock model, as MiningService builds it: RockFloor / RockKind)
+				local lookFloor, lookKind = marker:GetAttribute("RockFloor"), marker:GetAttribute("RockKind")
+				if type(lookFloor) == "string" and type(lookKind) == "string" then
+					RockBuilder.build(lookFloor, lookKind, ores, roblox.CFrame.new(ground) * turn, index).Parent = folder
+				else
+					OreNodeBuilder.buildRock(zone.Id, ores, roblox.CFrame.new(ground) * turn, index).Parent = folder
+				end
 			end
 		end
 	end

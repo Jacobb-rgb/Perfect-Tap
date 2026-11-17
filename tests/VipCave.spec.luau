@@ -16,6 +16,8 @@ return function(T, Loader)
 	local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 	local Rng = Loader.requirePath("ReplicatedStorage.Shared.Util.Rng")
 	local OreNodeBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.OreNodeBuilder")
+	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
+	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local PlotBuilder = Loader.requirePath("ServerScriptService.Server.World.PlotBuilder")
 	local PlotCave = Loader.requirePath("ServerScriptService.Server.World.PlotCave")
 	local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
@@ -106,6 +108,9 @@ return function(T, Loader)
 			for _, s in spawns do
 				if s.PlotId == plot.Id then
 					T.eq(s.Zone, "Grotto", "the Glimmer Grotto's ore, blaster and VIP rule")
+					-- (owner: "put the new ore in there") each spot names a floor's Meshy rock model
+					T.truthy(MineFloors.ById[s.RockFloor] ~= nil, "a floor's rock look: " .. tostring(s.RockFloor))
+					T.truthy(RockBuilder.MeshSize[s.RockKind] ~= nil, "a rock kind: " .. tostring(s.RockKind))
 					table.insert(mine, cf:PointToObjectSpace(s.Position))
 					T.eq(AccessService.caveAt(s.Position + Vector3.new(0, 2, 0)), plot.Id, "the spot is in its own cave")
 					-- the magnet pulls the chunks off the rocks (the yard's margin ends before them)
@@ -115,15 +120,20 @@ return function(T, Loader)
 			T.eq(#mine, #cave.Rocks, `plot {plot.Id}'s 5 rock spots`)
 			for i, p in mine do
 				T.near(p.Y, 0, 0.01, "on the room's floor")
-				T.le(room.Min.X + 2.5, p.X, "clear of the left wall")
-				T.le(p.X, room.Max.X - 2.5, "clear of the right wall")
-				T.le(ROOM_FRONT + 2.5, p.Z, "clear of the front wall")
-				T.le(p.Z, room.Max.Z - 2, "clear of the back wall")
-				-- (a U round the middle: the way in from the door stays clear)
-				T.truthy(math.abs(p.X) >= 5 or p.Z >= ROOM_FRONT + 6, "the way in from the door stays clear")
+				-- (a Meshy rock is up to MeshSize x 1.08 across: half of it, and a little air, to every wall)
+				local kind = cave.RockKinds[i]
+				local reach = RockBuilder.MeshSize[kind] * 1.08 / 2 * (RockBuilder.MeshFloorScale[cave.RockFloor] or 1)
+				T.le(room.Min.X + reach, p.X, "clear of the left wall")
+				T.le(p.X, room.Max.X - reach, "clear of the right wall")
+				T.le(ROOM_FRONT + reach, p.Z, "clear of the front wall")
+				T.le(p.Z, room.Max.Z - reach, "clear of the back wall")
+				T.le(reach * 2, room.Max.Y - 0.5, "under the ceiling")
+				-- (round an open middle: the way in from the door and the middle stay clear)
+				T.truthy(math.abs(p.X) >= 9 or p.Z >= ROOM_FRONT + 12, "the middle stays open")
 				for j = i + 1, #mine do
 					local q = mine[j]
-					T.le(6.5, Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude, "rock spots 6.5 studs apart (a rock is 6-7 across)")
+					local other = RockBuilder.MeshSize[cave.RockKinds[j]] * 1.08 / 2
+					T.le(reach + other, Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude, "rock spots far enough apart for their rocks")
 				end
 			end
 		end
@@ -238,6 +248,42 @@ return function(T, Loader)
 			end
 		end
 		T.eq(own, #WorldLayout.Plots * #cave.Rocks, "the caves' markers")
+		-- (the rooms run back past the island's edge) Land's boundary wall keeps its window only
+		-- where a room and its walls stand: beside the windows and over them it still blocks
+		local walls = {}
+		for _, d in map.Land.Bounds:GetChildren() do
+			if d:IsA("BasePart") then
+				T.truthy(d.CanCollide, "a boundary piece blocks")
+				table.insert(walls, d)
+			end
+		end
+		local function bounded(p: any): boolean
+			for _, w in walls do
+				local q = w.CFrame:PointToObjectSpace(p)
+				local h = w.Size / 2
+				if math.abs(q.X) <= h.X + 0.01 and math.abs(q.Y) <= h.Y + 0.01 and math.abs(q.Z) <= h.Z + 0.01 then
+					return true
+				end
+			end
+			return false
+		end
+		local edge = PlotCave.EdgeWindow
+		local samples = 0
+		for _, plot in WorldLayout.Plots do
+			local cf = WorldLayout.plotCFrame(plot)
+			for x = -40, 40, 2 do
+				for y = 1, 40, 3 do
+					if math.abs(x) > edge.X + 0.5 or y > edge.Top + 0.5 then
+						samples += 1
+						T.truthy(
+							bounded(cf:PointToWorldSpace(Vector3.new(x, y, 77))),
+							`plot {plot.Id}: the island's edge open at x {x}, y {y}`
+						)
+					end
+				end
+			end
+		end
+		T.lt(1000, samples, "edge samples")
 	end)
 
 	T.test("VIP cave: the walls round the room close it but for the door", function()
@@ -369,6 +415,45 @@ return function(T, Loader)
 			T.eq(AccessService.mineRefusal(guest, marker), AccessService.MineDeny, "a guest is refused")
 			T.eq(AccessService.mineRefusal(guest, plain), nil, "other rocks as before")
 		end)
+	end)
+
+	T.test("VIP cave: a cave rock is its floor's Meshy rock model with the grotto's name and rules", function()
+		local mining = MiningService._test
+		local rocksFolder = Instance.new("Folder")
+		mining.reset(rocksFolder)
+		local ok, err = pcall(function()
+			for i, kind in cave.RockKinds do
+				local m = Instance.new("Part")
+				m.Size = Vector3.new(2, 2, 2)
+				m.CFrame = CFrame.new(i * 20, 1, 0)
+				m:SetAttribute("Zone", "Grotto")
+				m:SetAttribute("RockFloor", cave.RockFloor)
+				m:SetAttribute("RockKind", kind)
+				local rock = mining.spawnRock(m)
+				T.truthy(rock, "a rock grows: " .. kind)
+				T.truthy(rock.MeshLook, "in the floor's rock look: " .. kind)
+				local model = rock.Model
+				T.eq(model:GetAttribute("Zone"), "Grotto", "the grotto's rock")
+				T.eq(model:GetAttribute("Floor"), nil, "no floor's name over it (a Grotto Rock)")
+				T.eq(model:GetAttribute("VipOnly"), true, "the VIP rule")
+				T.truthy(model:FindFirstChild("Rock1"), "the floor rock's body (RockBuilder cracks it)")
+				for _, oreId in rock.Ores do
+					T.truthy(WorldLayout.ZoneById.Grotto.Ores[oreId] ~= nil, "a grotto ore: " .. oreId)
+				end
+			end
+			-- a marker without a look keeps the zone's own rock
+			local plain = Instance.new("Part")
+			plain.Size = Vector3.new(2, 2, 2)
+			plain.CFrame = CFrame.new(0, 1, 40)
+			plain:SetAttribute("Zone", "Grotto")
+			local rock = mining.spawnRock(plain)
+			T.truthy(rock, "a plain grotto rock grows")
+			T.falsy(rock.MeshLook, "in the zone's own look")
+		end)
+		mining.reset(nil)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	-- A rock model like OreNodeBuilder.buildRock makes (one 4x3x4 block).

@@ -121,19 +121,26 @@ BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 	  Rocks  the 5 rock spots, past the yard's pickup margin (ItemService.onBase)
 ]]
 BaseLayout.VipCave = {
-	Door = { CenterX = 0, Width = 8, Height = 7.6 },
-	-- (its back wall in front of the island's coastal rocks, Map.Land.Cliffs from about z 75; as
-	-- wide as five rocks side by side, a rock 6-7 studs across)
-	Room = { Min = Vector3.new(-17, 0, 64.2), Max = Vector3.new(17, 10, 74.8) },
-	Mound = { Min = Vector3.new(-24, 0, 63.8), Max = Vector3.new(24, 25, 84) },
-	-- (a shallow arc along the back: the strip inside the door stays free to walk to every rock)
+	-- (owner 2026-11-17 evening: "widen the VIP cave a bit, it's terribly narrow in there") a wide
+	-- door, a room 40 across, 18 deep and 12 high
+	Door = { CenterX = 0, Width = 10, Height = 8.6 },
+	-- (it runs back past the island's edge: World/PlotCave opens Land's boundary wall and lowers the
+	-- coastal rocks there, its own walls close it)
+	Room = { Min = Vector3.new(-20, 0, 64.2), Max = Vector3.new(20, 12, 84) },
+	Mound = { Min = Vector3.new(-27, 0, 63.8), Max = Vector3.new(27, 27, 90) },
+	-- (round an open middle: two by the front corners, three along the back)
 	Rocks = {
-		Vector3.new(-13.2, 0, 70.2),
-		Vector3.new(-6.6, 0, 71.6),
-		Vector3.new(0, 0, 72),
-		Vector3.new(6.6, 0, 71.6),
-		Vector3.new(13.2, 0, 70.2),
+		Vector3.new(-15, 0, 70.4),
+		Vector3.new(-12, 0, 79.2),
+		Vector3.new(0, 0, 79.2),
+		Vector3.new(12, 0, 79.2),
+		Vector3.new(15, 0, 70.4),
 	},
+	-- (owner: "put the new ore in there", his Meshy rocks) each spot's rock is that floor's model of
+	-- that kind (RockBuilder: the Deep Hollow's blue geodes, Azure Shards and its Golden Rock); the
+	-- grotto's ores, health and rules stay (MiningService)
+	RockFloor = "DeepHollow",
+	RockKinds = { "Geode", "Crystal", "Golden", "Crystal", "Geode" },
 }
 
 -- Every fixed piece, for overlap tests.

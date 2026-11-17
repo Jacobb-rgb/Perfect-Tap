@@ -455,8 +455,12 @@ return function(T, Loader)
 		local island = WorldLayout.Island
 		T.falsy(map.Land:FindFirstChild("Bay"), "no bay sea")
 		-- north, west, east, the south wall in two pieces round SKY HAVEN's gate, the gate's two side
-		-- walls and the outer wall's two pieces along the rim's sea edge
-		T.eq(#map.Land.Bounds:GetChildren(), 9, "the island's invisible walls")
+		-- walls and the outer wall's two pieces along the rim's sea edge; each plot's VIP cave runs
+		-- back through the west or east wall (2026-11-17, PlotCave.openEdge): one more piece beside
+		-- its window and one over it
+		local PlotCave = Loader.requirePath("ServerScriptService.Server.World.PlotCave")
+		T.truthy(PlotCave.openEdge ~= nil, "the caves open the island's edge")
+		T.eq(#map.Land.Bounds:GetChildren(), 9 + 2 * #WorldLayout.Plots, "the island's invisible walls")
 		-- the ground covers the lawn behind the vault (x -52..52, the plot
 		-- roads' inner verges) from the 12-cell coast (z 150) out to the south coast
 		local covered = false
