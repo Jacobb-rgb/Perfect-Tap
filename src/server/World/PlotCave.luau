@@ -32,11 +32,18 @@ local PlotCave = {}
 
 export type Spawn = { Position: Vector3, Zone: string, PlotId: number }
 
--- the room's dark rock (inside the rainbow, the cave's own colour) and its floor
-PlotCave.RockColor = Color3.fromRGB(78, 56, 104)
-PlotCave.FloorColor = Color3.fromRGB(60, 44, 82)
+-- the room's violet rock (inside the rainbow, the cave's own colour) and its floor, light enough
+-- to read under the grotto's teal cave light
+PlotCave.RockColor = Color3.fromRGB(96, 74, 134)
+PlotCave.FloorColor = Color3.fromRGB(74, 58, 104)
+-- the mound's colours: the island's mountain range from one side to the other (Spectrum's lanes,
+-- gold and orange through pink to purple; every other plot the other way round), bright: the
+-- height (t) runs over this part of the lanes, foot to top
+PlotCave.Hue = { Lane = 170, T0 = 0.45, T1 = 0.8 }
+-- the cave's light: a pale cyan, so the rocks' crusts and ores keep their own colours under it
+PlotCave.LightColor = Color3.fromRGB(200, 244, 255)
 PlotCave.Zone = "Grotto"
-PlotCave.MoundTop = 24 -- the mound's highest top: its colours run from the foot to here
+PlotCave.MoundTop = 25 -- the mound's highest top: its colours run from the foot to here
 PlotCave.RoomFront = 65.6 -- the room's inside runs from here back (the mound's front, the door's tunnel, before it)
 -- phones (tests/VipCave.spec.luau): a cave's parts and see-through parts (the falls and their pools);
 -- every plot has one, all inside the town's streaming radius (LobbyLayout.Budget)
@@ -50,26 +57,26 @@ PlotCave.Budget = { Parts = 80, SeeThrough = 10 }
 	its shell a stud thick round it).
 ]]
 PlotCave.Columns = {
-	-- (the front's tops 10.6 and up: their dirt bands start at the room's ceiling, none shows inside)
-	{ -12, 63.8, -4, 65.6, -2, 10.6 }, -- front, left of the door
-	{ 4, 63.8, 12, 65.6, -2, 10.8 }, -- front, right of the door
-	{ -4, 63.8, 4, 65.6, 7.6, 11.6 }, -- the lintel over the door
-	{ -20, 66.6, -12, 71, -2, 12.4 }, -- the left wing (its fall down the front)
-	{ 12, 66.6, 20, 71, -2, 13.2 }, -- the right wing
-	{ -20, 71, -12, 77, -2, 15 },
-	{ 12, 71, 20, 77, -2, 14.4 },
-	{ -12, 65.6, 0, 71, 10, 13.6 }, -- the roof over the room
-	{ 0, 65.6, 12, 71, 10, 12.8 },
-	{ -12, 71, 0, 75.8, 10, 17.4 },
-	{ 0, 71, 12, 75.8, 10, 16.2 },
-	{ -20, 77, -12, 84, -2, 19.6 }, -- the back
-	{ -12, 75.8, 6, 84, -2, 22.4 },
-	{ 6, 75.8, 20, 84, -2, 18.6 },
-	{ -4, 74, 3, 81, 17, PlotCave.MoundTop }, -- the peak
+	-- (the front's tops 11.6 and up: their dirt bands start at the room's ceiling, none shows inside)
+	{ -18, 63.8, -4, 65.6, -2, 11.8 }, -- front, left of the door
+	{ 4, 63.8, 18, 65.6, -2, 12 }, -- front, right of the door
+	{ -4, 63.8, 4, 65.6, 7.6, 12.6 }, -- the lintel over the door
+	{ -24, 66.6, -18, 71, -2, 13.4 }, -- the left wing (its fall down the front)
+	{ 18, 66.6, 24, 71, -2, 14.2 }, -- the right wing
+	{ -24, 71, -18, 77, -2, 16 },
+	{ 18, 71, 24, 77, -2, 15.4 },
+	{ -18, 65.6, 0, 71, 11, 14.6 }, -- the roof over the room
+	{ 0, 65.6, 18, 71, 11, 13.8 },
+	{ -18, 71, 0, 75.8, 11, 18.4 },
+	{ 0, 71, 18, 75.8, 11, 17.2 },
+	{ -24, 77, -18, 84, -2, 20.6 }, -- the back
+	{ -18, 75.8, 6, 84, -2, 23.4 },
+	{ 6, 75.8, 24, 84, -2, 19.6 },
+	{ -4, 74, 3, 81, 18, PlotCave.MoundTop }, -- the peak
 }
 -- the falls: x along the back wall, the lip's height on the wing's front (z 66.6), width (their foot
 -- and pool behind the yard's back wall: no foam)
-PlotCave.Falls = { { -15.5, 12.2, 3.6 }, { 15.5, 13, 3.6 } }
+PlotCave.Falls = { { -21, 13.2, 3.6 }, { 21, 14, 3.6 } }
 
 local SOLID = Style.solid() -- (queryable: the camera stays inside the room)
 
@@ -103,13 +110,16 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 	m.Name = "VipCave_" .. plot.Id
 	m:SetAttribute("PlotId", plot.Id)
 
-	-- the mound: each column in its own rainbow colour for its height (lanes all over the island's
-	-- range, so neighbours never match), a grass top like the island's mountains
+	-- the mound: a rainbow across it like the mountains round the island (each column the range's
+	-- colour for its place and height, Spectrum jitters neighbours apart), a grass top on each
+	local hue = PlotCave.Hue
+	local flip = if plot.Id % 2 == 0 then -1 else 1
 	for _, c in PlotCave.Columns do
 		local a = cf:PointToWorldSpace(Vector3.new(c[1], c[5], c[2]))
 		local b = cf:PointToWorldSpace(Vector3.new(c[3], c[6], c[4]))
-		local shade = 14 + c[6] / PlotCave.MoundTop * 150
-		local color = Spectrum.color(rng:range(-170, 170), shade, rng)
+		local across = math.clamp((c[1] + c[3]) / 2 / cave.Mound.Max.X, -1, 1)
+		local t = hue.T0 + (hue.T1 - hue.T0) * c[6] / PlotCave.MoundTop
+		local color = Spectrum.color(flip * across * hue.Lane, 14 + t * 150, rng)
 		local main = Kit.column(m, a.X, a.Z, b.X, b.Z, a.Y, b.Y, rng, { Color = color, Cap = "Grass" })
 		main.Color = color
 		main.Name = "Mound"
@@ -127,12 +137,15 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 	partIn(shell, cf, rx0 - 1, 63.8, rx0, rz1 + 1, -0.4, ry1 + 1, PlotCave.RockColor, Enum.Material.Slate, SOLID).Name = "Wall"
 	partIn(shell, cf, rx1, 63.8, rx1 + 1, rz1 + 1, -0.4, ry1 + 1, PlotCave.RockColor, Enum.Material.Slate, SOLID).Name = "Wall"
 	partIn(shell, cf, rx0, rz1, rx1, rz1 + 1, -0.4, ry1, PlotCave.RockColor, Enum.Material.Slate, SOLID).Name = "Wall"
-	partIn(shell, cf, rx0 - 1, rz0, rx1 + 1, rz1 + 1, ry1, ry1 + 1, PlotCave.RockColor, Enum.Material.Slate, SOLID).Name = "Ceiling"
+	local ceiling = partIn(shell, cf, rx0 - 1, rz0, rx1 + 1, rz1 + 1, ry1, ry1 + 1, PlotCave.RockColor, Enum.Material.Slate, SOLID)
+	ceiling.Name = "Ceiling"
 
-	-- cyan crystals in the back corners, the left one lit
-	for i, spot in { Vector3.new(rx0 + 1.6, 0, rz1 - 1.4), Vector3.new(rx1 - 1.6, 0, rz1 - 1.4) } do
-		Style.crystalCluster(m, cf * CFrame.new(spot), 4.2, Palette.Vip, rng, { Count = 1, Light = i == 1, Range = 22, Brightness = 1.2 })
+	-- cyan crystals in the back corners; the cave's one light under the ceiling's middle (no
+	-- shadows: it reaches the whole room, the rocks and the way in)
+	for _, spot in { Vector3.new(rx0 + 1.6, 0, rz1 - 1.4), Vector3.new(rx1 - 1.6, 0, rz1 - 1.4) } do
+		Style.crystalCluster(m, cf * CFrame.new(spot), 4.2, Palette.Vip, rng, { Count = 1 })
 	end
+	Style.light(ceiling, PlotCave.LightColor, 26, 1.8)
 
 	-- the grotto's cave light inside (LightingController: a LightingZone part's box)
 	local zone = partIn(m, cf, rx0, 63.8, rx1, rz1, 0, ry1, PlotCave.RockColor, nil, Style.tiny({ Transparency = 1 }))
@@ -150,7 +163,7 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 	end
 
 	-- the name over the door
-	Props.sign(m, cf * CFrame.new(0, 9.4, 63.35), "GLIMMER GROTTO", 10, 1.7, Palette.HollowRockDark, Palette.Vip)
+	Props.sign(m, cf * CFrame.new(0, 10.1, 63.35), "GLIMMER GROTTO", 10, 1.7, Palette.HollowRockDark, Palette.Vip)
 
 	m.Parent = parent
 	local spawns: { Spawn } = {}

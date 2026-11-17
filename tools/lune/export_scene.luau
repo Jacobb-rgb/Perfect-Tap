@@ -105,6 +105,19 @@ local function addNodes(parent, map)
 				end
 				local ground = marker.CFrame.Position - roblox.Vector3.new(0, marker.Size.Y / 2, 0)
 				RockBuilder.build(floorIndex, kind, ores, roblox.CFrame.new(ground), index).Parent = folder
+			elseif marker:GetAttribute("PlotId") ~= nil then
+				-- the plots' VIP caves (World/PlotCave): their 5 rocks as the plot's owner with the
+				-- pass sees them (MiningService grows them only then)
+				local zone = WorldLayout.ZoneById[marker:GetAttribute("Zone")]
+				local index = marker:GetAttribute("SpawnIndex") or 0
+				local rng = Rng.new(index * 97 + 5)
+				local ores = {}
+				for _ = 1, 1 + index % 3 do
+					table.insert(ores, rng:weighted(zone.Ores))
+				end
+				local ground = marker.CFrame.Position - roblox.Vector3.new(0, marker.Size.Y / 2, 0)
+				local turn = roblox.CFrame.Angles(0, rng:next() * math.pi * 2, 0)
+				OreNodeBuilder.buildRock(zone.Id, ores, roblox.CFrame.new(ground) * turn, index).Parent = folder
 			end
 		end
 	end

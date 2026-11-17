@@ -9,6 +9,8 @@
 	"trace" also adds tools/lune/test_place/egg_trace.client.luau: a Studio-only panel that says what blocks the next egg.
 	"eggtest" also adds tools/lune/test_place/egg_selftest.client.luau: in Studio the egg opening plays itself
 	(1 / 3 / 10 eggs, a Legendary, a Mythic, a pack, Auto) and says [EGG TEST] PASS / FAIL for each in Output.
+	"vip" also adds tools/lune/test_place/vip_pass.server.luau: in Studio every player has the Forgemaster's
+	Pass perk ForgeVip, so their plot's VIP cave opens and its rocks grow (owner 2026-11-17).
 ]]
 
 local fs = require("@lune/fs")
@@ -60,7 +62,7 @@ for _, player in Players:GetPlayers() do
 end
 ]]
 script.Parent = sss
-local extras = { [process.args[3] or ""] = true, [process.args[4] or ""] = true }
+local extras = { [process.args[3] or ""] = true, [process.args[4] or ""] = true, [process.args[5] or ""] = true }
 if extras.trace then
 	local trace = roblox.Instance.new("LocalScript")
 	trace.Name = "TEST_VejceStopa"
@@ -72,6 +74,12 @@ if extras.eggtest then
 	test.Name = "TEST_VejceAutoTest"
 	test.Source = fs.readFile("tools/lune/test_place/egg_selftest.client.luau")
 	test.Parent = game:GetService("StarterPlayer"):FindFirstChildOfClass("StarterPlayerScripts")
+end
+if extras.vip then
+	local vip = roblox.Instance.new("Script")
+	vip.Name = "TEST_VipPas"
+	vip.Source = fs.readFile("tools/lune/test_place/vip_pass.server.luau")
+	vip.Parent = sss
 end
 fs.writeFile(dst, roblox.serializePlace(game))
 -- Lune drops the texture packs it can't read: put them back (tools/meshy/texture_packs.mjs)

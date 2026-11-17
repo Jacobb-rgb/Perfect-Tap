@@ -123,7 +123,7 @@ return function(T, Loader)
 				T.truthy(math.abs(p.X) >= 5 or p.Z >= ROOM_FRONT + 6, "the way in from the door stays clear")
 				for j = i + 1, #mine do
 					local q = mine[j]
-					T.le(4.5, Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude, "rock spots 4.5 studs apart")
+					T.le(6.5, Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude, "rock spots 6.5 studs apart (a rock is 6-7 across)")
 				end
 			end
 		end

@@ -122,16 +122,17 @@ BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 ]]
 BaseLayout.VipCave = {
 	Door = { CenterX = 0, Width = 8, Height = 7.6 },
-	-- (its back wall in front of the island's coastal rocks, Map.Land.Cliffs from about z 75)
-	Room = { Min = Vector3.new(-11, 0, 64.2), Max = Vector3.new(11, 9, 74.8) },
-	Mound = { Min = Vector3.new(-20, 0, 63.8), Max = Vector3.new(20, 24, 84) },
-	-- (a U round the middle: the way in from the door stays clear)
+	-- (its back wall in front of the island's coastal rocks, Map.Land.Cliffs from about z 75; as
+	-- wide as five rocks side by side, a rock 6-7 studs across)
+	Room = { Min = Vector3.new(-17, 0, 64.2), Max = Vector3.new(17, 10, 74.8) },
+	Mound = { Min = Vector3.new(-24, 0, 63.8), Max = Vector3.new(24, 25, 84) },
+	-- (a shallow arc along the back: the strip inside the door stays free to walk to every rock)
 	Rocks = {
-		Vector3.new(-8, 0, 68.4),
-		Vector3.new(-5.4, 0, 72.4),
-		Vector3.new(0, 0, 72.6),
-		Vector3.new(5.4, 0, 72.4),
-		Vector3.new(8, 0, 68.4),
+		Vector3.new(-13.2, 0, 70.2),
+		Vector3.new(-6.6, 0, 71.6),
+		Vector3.new(0, 0, 72),
+		Vector3.new(6.6, 0, 71.6),
+		Vector3.new(13.2, 0, 70.2),
 	},
 }
 
