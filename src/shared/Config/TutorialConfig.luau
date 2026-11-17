@@ -228,7 +228,7 @@ TutorialConfig.Steps = {
 	{
 		Id = "Clean",
 		Title = "Clean your ore",
-		Text = "Clean the dirty ore from your backpack at your Cleaning Station. None with you? Take one out of your Ore Pen.",
+		Text = "Clean your dirty ore at the Cleaning Station. Backpack empty? Take one from your Ore Pen.",
 		-- (the station's main prompt, E / Y, reads "Place Raw Ore" first, then "Clean Ore"; an empty
 		-- backpack: the guide points at the pen, where "Open Pen" is G / B)
 		Hint = { Mouse = "E at the Cleaning Station", Touch = "Tap the station's button", Gamepad = "Y at the Cleaning Station" },

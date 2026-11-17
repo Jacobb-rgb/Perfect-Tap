@@ -107,7 +107,7 @@ return function(T, Loader)
 	T.test("TrainDisplay: the world has no railway, no train stop and no train prompt", function()
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
-		T.truthy(WorldBuilder.Version >= 74, "map v74 or later: no railway")
+		T.le(74, WorldBuilder.Version, "map v74 or later: no railway")
 		T.eq(map:FindFirstChild("Railway"), nil, "no railway")
 		T.truthy(map:FindFirstChild("TrainDisplay"), "the still train")
 		for _, d in map:GetDescendants() do
