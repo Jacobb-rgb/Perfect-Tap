@@ -26,6 +26,7 @@ local Rng = require(Shared:WaitForChild("Util"):WaitForChild("Rng"))
 local MeshKit = require(Shared:WaitForChild("Builders"):WaitForChild("MeshKit"))
 local MeshCatalog = require(Shared:WaitForChild("Config"):WaitForChild("MeshCatalog"))
 local MineFloors = require(Shared:WaitForChild("Config"):WaitForChild("MineFloors"))
+local WorldLayout = require(Shared:WaitForChild("Config"):WaitForChild("WorldLayout"))
 local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmbience"))
 local Mine = ServerScriptService:WaitForChild("Server"):WaitForChild("World"):WaitForChild("Mine")
 local MineKit = require(Mine:WaitForChild("MineKit"))
@@ -285,6 +286,10 @@ Diorama.MeshBodyIn = Diorama.MeshOut
 Diorama.LedgeReach = 5
 Diorama.CameraGroup = "CameraOnly"
 Diorama.CameraTag = "CameraOnly"
+-- a veil's lighting portal: its tag (LightingController.PortalTag) and how far either side of it
+-- the zones are probed for its two presets
+Diorama.PortalTag = "LightingPortal"
+Diorama.PortalProbe = 2
 
 Diorama.LightHeight = 14
 Diorama.LightRange = 48
@@ -700,7 +705,12 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	end
 
 	-- the veils: a glowing curtain in an opening (look.Openings[*].Veil), just behind the wall's
-	-- line, tucked a little behind its edges and lintel; walked through, never seen through
+	-- line, tucked a little behind its edges and lintel; walked through, never seen through. Each is
+	-- a lighting portal (LightingController: tag Diorama.PortalTag, its LookVector into the room,
+	-- attributes Inside / Outside = the presets of the zones either side): the light follows the
+	-- camera's side and changes the frame the camera passes through; its sides part at the middle of
+	-- a thin wall round it (attribute PlaneZ, along its own Z: a camera stopped on either face of
+	-- that wall then lies on its own side)
 	for _, o in openings do
 		local color = o.Veil
 		if not color or not kind[o.Side] or (cutaway and o.Side == "S") then
@@ -713,15 +723,25 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		local vy0, vy1 = -0.5, (o.Top or wallTop(o.Side)) + 0.2
 		local width = o.To - o.From + 0.4
 		local mid = (o.From + o.To) / 2
+		local pos = if alongX then Vector3.new(mid, (vy0 + vy1) / 2, c) else Vector3.new(c, (vy0 + vy1) / 2, mid)
+		local inward = if alongX then Vector3.new(0, 0, -outward) else Vector3.new(-outward, 0, 0)
 		local veil = Geo.block(
 			folder,
-			at(origin, if alongX then Vector3.new(mid, (vy0 + vy1) / 2, c) else Vector3.new(c, (vy0 + vy1) / 2, mid)),
-			if alongX then Vector3.new(width, vy1 - vy0, Diorama.VeilThickness) else Vector3.new(Diorama.VeilThickness, vy1 - vy0, width),
+			origin * CFrame.lookAt(pos, pos + inward),
+			Vector3.new(width, vy1 - vy0, Diorama.VeilThickness),
 			color,
 			Enum.Material.Neon,
 			{ CanTouch = false, CanQuery = false, CanCollide = false, CastShadow = false }
 		)
 		veil.Name = "Veil"
+		local function presetAt(p: Vector3): string
+			local zone = WorldLayout.zoneAt(origin:PointToWorldSpace(p))
+			return if zone then zone.Lighting else "Surface"
+		end
+		veil:SetAttribute("Inside", presetAt(pos + inward * Diorama.PortalProbe))
+		veil:SetAttribute("Outside", presetAt(pos - inward * Diorama.PortalProbe))
+		veil:SetAttribute("PlaneZ", if kind[o.Side] == "thin" then -(Diorama.ThinWall / 2 + 0.01 + Diorama.VeilThickness / 2) else 0)
+		veil:AddTag(Diorama.PortalTag)
 	end
 
 	if cutaway or not closed then
