@@ -14,7 +14,8 @@
 	  elevator stop             front-left (-32, 42), facing the main road
 	  Giant Crystal plaza       (0, 18): a round flagstone plaza, 14 studs clear
 	  lagoon                    middle-back; the falls on the back cliff at x -4 / -15
-	  ore lift                  east side (50, 2), a timber shaft frame up to its cable anchor
+	  old lift spot             east side (50, 2): kept clear (the lift and its timber shaft
+	                            went with the train, 2026-11-14 / 2026-11-17)
 	  rock patches              front-left, front-right, west and east shores, the
 	                            back corners (deep) and both islands
 	Contract and budgets: MineKit's header.
@@ -61,7 +62,7 @@ local OPEN_HALF = 12 -- half width of the opening in the front wall
 local OPEN_TOP = 28 -- underside of the lintel (22+ over the ramp at the front face)
 local GATE_Z = 49
 local GATE_WIDTH = 22
--- the Mine Lift's spot (Railway builds the lift there from TrainConfig in the game)
+-- where the Mine Lift stood (kept clear: MineFloors.LiftSpots)
 local LIFT_SPOT = MineFloors.LiftSpots[3] or Vector3.new(50, 0, 2)
 local LIFT = Vector2.new(LIFT_SPOT.X, LIFT_SPOT.Z)
 

@@ -86,6 +86,13 @@ AnalyticsService.Funnel = {
 			return stat(data, "PodiumEarned") > 0
 		end,
 	},
+	-- (in the train's old place: the funnel keeps its step numbers, owner 2026-11-17)
+	{
+		Name = "FirstOreStored",
+		Done = function(data: Data): boolean
+			return stat(data, "OresStored") >= 1
+		end,
+	},
 	{
 		Name = "FirstBlasterForged",
 		Done = function(data: Data): boolean

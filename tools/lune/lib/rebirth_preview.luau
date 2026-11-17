@@ -97,7 +97,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local sure = view(scale, false, pcWidth, pcHeight, info(8, 3, perks, 1), "Rebirth", pcHint)
 	RebirthView.setConfirm(sure, true)
 	exports.ui_rebirth_pc_sure = UiExport.export({ hud(scale, 1.4e9).Gui, sure.Gui })
-	local shopPerks = { GoldenTouch = 4, HeadStart = 1, DeepPockets = 3, ExpressRails = 1 }
+	local shopPerks = { GoldenTouch = 4, HeadStart = 1, DeepPockets = 3 }
 	exports.ui_rebirth_shop_pc = UiExport.export({
 		hud(scale, 1.4e9).Gui,
 		view(scale, false, pcWidth, pcHeight, info(8, 9, shopPerks, 3), "Shop", pcHint).Gui,

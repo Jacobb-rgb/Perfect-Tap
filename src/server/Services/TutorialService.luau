@@ -10,10 +10,11 @@
 	client claim:
 	  - every DataService.onChanged (and right after the data loads) runs
 	    TutorialConfig.advance, which walks past every step whose check holds
-	  - Signals the save data doesn't hold: NearStation and NearPen (a
+	  - Signals the save data doesn't hold: NearStation and NearHome (a
 	    TutorialConfig.PollSeconds loop checks where the character stands,
 	    only while the player is on the "Station" step: the quarry floor,
-	    TutorialConfig.MinePoint, or on the "Home" step: their own Ore Pen)
+	    TutorialConfig.MinePoint, or on the "Home" step: their own yard's
+	    Cleaning Station, where the guide points, or their Ore Pen)
 	    and Carrying (the CarryCount attribute CarryService sets; its change
 	    signal re-runs the check)
 	When Step passes Total, Done = true and the player gets TutorialConfig.
@@ -155,7 +156,7 @@ function TutorialService.nearStation(player: Player): boolean
 	return offset.Magnitude <= TutorialConfig.StationRadius
 end
 
--- Is the player's character at their own Ore Pen (home)?
+-- Is the player's character at their own Ore Pen?
 function TutorialService.nearPen(player: Player): boolean
 	local root = Guard.rootPart(player)
 	local pen = TutorialConfig.layoutPoint("Pen", PlotService.plotOf(player))
@@ -164,6 +165,20 @@ function TutorialService.nearPen(player: Player): boolean
 	end
 	local offset = root.CFrame.Position - pen
 	return Vector2.new(offset.X, offset.Z).Magnitude <= TutorialConfig.PenRadius
+end
+
+-- Is the player's character at home: at their yard's Cleaning Station (the Home step's guide
+-- target) or at their Ore Pen?
+function TutorialService.nearHome(player: Player): boolean
+	local root = Guard.rootPart(player)
+	local station = TutorialConfig.layoutPoint("Cleaning", PlotService.plotOf(player))
+	if root and station then
+		local offset = root.CFrame.Position - station
+		if Vector2.new(offset.X, offset.Z).Magnitude <= TutorialConfig.HomeRadius then
+			return true
+		end
+	end
+	return TutorialService.nearPen(player)
 end
 
 -- The step the player is on (nil while the data isn't loaded or once done).
@@ -183,8 +198,8 @@ local function poll()
 		if def and def.Id == "Station" and TutorialService.nearStation(player) then
 			signalsOf(player).NearStation = true
 			TutorialService.evaluate(player)
-		elseif def and def.Id == "Home" and TutorialService.nearPen(player) then
-			signalsOf(player).NearPen = true
+		elseif def and def.Id == "Home" and TutorialService.nearHome(player) then
+			signalsOf(player).NearHome = true
 			TutorialService.evaluate(player)
 		end
 	end

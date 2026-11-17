@@ -47,6 +47,10 @@ QuestConfig.DailyCount = 3
 QuestConfig.WeeklyCount = 1
 QuestConfig.DaySeconds = 86400
 
+-- Retired quest ids -> the quest that takes their place in a saved list (QuestLogic.refresh keeps the
+-- list, the successor starting at the stats then): the train's went 2026-11-17.
+QuestConfig.Renamed = { Train = "Store", WTrain = "WStore" } :: { [string]: string }
+
 QuestConfig.Daily = {
 	{
 		Id = "Mine",

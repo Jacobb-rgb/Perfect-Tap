@@ -161,6 +161,34 @@ return function(T, Loader)
 		T.eq(#broken.Weekly, 1)
 	end)
 
+	-- (integrator review 2026-11-17) the train's quests became the pen's (QuestConfig.Renamed): a saved
+	-- list that still names one keeps its other entries and claims, the successor starts from now
+	T.test("Quests: a saved Train / WTrain quest becomes Store / WStore in place, nothing rerolled", function()
+		local stats = { OresMined = 500, OresCleaned = 30, OresStored = 12 }
+		local record: any = {
+			Day = QuestLogic.day(NOW),
+			Daily = {
+				{ Id = "Mine", Base = 100, Goal = 100, Claimed = true },
+				{ Id = "Train", Base = 3, Goal = 4, Claimed = false },
+				{ Id = "Clean", Base = 24, Goal = 8, Claimed = false },
+			},
+			Week = QuestLogic.week(NOW),
+			Weekly = { { Id = "WTrain", Base = 1, Goal = 35, Claimed = true } },
+		}
+		T.truthy(QuestLogic.refresh(record, ctx({ Stats = stats })))
+		T.eq(record.Daily[1].Id, "Mine")
+		T.eq(record.Daily[1].Claimed, true, "a claimed quest stays claimed")
+		T.eq(record.Daily[2].Id, "Store")
+		T.eq(record.Daily[2].Base, 12, "the successor starts from now")
+		T.eq(record.Daily[2].Goal, QuestLogic.goal(QuestConfig.ById.Store, 1, 0))
+		T.eq(record.Daily[2].Claimed, false)
+		T.eq(record.Daily[3].Id, "Clean")
+		T.eq(QuestLogic.progress(record.Daily[3], stats), 6, "the other quests keep their progress")
+		T.eq(record.Weekly[1].Id, "WStore")
+		T.eq(record.Weekly[1].Claimed, true, "a claimed weekly stays claimed: no second weekly")
+		T.falsy(QuestLogic.refresh(record, ctx({ Stats = stats, Now = NOW + 60 })), "then unchanged")
+	end)
+
 	T.test("Quests: the login streak grows, waits a day, resets after a miss and wraps after 7", function()
 		local s: any = { Day = 0, Last = 0 }
 		T.eq(QuestLogic.streakNext(s, NOW), 1, "a new player starts at day 1")
