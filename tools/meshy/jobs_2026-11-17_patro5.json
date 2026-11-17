@@ -1,0 +1,86 @@
+{
+ "set": "3D_patro5_ostrejsi_2026-11-17",
+ "manifest": "tools/meshy/manifest_2026-11-17_patro5.json",
+ "jobs": [
+  {
+   "mode": "rebake",
+   "name": "Rock_StormglassRift_Crystal",
+   "src": "/Users/kuban/Downloads/Meshy_AI_Stormglass_Node_3_Cry_1113171435_texture.glb",
+   "low": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-13/Rock_StormglassRift_Crystal.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_patro5_ostrejsi_2026-11-17/dily/Rock_StormglassRift_Crystal.glb",
+   "unit": 4.0,
+   "tex": 1024,
+   "supersample": 2,
+   "normal": true,
+   "smooth": 40,
+   "extr": 0.02,
+   "margin": 0.002,
+   "sharpen": 0.6,
+   "sharpen_r": 1
+  },
+  {
+   "mode": "rebake",
+   "name": "Floor_StormglassRiftHD",
+   "src": "/Users/kuban/Downloads/Meshy_AI_StormglassRiftDiorama_1113171850_image-to-3d-texture.glb",
+   "low": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra/Floor_StormglassRiftHD.glb",
+   "out": "/Users/kuban/Desktop/Terra Forge Roblox game KIT/NAHRAJ_DO_ROBLOXU/3D_patro5_ostrejsi_2026-11-17/dily/Floor_StormglassRiftHD.glb",
+   "unit": 8.0,
+   "layout": {
+    "scale": 15.001,
+    "ground_n": 0.06,
+    "center_n": [
+     0.0,
+     -0.0006
+    ]
+   },
+   "flatten": [
+    [
+     -2.6,
+     1.0,
+     18.76,
+     2.5,
+     6.5,
+     20.63
+    ],
+    [
+     -3.4,
+     1.0,
+     33.76,
+     3.9,
+     5.8,
+     37.51
+    ],
+    [
+     5.5,
+     1.0,
+     44.0,
+     6.5,
+     1.2,
+     45.0
+    ],
+    [
+     10.5,
+     1.0,
+     44.0,
+     11.5,
+     1.2,
+     45.0
+    ]
+   ],
+   "cuts": [],
+   "tex": 1024,
+   "supersample": 2,
+   "normal": true,
+   "matte": true,
+   "smooth": 35,
+   "extr": 0.012,
+   "margin": 0.002,
+   "clarity": [
+    0.35,
+    6
+   ],
+   "sharpen": 0.8,
+   "sharpen_r": 1
+  }
+ ]
+}

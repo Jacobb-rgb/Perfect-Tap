@@ -54,6 +54,11 @@ RockBuilder.MeshSize = {
 	Giant = 22,
 } :: { [string]: number }
 RockBuilder.MeshFloorScale = { SunkenPalace = 1.05, StormglassRift = 1.05, HeartstoneCore = 1.15 } :: { [string]: number }
+-- (owner 2026-11-17, floor 5: "the thin golden pillars", his Thunder Shard crystals: thicker) a
+-- model's own proportions changed: its width and depth times this, its height as it was (so its
+-- longest side is that much over MeshSize). 1.25 keeps two neighbours apart on floor 5's closest
+-- rock spots (10.1 studs: a crystal 10.5 across beside a Big rock 9.5 across)
+RockBuilder.MeshStretch = { Rock_StormglassRift_Crystal = Vector3.new(1.25, 1, 1.25) } :: { [string]: Vector3 }
 -- (integrator review 2026-11-17) A crack stage never moves or resizes what a mesh rock already has:
 -- the clients' tremble (Effects/RockFx.shake) holds every part's frame and wrote the old ones back,
 -- so a shrunk rock floated with its glints off it; a stage adds its cracks and breaks bits off.
@@ -839,6 +844,10 @@ local function meshRock(floor: MineFloors.Floor, kind: string, oreIds: { string 
 	end
 	local longest = (RockBuilder.MeshSize[kind] or 7) * (RockBuilder.MeshFloorScale[floor.Id] or 1) * rng:range(0.92, 1.08)
 	local size = own * (longest / math.max(own.X, own.Y, own.Z))
+	local stretch = RockBuilder.MeshStretch[name]
+	if stretch then
+		size *= stretch
+	end
 	local foot = base * CFrame.Angles(0, rng:range(0, math.pi * 2), 0)
 	local rock1 = MeshKit.part(name, size, foot * CFrame.new(0, size.Y / 2, 0), { Name = "Rock1", CanCollide = true, CanQuery = true })
 	if not rock1 then

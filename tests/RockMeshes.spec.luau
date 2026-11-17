@@ -53,7 +53,10 @@ return function(T, Loader)
 				T.near(rock1.CFrame.Position.X, 10, 0.01, label .. " at the base")
 				-- about the part rocks' size
 				local longest = math.max(rock1.Size.X, rock1.Size.Y, rock1.Size.Z)
-				local want = RockBuilder.MeshSize[kind] * (RockBuilder.MeshFloorScale[floor.Id] or 1)
+				-- (a stretched model: its longest side that much over)
+				local stretch = RockBuilder.MeshStretch["Rock_" .. floor.Id .. "_" .. kind]
+				local over = if stretch then math.max(stretch.X, stretch.Y, stretch.Z) else 1
+				local want = RockBuilder.MeshSize[kind] * (RockBuilder.MeshFloorScale[floor.Id] or 1) * over
 				T.le(want * 0.9, longest, label .. " size")
 				T.le(longest, want * 1.1, label .. " size")
 				local glints = 0
@@ -75,6 +78,42 @@ return function(T, Loader)
 			end
 		end
 		Fakes.unmount(Loader)
+	end)
+
+	T.test("rock meshes: floor 5's Thunder Shard crystals are thicker (owner 2026-11-17)", function()
+		Fakes(Loader, true)
+		local ok, err = pcall(function()
+			local name = "Rock_StormglassRift_Crystal"
+			local stretch = RockBuilder.MeshStretch[name]
+			T.truthy(stretch ~= nil and stretch.X > 1.2 and stretch.Z > 1.2 and stretch.Y == 1, "wider and deeper, as tall")
+			local floor = MineFloors.ById.StormglassRift
+			local model = RockBuilder.build(floor.Index, "Crystal", { "Sunstone", "Moonstone", "StormGem" }, CF.new(0, 0, 0), 5)
+			local rock1 = model.PrimaryPart
+			T.eq(rock1:GetAttribute("Asset"), name, "his crystal model")
+			local own = MeshCatalog.Assets[name].Box
+			local s = rock1.Size
+			T.near((s.X / s.Y) / (own.X / own.Y), stretch.X, 1e-3, "thicker for its height")
+			T.near((s.Z / s.Y) / (own.Z / own.Y), stretch.Z, 1e-3, "both ways")
+			-- as tall as before: the longest side of its own box at the floor's rock size
+			local longest = s.Y * math.max(own.X, own.Y, own.Z) / own.Y
+			local want = RockBuilder.MeshSize.Crystal * RockBuilder.MeshFloorScale.StormglassRift
+			T.le(want * 0.9, longest, "its height as before")
+			T.le(longest, want * 1.1, "its height as before")
+			-- a crack stage keeps its shape
+			RockBuilder.applyStage(model, 1, 5)
+			T.near((rock1.Size.X / rock1.Size.Y), s.X / s.Y, 1e-3, "a stage keeps its shape")
+			-- the other floors' crystals keep their shapes
+			for _, other in MineFloors.List do
+				local o = "Rock_" .. other.Id .. "_Crystal"
+				if o ~= name then
+					T.eq(RockBuilder.MeshStretch[o], nil, other.Id .. " crystal as it was")
+				end
+			end
+		end)
+		Fakes.unmount(Loader)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 
 	T.test("rock meshes: stages crack and break bits off, nothing already there moves", function()

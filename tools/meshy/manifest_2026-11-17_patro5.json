@@ -1,0 +1,254 @@
+{
+ "Rock_StormglassRift_Crystal": {
+  "parts": [
+   {
+    "name": "Rock_StormglassRift_Crystal",
+    "tris": 3999,
+    "center": [
+     0.00226,
+     1.87468,
+     0.01322
+    ],
+    "size": [
+     4.01595,
+     3.80763,
+     3.97785
+    ]
+   }
+  ],
+  "file": "Rock_StormglassRift_Crystal.glb",
+  "src": "Meshy_AI_Stormglass_Node_3_Cry_1113171435_texture.glb",
+  "mode": "rebake"
+ },
+ "Floor_StormglassRiftHD": {
+  "parts": [
+   {
+    "name": "Floor_StormglassRiftHD_01",
+    "tris": 14999,
+    "center": [
+     -3.23574,
+     1.0219,
+     2.81954
+    ],
+    "size": [
+     1.24332,
+     2.00162,
+     2.3603
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_02",
+    "tris": 15000,
+    "center": [
+     -1.69835,
+     0.48697,
+     2.82363
+    ],
+    "size": [
+     3.43619,
+     0.93191,
+     2.35211
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_03",
+    "tris": 15000,
+    "center": [
+     -2.88888,
+     1.11822,
+     0.71546
+    ],
+    "size": [
+     1.93728,
+     2.19436,
+     3.29983
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_04",
+    "tris": 15000,
+    "center": [
+     -1.63155,
+     0.40747,
+     0.81965
+    ],
+    "size": [
+     4.4323,
+     0.77298,
+     3.02952
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_05",
+    "tris": 15000,
+    "center": [
+     1.31165,
+     0.7024,
+     2.55663
+    ],
+    "size": [
+     4.77926,
+     1.36285,
+     2.88503
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_06",
+    "tris": 15000,
+    "center": [
+     2.88242,
+     1.08787,
+     2.64339
+    ],
+    "size": [
+     1.94946,
+     2.13373,
+     2.71151
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_07",
+    "tris": 15000,
+    "center": [
+     1.61914,
+     0.57094,
+     0.51659
+    ],
+    "size": [
+     4.46077,
+     1.10004,
+     2.60625
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_08",
+    "tris": 15000,
+    "center": [
+     2.96053,
+     1.1149,
+     0.5905
+    ],
+    "size": [
+     1.79424,
+     2.18765,
+     2.45843
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_09",
+    "tris": 15000,
+    "center": [
+     -2.60894,
+     1.11814,
+     -1.62622
+    ],
+    "size": [
+     2.49686,
+     2.19451,
+     3.16325
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_10",
+    "tris": 15000,
+    "center": [
+     -2.60892,
+     1.11543,
+     -2.80334
+    ],
+    "size": [
+     2.49684,
+     2.18909,
+     2.28561
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_11",
+    "tris": 15000,
+    "center": [
+     -0.18697,
+     0.76094,
+     -2.00583
+    ],
+    "size": [
+     3.33655,
+     1.47992,
+     3.44221
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_12",
+    "tris": 15000,
+    "center": [
+     -0.74905,
+     0.99844,
+     -2.83043
+    ],
+    "size": [
+     2.70487,
+     1.95512,
+     2.33978
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_13",
+    "tris": 15000,
+    "center": [
+     1.15448,
+     0.80468,
+     -1.89561
+    ],
+    "size": [
+     3.52215,
+     1.56739,
+     3.66264
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_14",
+    "tris": 15000,
+    "center": [
+     1.06957,
+     1.00135,
+     -3.11354
+    ],
+    "size": [
+     3.35233,
+     1.96105,
+     1.67367
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_15",
+    "tris": 15000,
+    "center": [
+     2.83057,
+     1.11369,
+     -1.16377
+    ],
+    "size": [
+     2.05374,
+     2.1854,
+     2.10268
+    ]
+   },
+   {
+    "name": "Floor_StormglassRiftHD_16",
+    "tris": 15000,
+    "center": [
+     2.97976,
+     1.11955,
+     -2.37965
+    ],
+    "size": [
+     1.7546,
+     2.23955,
+     2.6496
+    ]
+   }
+  ],
+  "file": "Floor_StormglassRiftHD.glb",
+  "src": "Meshy_AI_StormglassRiftDiorama_1113171850_image-to-3d-texture.glb",
+  "mode": "rebake"
+ }
+}

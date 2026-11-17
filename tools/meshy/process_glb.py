@@ -37,14 +37,16 @@ def import_glb(path):
     bpy.ops.import_scene.gltf(filepath=path)
     new = [o for o in bpy.data.objects if o not in before]
     meshes = [o for o in new if o.type == 'MESH']
+    # (the rest, taken before the join: joined meshes are gone and can't be asked their type)
+    others = [o for o in new if o.type != 'MESH']
     select_only(meshes, meshes[0])
     bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
     if len(meshes) > 1:
         bpy.ops.object.join()
     ob = bpy.context.view_layer.objects.active
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    for o in new:
-        if o != ob and o.name in bpy.data.objects and o.type != 'MESH':
+    for o in others:
+        if o.name in bpy.data.objects:
             bpy.data.objects.remove(o, do_unlink=True)
     return ob
 
@@ -430,10 +432,12 @@ def kmeans(x, k, iters=12):
 
 def post_color(mats, j):
     # the baked colour maps cleaner: "poster" = one palette of that many colours for the whole floor
-    # (k-means), every texel snapped to it; "sharpen" = an unsharp mask of that strength
+    # (k-means), every texel snapped to it; "sharpen" = an unsharp mask of that strength (over
+    # "sharpen_r" texels, 2 by default); "clarity" = [strength, radius]: the same over a wider
+    # radius first, local contrast (shapes read crisper where the source itself is soft)
     import numpy as np
-    sharpen, poster = j.get("sharpen", 0), j.get("poster", 0)
-    if not sharpen and not poster:
+    sharpen, poster, clarity = j.get("sharpen", 0), j.get("poster", 0), j.get("clarity")
+    if not sharpen and not poster and not clarity:
         return
     imgs = [tc.image for (_, tc, _) in mats]
     arrs = []
@@ -461,11 +465,13 @@ def post_color(mats, j):
                 d = ((flat[i:i + 65536, None, :] - cent[None, :, :]) ** 2).sum(-1)
                 lab[i:i + 65536] = d.argmin(1)
             rgb = cent[lab].reshape(rgb.shape)
+        if clarity:
+            rgb = np.clip(rgb + clarity[0] * (rgb - blur(rgb, int(clarity[1]))), 0, 1)
         if sharpen:
-            rgb = np.clip(rgb + sharpen * (rgb - blur(rgb, 2)), 0, 1)
+            rgb = np.clip(rgb + sharpen * (rgb - blur(rgb, j.get("sharpen_r", 2))), 0, 1)
         a[..., :3] = rgb
         im.pixels.foreach_set(a.ravel()); im.update(); im.pack()
-    log("  post colour", "sharpen", sharpen, "poster", poster)
+    log("  post colour", "sharpen", sharpen, "poster", poster, "clarity", clarity)
 
 def local_boxes_to_blender(j, key="cuts"):
     # j[key]: [[x0, y0, z0, x1, y1, z1, (keep)], ...] in floor-local studs (Roblox axes) with
@@ -585,7 +591,82 @@ def job_tiles(j):
     export(tiles, j["out"])
     return {"parts": sorted(parts, key=lambda p: p["name"])}
 
-MODES = {"plain": job_plain, "bake": job_bake, "tiles": job_tiles}
+def downsample(img, k, normal):
+    # every texel the mean of a k x k block (the bake ran at k x the size: anti-aliased, crisper
+    # than one sample per texel); a normal map's vectors are made unit length again
+    import numpy as np
+    w, h = img.size
+    a = np.empty(w * h * 4, np.float32); img.pixels.foreach_get(a)
+    a = a.reshape(h // k, k, w // k, k, 4).mean(axis=(1, 3))
+    if normal:
+        v = a[..., :3] * 2 - 1
+        v /= np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-6)
+        a[..., :3] = v * 0.5 + 0.5
+    img.scale(w // k, h // k)
+    img.pixels.foreach_set(a.ravel()); img.update(); img.pack()
+
+def job_rebake(j):
+    # (owner 2026-11-17, floor 5: "thin, blurry golden pillars", "the floor is blurry") the SAME low
+    # meshes (names, shapes, tile split: nothing the game reads changes) with new textures: their
+    # islands packed tighter (margin added, not a fraction of the UV square: the crystal's small
+    # islands had filled 15 % of it), baked at `supersample` x the size and scaled down, sharpened
+    high = import_glb(j["src"])
+    normalize(high, j.get("anchor", "bottom"), j.get("unit", 4.0))
+    cut_boxes(high, local_boxes_to_blender(j))
+    flatten_boxes(high, local_boxes_to_blender(j, "flatten"), 1.0 / j["layout"]["scale"] if j.get("layout") else None)
+    make_emit(high)
+    low = import_glb(j["low"])
+    weld(low, 1e-7)
+    smooth(low, j.get("smooth", 35))
+    names = [m.name for m in low.data.materials]
+    for m in low.data.materials:
+        m.name = m.name + "_old"
+    ss, tex, margin = j.get("supersample", 2), j.get("tex", 1024), j.get("margin", 0.002)
+    mats = []
+    for i, name in enumerate(names):
+        m = bake_material(name, tex * ss, j.get("normal", True), j.get("matte", False))
+        low.data.materials[i] = m[0]
+        mats.append(m)
+    while low.data.uv_layers:
+        low.data.uv_layers.remove(low.data.uv_layers[0])
+    low.data.uv_layers.new(name="UVMap")
+    select_only([low], low)
+    bpy.ops.object.mode_set(mode='EDIT')
+    for i in range(len(names)):
+        bpy.ops.mesh.select_all(action='DESELECT')
+        low.active_material_index = i
+        bpy.ops.object.material_slot_select()
+        bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=margin, area_weight=0.0, correct_aspect=True, scale_to_bounds=False)
+        bpy.ops.uv.pack_islands(rotate=True, rotate_method='ANY', margin_method='ADD', margin=margin, shape_method='CONCAVE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+    lo, hi = bbox(low)
+    bake(high, low, mats, max(hi - lo) * j.get("extr", 0.012), j.get("normal", True))
+    for (mat, tc, tn) in mats:
+        downsample(tc.image, ss, False)
+        if tn:
+            downsample(tn.image, ss, True)
+    post_color(mats, j)
+    bpy.data.objects.remove(high, do_unlink=True)
+    if len(names) > 1:
+        select_only([low], low)
+        bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.separate(type='MATERIAL')
+        bpy.ops.object.mode_set(mode='OBJECT')
+    parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    # (the imported tiles' own meshes, left over from the join, hold the names: a tile's mesh came
+    # out "..._02.001" without this)
+    for me in list(bpy.data.meshes):
+        if me.users == 0:
+            bpy.data.meshes.remove(me)
+    out = []
+    for o in parts:
+        mname = o.data.materials[0].name if len(o.data.materials) == 1 else next(m.name for m in o.data.materials if m and o.data.polygons and m == o.data.materials[o.data.polygons[0].material_index])
+        o.name = mname; o.data.name = mname
+        out.append(dict(name=mname, **info(o)))
+    export(parts, j["out"])
+    return {"parts": sorted(out, key=lambda p: p["name"])}
+
+MODES = {"plain": job_plain, "bake": job_bake, "tiles": job_tiles, "rebake": job_rebake}
 
 jobs = json.load(open(sys.argv[sys.argv.index("--") + 1]))
 manifest_path = jobs["manifest"]
