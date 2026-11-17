@@ -144,6 +144,16 @@ return function(T, Loader)
 		return intake
 	end
 
+	-- extra train hooks the way the Mine Lifts were (the owner took the lifts out 2026-11-14;
+	-- TrainService still takes any tagged hook model with its own id, so the specs keep two kinds)
+	local MineFloorsF = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
+	local FIXTURE_LIFTS = {}
+	for _, id in { "EmberCaves", "DeepHollow", "SunkenPalace", "StormglassRift", "HeartstoneCore" } do
+		local f = MineFloorsF.get(id)
+		local at = MineFloorsF.Placement[f.Index]:PointToWorldSpace(MineFloorsF.LiftSpots[f.Index])
+		table.insert(FIXTURE_LIFTS, { Id = id, Position = at, Size = Vector3.new(6, 5, 6) })
+	end
+
 	local function buildRailway(): any
 		local railway = Instance.new("Folder")
 		railway.Name = "Railway"
@@ -158,7 +168,7 @@ return function(T, Loader)
 		hopper(station, s.Hopper, s.HopperSize)
 		-- an untagged box: not a hook
 		newPart(station, "Chute", CFrame.new(s.Hopper + Vector3.new(0, 8, 0)), Vector3.new(4, 4, 4))
-		for _, lift in TrainConfig.Lifts do
+		for _, lift in FIXTURE_LIFTS do
 			local m = Instance.new("Model")
 			m.Name = "Lift_" .. lift.Id
 			m:SetAttribute("LiftId", lift.Id)
@@ -434,12 +444,12 @@ return function(T, Loader)
 	---------------------------------------------------------------- hooks
 
 	withWorld("TrainService: every tagged hopper under the railway gets an intake zone and two prompts", function(w)
-		T.eq(#w.zones, 1 + #TrainConfig.Lifts, "the station and each lift (the untagged box is no hook)")
+		T.eq(#w.zones, 1 + #FIXTURE_LIFTS, "the station and each lift (the untagged box is no hook)")
 		T.truthy(w.station and w.TrainEmberCaves and w.TrainDeepHollow, "zone names")
 		T.eq(w.station.Part, w.railway.MineStation.Intake, "the station's Intake part")
 		train.watch(w.railway)
 		train.setupHook(w.station.Part)
-		T.eq(#w.zones, 1 + #TrainConfig.Lifts, "a hook is set up only once")
+		T.eq(#w.zones, 1 + #FIXTURE_LIFTS, "a hook is set up only once")
 		local point = w.railway.MineStation.Platform.PromptPoint
 		local load = point:FindFirstChild("TrainLoadPrompt")
 		local send = point:FindFirstChild("TrainSendPrompt")
@@ -522,7 +532,7 @@ return function(T, Loader)
 		T.eq(liftHook.LiftId, "Annex", "lift id from the model")
 		T.eq(liftHook.Name, "Mine Lift", "lift")
 		T.eq(cage.PromptPoint.TrainSendPrompt.ObjectText, "Mine Lift", "prompts at the lift's PromptPoint")
-		T.eq(#w.zones, 1 + #TrainConfig.Lifts + 2, "zones for both")
+		T.eq(#w.zones, 1 + #FIXTURE_LIFTS + 2, "zones for both")
 		T.eq(w.zones[#w.zones].Name, "TrainAnnex", "lift zone name")
 		-- a hopper straight in the railway: no search above the railway (the map model)
 		local bare = hopper(railway, Vector3.new(0, 0, 700), Vector3.new(4, 4, 4))
@@ -542,7 +552,7 @@ return function(T, Loader)
 		}
 		train.watch(w.railway, added)
 		local before = #w.zones
-		T.eq(before, 1 + #TrainConfig.Lifts, "the hooks are set up once")
+		T.eq(before, 1 + #FIXTURE_LIFTS, "the hooks are set up once")
 		local lift = Instance.new("Model")
 		lift.Name = "Lift_Third"
 		lift:SetAttribute("LiftId", "Third")
@@ -1338,7 +1348,7 @@ return function(T, Loader)
 		local first = buildRailway()
 		first.Parent = map
 		mapHandlers[1](first)
-		T.eq(#w.zones, before + 1 + #TrainConfig.Lifts, "the railway's hooks")
+		T.eq(#w.zones, before + 1 + #FIXTURE_LIFTS, "the railway's hooks")
 		-- built again: the old railway goes (Destroy: every part's Parent is nil), a new one comes
 		local gone = first:GetDescendants()
 		for i = #gone, 1, -1 do
@@ -1348,9 +1358,9 @@ return function(T, Loader)
 		local second = buildRailway()
 		second.Parent = map
 		mapHandlers[1](second)
-		T.eq(#w.zones, before + 2 * (1 + #TrainConfig.Lifts), "the new railway's hooks")
-		T.eq(train.hooks(), 1 + #TrainConfig.Lifts + 1 + #TrainConfig.Lifts, "hooks of the first test railway and the new one")
-		local zone = w.zones[#w.zones - #TrainConfig.Lifts]
+		T.eq(#w.zones, before + 2 * (1 + #FIXTURE_LIFTS), "the new railway's hooks")
+		T.eq(train.hooks(), 1 + #FIXTURE_LIFTS + 1 + #FIXTURE_LIFTS, "hooks of the first test railway and the new one")
+		local zone = w.zones[#w.zones - #FIXTURE_LIFTS]
 		T.eq(zone.Part, second.MineStation.Intake, "the new station hopper")
 		drop(zone, USER, COAL)
 		T.eq(#w.data.Train.Cargo, 1, "loads through the new railway")
@@ -1376,7 +1386,7 @@ return function(T, Loader)
 		local third = buildRailway()
 		third.Parent = other
 		train.watchMap(other, mapAdded)
-		T.eq(#w.zones, count + 1 + #TrainConfig.Lifts, "its hooks at once")
+		T.eq(#w.zones, count + 1 + #FIXTURE_LIFTS, "its hooks at once")
 		T.eq(#mapHandlers, 2, "a new listener")
 		T.eq(listening, 1, "the old map's listener is gone")
 	end)

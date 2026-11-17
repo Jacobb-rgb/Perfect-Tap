@@ -63,7 +63,7 @@ local GATE_WIDTH = 22
 -- the Mine Lift's spot (Railway builds the lift there from TrainConfig in the game)
 local LIFT_SPOT = MineFloors.LiftSpots[3] or Vector3.new(50, 0, 2)
 local LIFT = Vector2.new(LIFT_SPOT.X, LIFT_SPOT.Z)
-local LIFT_ANCHOR = 30 -- the preview lift (Railway.buildLift outside a cave) hangs its cable from 30 up
+local LIFT_ANCHOR = 30 -- the top of the timber shaft over the old lift spot (the lifts went 2026-11-14)
 
 local LAKE: { Ellipse } = {
 	{ x = 0, z = -24, rx = 40, rz = 24 }, -- the main basin
@@ -1208,7 +1208,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	MineKit.marker(model, "Entrance", facing(ENTRANCE.X, 0, ENTRANCE.Y, 0, -1))
 	MineKit.gate(model, facing(0, 0, GATE_Z, 0, 1), GATE_WIDTH, MineFloors.get(3).MinBlaster, { PAL.Mid, PAL.Light, PAL.Dark })
 	MineKit.elevator(model, facing(ELEVATOR.X, 0, ELEVATOR.Y, 1, 0), Floor.Index)
-	MineKit.oreLift(model, origin:PointToWorldSpace(LIFT_SPOT), "Floor3")
+	-- (no Mine Lift: the owner took them out 2026-11-14; its timber shaft stays as decoration)
 
 	---------------------------------------------------------------- ambience (Config/MineAmbience: tagged Attachments, no parts)
 	-- water lapping at three stretches of the lagoon's shore (front, west bay, behind Crystal

@@ -412,7 +412,8 @@ WorldLayout.KeepOut = {
 	{ Min = Vector3.new(-12, -50, -250), Max = Vector3.new(12, 10, -228) }, -- cave entrance
 	{ Min = Vector3.new(-12, -50, -404), Max = Vector3.new(12, 10, -346) }, -- hollow ramp
 	{ Min = Vector3.new(60, -50, -192), Max = Vector3.new(100, 10, -172) }, -- grotto door
-	-- ore trains (TrainConfig): the quarry track + Mine Station, and the two Mine Lifts
+	-- ore trains (TrainConfig): the quarry track + Mine Station; the spots where the Mine Lifts stood
+	-- (the owner took them out 2026-11-14: the part-built floors keep them clear, nothing up top moves)
 	{ Min = Vector3.new(-74, -50, -162), Max = Vector3.new(74, 10, -141) },
 	{ Min = Vector3.new(38, -50, -268), Max = Vector3.new(54, 10, -252) }, -- EmberCaves lift (MineFloors.LiftSpots[2])
 	{ Min = Vector3.new(42, -50, -450), Max = Vector3.new(58, 10, -434) }, -- DeepHollow lift (MineFloors.LiftSpots[3])

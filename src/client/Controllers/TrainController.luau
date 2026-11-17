@@ -77,8 +77,8 @@
 	- The chip under the coins: "TRAIN 6/8", the state and SEND (TrainAction
 	  "Send"); while the train is away it counts the ore on board. Click /
 	  tap the chip, press T or gamepad L3, or use the "Train" prompt (UIOffset
-	  slot 2 under the server's Load / Send prompts on every Mine Station and
-	  Mine Lift PromptPoint) to open the panel: cargo, trip time, SEND,
+	  slot 2 under the server's Load / Send prompts on the Mine Station's
+	  PromptPoint) to open the panel: cargo, trip time, SEND,
 	  Capacity / Speed upgrades with BUY (TrainAction "Upgrade" { Kind, Level =
 	  the level bought }) and
 	  the Express perk placeholder; the header shows your coins. X, B or
@@ -2962,7 +2962,7 @@ end
 
 --[[
 	The prompt rules (TrainConfig.PromptSlots / PromptSlotHeight / PromptTag,
-	the same numbers TrainService uses): on every Mine Station and Mine Lift
+	the same numbers TrainService uses): on the Mine Station's
 	PromptPoint the server's "TrainLoadPrompt" (slot 0, UIOffset (0, 0),
 	PromptConfig "Main": E / Y) and "TrainSendPrompt" (slot 1, (0, 72),
 	"Second": G / B) are tagged "TrainPrompt"; this client adds its own
@@ -2981,7 +2981,7 @@ function TrainController.makePanelPrompt(objectText: string): ProximityPrompt
 	})
 end
 
--- The "Train" panel prompt on a station's / lift's PromptPoint (slot 2, under the server's Load and Send).
+-- The "Train" panel prompt on a station's PromptPoint (slot 2, under the server's Load and Send).
 local function addPrompt(root: Instance, objectText: string)
 	local function attach(point: Instance)
 		if not point:IsA("Attachment") or point.Name ~= "PromptPoint" or point:FindFirstChild(TrainController.PanelPromptName) then
@@ -3151,18 +3151,13 @@ function TrainController.start()
 		return Enum.ContextActionResult.Pass
 	end, false, Enum.KeyCode.T, Enum.KeyCode.ButtonL3)
 
-	-- the panel prompt on the station and the lifts; the server's Load prompts only with full hands
+	-- the panel prompt on the station (the Mine Lifts went 2026-11-14); the server's Load prompts
+	-- only with full hands
 	CollectionService:GetInstanceAddedSignal("TrainStation"):Connect(function(station)
 		addPrompt(station, "Mine Station")
 	end)
 	for _, station in CollectionService:GetTagged("TrainStation") do
 		addPrompt(station, "Mine Station")
-	end
-	CollectionService:GetInstanceAddedSignal("MineLift"):Connect(function(lift)
-		addPrompt(lift, "Mine Lift")
-	end)
-	for _, lift in CollectionService:GetTagged("MineLift") do
-		addPrompt(lift, "Mine Lift")
 	end
 	CollectionService:GetInstanceAddedSignal(TrainController.PromptTag):Connect(trackLoadPrompt)
 	for _, prompt in CollectionService:GetTagged(TrainController.PromptTag) do

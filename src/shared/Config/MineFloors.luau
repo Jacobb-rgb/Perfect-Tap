@@ -12,7 +12,7 @@
 	  7 ???                 blaster 11   "Coming soon"
 
 	Floor logic keys on a floor's Id (RockBuilder looks, MineAmbience kinds,
-	TrainConfig lifts), never on its Index: a floor can go in between.
+	the floor layouts), never on its Index: a floor can go in between.
 
 	Every floor has 5-8 home ores (variant A2 of the balance sim; all 36 ores, OreData.Tier = the floor's MinBlaster). Rocks come in three kinds: Small (3 ores),
 	Big (4 ores) and Crystal (3 ores rolled from the floor's better table,
@@ -251,8 +251,9 @@ MineFloors.Placement = {
 	CFrame.new(0, -400, -800),
 } :: { CFrame }
 
--- Where each floor's Mine Lift stands (floor-local, on the ground; TrainConfig.Lifts builds them
--- through Railway). Floor 1 has none: players load the Mine Station's hopper in the quarry.
+-- Where each part-built floor's Mine Lift stood (floor-local, on the ground). The owner took the
+-- lifts out of every floor 2026-11-14 ("it really bothers me there"); the part-built floors (no
+-- upload) keep the spot clear and their lift's beams as decoration.
 MineFloors.LiftSpots = {
 	[2] = Vector3.new(46, 0, 40),
 	[3] = Vector3.new(50, 0, 2),
@@ -260,16 +261,6 @@ MineFloors.LiftSpots = {
 	[5] = Vector3.new(28, 2.4, 47), -- on the Rift's landing deck, under its crane beam
 	[6] = Vector3.new(12, 0, 25),
 } :: { [number]: Vector3 }
-
--- The world position of a floor's Mine Lift (nil for floor 1).
-function MineFloors.liftPosition(index: number): Vector3?
-	local spot = MineFloors.LiftSpots[index]
-	local placement = MineFloors.Placement[index]
-	if not spot or not placement then
-		return nil
-	end
-	return placement:PointToWorldSpace(spot)
-end
 
 MineFloors.ByIndex = {} :: { [number]: Floor }
 MineFloors.ById = {} :: { [string]: Floor }

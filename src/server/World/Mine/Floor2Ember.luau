@@ -811,10 +811,8 @@ function Floor.build(parent: Instance, origin: CFrame, opts: Opts?): Model
 	MineKit.gate(model, origin * facing(Vector3.new(0, 0, GATE_Z), Vector3.new(0, 0, 1)), 14, MineFloors.get(2).MinBlaster, { BASALT, BASALT_LIGHT, BASALT_DARK })
 	-- the elevator stop on the left, turned toward the way in
 	MineKit.elevator(model, origin * facing(flat(ELEVATOR, 0), Vector3.new(1, 0, 1).Unit), 2)
-	-- the train's Mine Lift on the right (in the game Railway builds it from TrainConfig at
-	-- MineFloors.LiftSpots[2] and this only marks the spot; the preview builds it, its cable
-	-- hung from a timber beam out of the wall under the roof)
-	MineKit.oreLift(model, origin:PointToWorldSpace(LIFT_SPOT), if cutaway then "MineFloor2" else "EmberCaves")
+	-- (the train's Mine Lift stood on the right, MineFloors.LiftSpots[2]: the owner took the lifts
+	-- out 2026-11-14; its timber beam out of the wall under the roof stays as decoration)
 	block(props, CFrame.new((LIFT.X - 3 + WALL_X + 2) / 2, CEIL - 0.55, LIFT.Y), Vector3.new(WALL_X + 2 - LIFT.X + 3, 1.1, 1.4), Style.C.WoodDark, nil, DECOR)
 	block(props, CFrame.new(LIFT.X + 10.5, CEIL - 4.2, LIFT.Y) * CFrame.Angles(0, 0, math.rad(-45)), Vector3.new(9, 0.9, 1), Style.C.Wood, nil, DECOR)
 

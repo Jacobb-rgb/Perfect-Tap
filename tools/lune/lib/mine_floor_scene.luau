@@ -16,7 +16,7 @@ local MineFloorScene = {}
 
 MineFloorScene.Modules = { "Floor1Quarry", "Floor2Ember", "Floor3Lagoon", "Floor4Palace", "Floor5Storm", "Floor6Core" }
 
--- index 0: the shared MineKit pieces side by side (elevator, gate, ore lift, wall, crystals)
+-- index 0: the shared MineKit pieces side by side (elevator, gate, wall, crystals)
 local function buildKit(Loader, workspace)
 	local CF = Loader.CFrame
 	local V3 = roblox.Vector3
@@ -33,7 +33,6 @@ local function buildKit(Loader, workspace)
 	local colors = { pal.Mid, pal.Light, pal.Dark }
 	MineKit.elevator(m, CF.lookAt(V3.new(-30, 0, 0), V3.new(-30, 0, 10)), 4)
 	MineKit.gate(m, CF.lookAt(V3.new(0, 0, 0), V3.new(0, 0, 10)), 12, 5, colors)
-	MineKit.oreLift(m, V3.new(30, 0, 0), "KitPreview")
 	MineKit.wall(m, V3.new(-60, 0, -25), V3.new(60, 0, -25), 18, V3.new(0, 0, 1), colors, Rng.new(4), { Glow = C3.fromRGB(255, 140, 50) })
 	MineKit.crystals(m, CF.new(14, 0, -14), 7, 6, "Tipped", { pal.Crystal, pal.Crystal2 }, 3)
 	MineKit.crystals(m, CF.new(-14, 0, -14), 9, 8, "Shell", { MineFloors.get(3).Palette.Crystal, MineFloors.get(3).Palette.Crystal2 }, 5)
@@ -55,8 +54,6 @@ function MineFloorScene.build(Loader, workspace, index: number)
 	local MineFloors = Loader.requirePath("ReplicatedStorage.Shared.Config.MineFloors")
 	local RockBuilder = Loader.requirePath("ReplicatedStorage.Shared.Builders.RockBuilder")
 	local Floor = Loader.requirePath("ServerScriptService.Server.World.Mine." .. MineFloorScene.Modules[index])
-	-- the preview shows the floor's own Mine Lift (in the game Railway builds it from TrainConfig)
-	Loader.requirePath("ServerScriptService.Server.World.Mine.MineKit").PreviewLifts = true
 	local floor = MineFloors.get(index)
 	local model = Floor.build(workspace, CF.new(0, 0, 0), { Cutaway = true })
 

@@ -18,7 +18,7 @@ return function(T, Loader)
 		return n
 	end
 
-	T.test("MineKit: elevator, gate, ore lift, wall and crystals build", function()
+	T.test("MineKit: elevator, gate, wall and crystals build (no ore lift)", function()
 		local folder = roblox.Instance.new("Folder")
 		local elevator = MineKit.elevator(folder, CF.new(0, 0, 0), 4)
 		T.eq(elevator:GetAttribute("Floor"), 4, "elevator floor")
@@ -27,13 +27,8 @@ return function(T, Loader)
 		T.le(count(elevator, "PointLight"), 1, "elevator lights")
 		local gate = MineKit.gate(folder, CF.new(20, 0, 0), 12, 5, { roblox.Color3.new(0.5, 0.5, 0.5), roblox.Color3.new(0.7, 0.7, 0.7), roblox.Color3.new(0.3, 0.3, 0.3) })
 		T.eq(gate:GetAttribute("MinBlaster"), 5, "gate level")
-		local spot = MineKit.oreLift(folder, V3.new(40, 0, 0), "Test")
-		T.eq(spot.Name, "OreLiftSpot", "in the game the floor only marks the lift's spot")
-		T.eq(spot:GetAttribute("LiftId"), "Test", "spot lift id")
-		MineKit.PreviewLifts = true
-		local lift = MineKit.oreLift(folder, V3.new(40, 0, 0), "Test")
-		MineKit.PreviewLifts = false
-		T.truthy(lift:HasTag("MineLift"), "the preview builds the Mine Lift")
+		-- (owner 2026-11-14: "take the ore lift out of every location")
+		T.eq((MineKit :: any).oreLift, nil, "no ore lift any more")
 		local cluster = MineKit.crystals(folder, CF.new(0, 0, 20), 7, 6, "Shell", { roblox.Color3.new(0.2, 0.8, 0.9) }, 1)
 		T.truthy(#cluster:GetChildren() >= 7, "cluster crystals")
 	end)
@@ -56,6 +51,7 @@ return function(T, Loader)
 				end
 				local lift = model:FindFirstChild("MineLift", true)
 				T.truthy(lift == nil or not lift:HasTag("MineLift"), name .. " builds no Mine Lift of its own in the game")
+				T.eq(model:FindFirstChild("OreLiftSpot", true), nil, name .. " no ore lift spot either (the lifts went 2026-11-14)")
 			end
 		end
 	end)
@@ -222,24 +218,15 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- in the game the floor only marks the lift's spot: Railway builds TrainConfig's "StormglassRift" lift there
+		-- (no ore lift on any floor since 2026-11-14: TrainConfig has none, the floor builds none; its
+		-- crane beam stays over the old spot as decoration)
 		local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
-		local liftCfg = nil
-		for _, cfg in TrainConfig.Lifts do
-			if cfg.Id == Floor.Id then
-				liftCfg = cfg
-			end
-		end
-		T.truthy(liftCfg ~= nil, "TrainConfig has the Rift's lift")
+		T.eq(#TrainConfig.Lifts, 0, "no Mine Lifts")
 		T.eq(Floor.LiftSpot, MineFloors.LiftSpots[Floor.Index], "MineFloors.LiftSpots[5]")
-		T.truthy((liftCfg.Position - origin:PointToWorldSpace(Floor.LiftSpot)).Magnitude < 0.01, "the lift stands on the Rift's spot")
 		local built = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
-		local spot = built:FindFirstChild("OreLiftSpot", true)
-		T.truthy(spot ~= nil and spot:GetAttribute("LiftId") == "StormglassRift", "ore lift spot")
-		local at = origin:PointToObjectSpace(spot.PrimaryPart.CFrame.Position)
-		T.truthy((at - (Floor.LiftSpot + V3.new(0, 0.5, 0))).Magnitude < 0.01, "the spot is Floor.LiftSpot")
+		T.eq(built:FindFirstChild("OreLiftSpot", true), nil, "no ore lift spot")
 		local lift = built:FindFirstChild("MineLift", true)
-		T.truthy(lift == nil or not lift:HasTag("MineLift"), "no Mine Lift of its own in the game")
+		T.truthy(lift == nil or not lift:HasTag("MineLift"), "no Mine Lift")
 	end)
 
 	T.test("stormglass rift: 4-8 ambience spots of its kinds, at most 3 loops anywhere, no extra parts", function()

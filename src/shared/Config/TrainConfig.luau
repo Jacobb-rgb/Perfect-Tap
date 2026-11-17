@@ -2,7 +2,7 @@
 	Per-player ore trains (design v2, docs/plans/STEP2_PLAN.md).
 
 	You load the ore from your backpack at the Mine Station (one press, "Load
-	Train"; owner 2026-10-24) or a Mine Lift; it becomes your train's cargo. The train
+	Train"; owner 2026-10-24); it becomes your train's cargo. The train
 	leaves when it is full, when you press Send, or AutoDepartSeconds after
 	the last load. It rolls out of the station into a tunnel in the quarry
 	wall, comes out of a tunnel on the south coast, runs north along the
@@ -13,7 +13,6 @@
 
 local WorldLayout = require(script.Parent.WorldLayout)
 local BaseLayout = require(script.Parent.BaseLayout)
-local MineFloors = require(script.Parent.MineFloors)
 local PromptConfig = require(script.Parent.PromptConfig)
 
 export type Level = { Value: number, Price: number }
@@ -58,7 +57,7 @@ TrainConfig.DeliveryRetry = 3 -- seconds between tries when the pen is full
 TrainConfig.MaxCargoSaved = 200 -- hard cap per save (Cargo + TripCargo), DataStore safety (the top train with Express: 180)
 TrainConfig.MaxTripSpan = 600 -- clients refuse a TrainTrip with ArriveAt - DepartAt above this (the server never sends one)
 
--- The prompts on every Mine Station / Mine Lift PromptPoint (shared contract,
+-- The prompts on every Mine Station PromptPoint (shared contract,
 -- docs/plans/STEP2_PLAN.md): UIOffset = (0, slot * PromptSlotHeight). Load and
 -- Send are the server's (tagged PromptTag, attribute Action = "Load" | "Send"),
 -- Panel is the client's own untagged "Train" prompt. No two share a slot.
@@ -111,22 +110,15 @@ TrainConfig.CoastEast = { Vector3.new(RAIL_X, 0, TrainConfig.SouthPortalZ), Vect
 TrainConfig.PortalInset = 6 -- the quarry tunnel mouths stand this far in front of the quarry line's ends
 TrainConfig.BufferGap = 1.7 -- the coastal buffer stops' face, past the coastal lines' ends
 
--- Mine Lifts: throw ore in down in the caves, it goes into your train's cargo.
--- One per mine floor 2-6, where the floor area leaves room for it (MineFloors.LiftSpots), found
--- by the floor's Id (a lift's Id is its floor's Id), so a new floor in between renumbers safely.
-local function liftAt(floorId: string): Vector3
-	return MineFloors.liftPosition(MineFloors.get(floorId).Index) or Vector3.zero
-end
-TrainConfig.Lifts = {
-	{ Id = "EmberCaves", Position = liftAt("EmberCaves"), Size = Vector3.new(6, 5, 6) },
-	{ Id = "DeepHollow", Position = liftAt("DeepHollow"), Size = Vector3.new(6, 5, 6) },
-	{ Id = "SunkenPalace", Position = liftAt("SunkenPalace"), Size = Vector3.new(6, 5, 6) },
-	{ Id = "StormglassRift", Position = liftAt("StormglassRift"), Size = Vector3.new(6, 5, 6) },
-	{ Id = "HeartstoneCore", Position = liftAt("HeartstoneCore"), Size = Vector3.new(6, 5, 6) },
-}
+-- Mine Lifts: none (the owner 2026-11-14: "take the ore lift out of every location, it really
+-- bothers me there"). The ore from floors 2-6 goes up in the backpack (the elevator, BASE and the
+-- pen's Put In) and into the train at the Mine Station; a hook list that the Railway and
+-- TrainService still read, empty.
+export type Lift = { Id: string, Position: Vector3, Size: Vector3 }
+TrainConfig.Lifts = {} :: { Lift }
 
--- (Rocks and big decorations stay off the track, the station and the lifts:
--- their boxes are in WorldLayout.KeepOut.)
+-- (Rocks and big decorations stay off the track and the station: their boxes are in
+-- WorldLayout.KeepOut.)
 
 ---------------------------------------------------------------- helpers
 
