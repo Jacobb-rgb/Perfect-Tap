@@ -336,13 +336,13 @@ return function(T, Loader)
 						T.eq(slotWalls, 2, label .. " the door's slot lined on both sides")
 						T.eq(inWay, 0, label .. " nothing of the frame in the VIP way in")
 					end
-					-- (owner 2026-11-16: "no wall there, you can see behind the 3D object") the train band's
-					-- openings and the grotto tunnel lined with his mossy cliff: looks only, clear of the
-					-- trains' way through the portals and of the way in to the VIP door
+					-- (owner 2026-11-16: "no wall there, you can see behind the 3D object") the grotto
+					-- tunnel lined with his mossy cliff, clear of the way in to the VIP door (the train
+					-- band's linings went with its openings, owner 2026-11-17: no train)
 					local linings = model:FindFirstChild("OpeningLinings")
 					T.truthy(linings ~= nil, label .. " the openings' linings")
 					if linings then
-						local chunks, inTrain, inDoor = 0, 0, 0
+						local chunks, inBand, inDoor = 0, 0, 0
 						for _, d in linings:GetChildren() do
 							if d:IsA("BasePart") then
 								chunks += 1
@@ -352,9 +352,9 @@ return function(T, Loader)
 									label .. " a lining stops the camera only"
 								)
 								local mn, mx = box(d)
-								-- (the quarry line at z 24, the portal mouths 8.6 wide, 11.4 high)
-								if math.abs(mx.X) > 58 and mn.Z < 28.6 and mx.Z > 19.4 and mn.Y < 11.4 then
-									inTrain += 1
+								-- (the old train band, z 14 .. 39 in either side wall)
+								if math.abs(mx.X) > 58 and mn.Z < 39 and mx.Z > 14 then
+									inBand += 1
 								end
 								-- (the tunnel to the VIP door, z -8 .. 4, a body's height)
 								if mx.X > 72 and mn.Z < 3.4 and mx.Z > -7.4 and mn.Y < 6.5 then
@@ -362,8 +362,8 @@ return function(T, Loader)
 								end
 							end
 						end
-						T.le(18, chunks, label .. " the band's sides, the portals' surrounds and the grotto tunnel lined")
-						T.eq(inTrain, 0, label .. " nothing of the linings in the trains' way")
+						T.le(2, chunks, label .. " the grotto tunnel lined")
+						T.eq(inBand, 0, label .. " no lining left in the closed train band")
 						T.eq(inDoor, 0, label .. " nothing of the linings in the way to the VIP door")
 					end
 					-- (owner 2026-11-16: "board it up, an earth hill round it") an earth hill in each back
@@ -414,6 +414,29 @@ return function(T, Loader)
 							end
 						end
 						T.eq(hillBodies, 2, label .. " both hills' bodies")
+					end
+					-- (owner 2026-11-17: no train, "remove all ... rails") the old quarry line modelled
+					-- into the diorama's floor (rails up to 0.8 high, x -48 .. 48, z 21 .. 27) is covered:
+					-- west of the still train's platform by a sand mound walked over, no rock spawn on it
+					local cover = model:FindFirstChild("TrackCover")
+					T.truthy(cover ~= nil, label .. " the old track covered")
+					if cover then
+						local t = Floor.TrackCover
+						local mound = cover:FindFirstChild("Mound")
+						T.truthy(mound ~= nil and mound.CanCollide, label .. " the mound is walked on")
+						if mound then
+							local mn, mx = box(mound)
+							T.truthy(mn.X <= -48 and mx.X >= 4, label .. " the mound from the rails' west end to the platform")
+							T.truthy(mn.Z <= 21 and mx.Z >= 27, label .. " the mound over both rails")
+							T.le(0.85, mx.Y, label .. " the mound over the rails' tops")
+						end
+						for _, spawn in DioramaData.Quarry.Spawns do
+							local on = spawn[1] > t.X0 - t.Slope
+								and spawn[1] < t.X1
+								and spawn[3] > t.Z0 - t.Slope
+								and spawn[3] < t.Z1 + t.Slope
+							T.falsy(on, label .. " no rock spawn on the mound")
+						end
 					end
 					-- (2026-11-17, the Meshy chat's review: the back wall, the side walls' back ends and
 					-- the hills stood up to 6 studs inside the Ember Caves, by its way out) nothing of the
@@ -629,6 +652,17 @@ return function(T, Loader)
 						end
 					end
 					T.eq(holes, 0, label .. " the room's walls have no holes")
+					-- (owner 2026-11-17: "remove all departures, rails and holes in the wall") the
+					-- quarry's side walls are closed: no opening on E or W but the grotto door
+					if index == 1 then
+						local sideOpenings = 0
+						for _, o in look.Openings or {} do
+							if (o.Side == "E" or o.Side == "W") and not (o.Side == "E" and o.To < 8) then
+								sideOpenings += 1
+							end
+						end
+						T.eq(sideOpenings, 0, label .. " no train band in the side walls")
+					end
 					-- and Land's passages stay open: no part of the room in an opening's lane (its width
 					-- less a stud each side, from the ground up to its top, through the wall)
 					for _, o in look.Openings or {} do

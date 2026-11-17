@@ -89,8 +89,9 @@ Diorama.Floors = {
 		-- behind them at all") rock walls round the open pit over its own cliffs and the part-built
 		-- rim behind them: the sides up to the diorama's tallest rocks, the town side just over the
 		-- rim (the town still looks in), the back is the DEPTHS portal and the massif. Openings: the
-		-- ramp down from the town, the train band (a lintel over the trains' clearance) and the
-		-- grotto door. (owner 2026-11-16, his shot down the side wall: "the gap's still there: board
+		-- ramp down from the town and the grotto door (the train band's two went with the train, owner
+		-- 2026-11-17: "remove all departures, rails and holes in the wall": the side walls run on over
+		-- it). (owner 2026-11-16, his shot down the side wall: "the gap's still there: board
 		-- it up, an earth hill round it, a wall in front and nobody sees it") the back too: the side
 		-- walls ended on the back line and the corners between them and the diorama's back cliff
 		-- showed the massif's waterfall and the rim; a back wall as tall as the sides, with the same
@@ -120,9 +121,6 @@ Diorama.Floors = {
 			{ Side = "S", From = -11, To = 11 },
 			-- (the DEPTHS portal's block, a little wider)
 			{ Side = "N", From = -22.4, To = 22.4 },
-			-- (over the train portals' frames and buttresses, the trains' clearance far below)
-			{ Side = "E", From = 13, To = 40, Top = 16.2 },
-			{ Side = "W", From = 13, To = 40, Top = 16.2 },
 			-- (a little under Land's grotto tunnel roof at local 11: no shared face)
 			{ Side = "E", From = -9.5, To = 5.5, Top = 10.8 },
 		},

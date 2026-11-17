@@ -15,9 +15,11 @@
 	other packages, so the floor leaves these spaces free:
 	  front   Land builds the town-side cliff (z +56..) and the ramp from
 	          0, +12, +68 down to 0, 0, +40: no front wall, x -10..10 clear
-	  train   z +18..+39 stays clear (track at z +24, Mine Station x 12..40);
-	          from z +14 to +39 the side walls step back to |x| 71.5 behind
-	          Railway's tunnel portals (x +-66); no ore lift of our own
+	  train   none since 2026-11-17 (owner: "completely remove this system"): a
+	          still train on its platform where the Mine Station stood
+	          (World/TrainDisplay, x 4..48, z +22..+32); the part-built side walls
+	          still step back to |x| 71.5 from z +14 to +39 where the line ran,
+	          the diorama's walls run on over it, closed; no ore lift
 	  grotto  the east wall opens at z -8..+4 (floor to +11) into Land's
 	          tunnel to the VIP Grotto (a rock lintel above it)
 	  back    the lobby's DEPTHS portal (x -22..22, z -60..-45) frames the way
@@ -569,8 +571,6 @@ local function buildParts(parent: Instance, origin: CFrame, opts: { Cutaway: boo
 
 	if cutaway then
 		tunnel(c, SLATE2, SLATE3, SLATE1)
-		-- stand-in for Railway's quarry line (the track the ore trains take at z +24)
-		Style.rails(model, pt(c, -66, 0, 24), pt(c, 66, 0, 24), { SleeperEvery = 3 })
 	end
 
 	------------------------------------------------------------ wall crystals (copper and quartz)
@@ -809,11 +809,10 @@ Floor.FillSand = Color3.fromRGB(205, 142, 104) -- the diorama's painted sand (th
 -- of its cut walls.)
 Floor.DioramaFills = {
 	{ Min = Vector3.new(-24, -2, -59), Max = Vector3.new(24, 0, -44) }, -- under the DEPTHS portal
+	-- (the old train band's floor: a sandy bay up to the side walls, closed over it 2026-11-17)
 	{ Min = Vector3.new(-59.5, -2, 13), Max = Vector3.new(-45, 0, 40) }, -- the train band, west
 	{ Min = Vector3.new(45, -2, 13), Max = Vector3.new(59.5, 0, 40) }, -- the train band, east
 	{ Min = Vector3.new(45, -2, -9), Max = Vector3.new(59.5, 0, 5) }, -- the grotto door
-	{ Min = Vector3.new(-70, -2, 13), Max = Vector3.new(-59.5, -0.1, 40) }, -- the band's west end
-	{ Min = Vector3.new(59.5, -2, 13), Max = Vector3.new(70, -0.1, 40) }, -- the band's east end
 	{ Min = Vector3.new(59.5, -2, -9), Max = Vector3.new(70, -0.1, 5) }, -- out to the grotto tunnel
 	{ Min = Vector3.new(-72.5, -3, -59), Max = Vector3.new(72.5, -0.45, 66) }, -- the underlay (out under the town-side wall)
 }
@@ -941,27 +940,17 @@ end
 
 --[[
 	(owner 2026-11-16, three Studio shots: "you can see there's no wall there, you can see behind the
-	3D object: put a wall there") Through the train band's two openings and the VIP door's slot the old
-	part-built pit still showed beside the diorama's painted rock: the side terraces' ends either side
-	of the band, the band's back wall and the light stone buttress round each tunnel portal, and the
-	grotto tunnel's flat walls up to the VIP door. They are faced with the owner's mossy cliff
-	(Diorama.meshFill, looks only: the solid parts right behind stop the camera); the portals' timber frames, mouths and
-	steel lintels and the VIP door stay in view. Per piece (east side; the west mirrors x): the front's
-	plane, which way it faces, its span and height, its depth behind the front. The band's sides stand
-	just in front of the side terraces' ends (BAND_Z0 / BAND_Z1: a lining behind them would stay
-	hidden), the back pieces in front of the buttress either side of the
-	frame (the frame: z 24 +-5.8 round the quarry line, Railway.portalFrame) and over its lintel, the
-	tunnel's in front of its walls (z -8 / 4, Land's grotto tunnel) up to the door (x 79.5).
+	3D object: put a wall there") Through the VIP door's slot the old part-built pit showed beside the
+	diorama's painted rock: the grotto tunnel's flat walls up to the VIP door. They are faced with the
+	owner's mossy cliff (Diorama.meshFill: the camera stops at it, the solid parts right behind stop
+	everyone); the VIP door stays in view. Per piece: the front's plane, which way it faces, its span
+	and height, its depth behind the front: in front of the tunnel's walls (z -8 / 4, Land's grotto
+	tunnel) up to the door (x 79.5). (The train band's two openings were lined the same way until the
+	owner took the train out, 2026-11-17: "remove all departures, rails and holes in the wall"; the
+	side walls run on over the band, closed.)
 ]]
 type Lining = { Axis: string, At: number, Facing: number, From: number, To: number, Y0: number, Y1: number, Depth: number }
 Floor.OpeningLinings = {
-	Band = {
-		{ Axis = "Z", At = BAND_Z0 + 0.3, Facing = 1, From = 58.45, To = 73.5, Y0 = -1, Y1 = 19, Depth = 4 },
-		{ Axis = "Z", At = BAND_Z1 - 0.3, Facing = -1, From = 58.45, To = 73.5, Y0 = -1, Y1 = 19, Depth = 4 },
-		{ Axis = "X", At = 64.3, Facing = -1, From = BAND_Z0 + 0.3, To = 18.35, Y0 = -1, Y1 = 19, Depth = 9.5 },
-		{ Axis = "X", At = 64.3, Facing = -1, From = 29.65, To = BAND_Z1 - 0.3, Y0 = -1, Y1 = 19, Depth = 9.5 },
-		{ Axis = "X", At = 65.8, Facing = -1, From = 18, To = 30, Y0 = 13, Y1 = 19, Depth = 8 },
-	} :: { Lining },
 	Tunnel = {
 		{ Axis = "Z", At = DOOR_Z0 + 0.3, Facing = 1, From = 72.3, To = 79.4, Y0 = -1, Y1 = 10.9, Depth = 4 },
 		{ Axis = "Z", At = DOOR_Z1 - 0.3, Facing = -1, From = 72.3, To = 79.4, Y0 = -1, Y1 = 10.9, Depth = 4 },
@@ -1007,12 +996,6 @@ local function openingLinings(model: Model, origin: CFrame)
 		else
 			local x0, x1 = math.min(n0 * mirror, n1 * mirror), math.max(n0 * mirror, n1 * mirror)
 			table.insert(boxes, { Vector3.new(x0, y0, s0), Vector3.new(x1, y1, s1) })
-		end
-	end
-	for _, mirror in { 1, -1 } do
-		for _, l in Floor.OpeningLinings.Band do
-			fill(l, mirror)
-			addBox(l, mirror)
 		end
 	end
 	for _, l in Floor.OpeningLinings.Tunnel do
@@ -1145,6 +1128,71 @@ local function cornerHills(model: Model, origin: CFrame)
 	end
 end
 
+--[[
+	(owner 2026-11-16 / 2026-11-17: no train any more, "remove all departures, rails and holes in the
+	wall") The owner's diorama has the old quarry line modelled into its floor: two rails on
+	sleepers, up to 0.8 high, local x -48 .. +48 along z 21 .. 27 (measured on
+	Floor_QuarryBHD.glb). East of x 4 the still train's platform (World/TrainDisplay: x 4 .. 48,
+	z 20 .. 28, 0.8 high) covers them; west of it a low mound of the diorama's sand lies over them,
+	its long sides and its west end sloped so it is walked over like the floor.
+]]
+Floor.TrackCover = { X0 = -48.6, X1 = 4, Z0 = 21, Z1 = 27, Top = 0.95, Slope = 1.4 }
+
+local function trackCover(model: Model, origin: CFrame)
+	local m = Instance.new("Model")
+	m.Name = "TrackCover"
+	m.Parent = model
+	local t = Floor.TrackCover
+	local sand = Floor.FillSand
+	local props = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false }
+	local function tag(p: BasePart)
+		p:AddTag("NoStuds")
+	end
+	local bottom = -0.4
+	local h = t.Top - bottom
+	local midX, midZ = (t.X0 + t.X1) / 2, (t.Z0 + t.Z1) / 2
+	local mound = Geo.block(
+		m,
+		origin * CFrame.new(midX, bottom + h / 2, midZ),
+		Vector3.new(t.X1 - t.X0, h, t.Z1 - t.Z0),
+		sand,
+		Enum.Material.Sand,
+		props
+	)
+	mound.Name = "Mound"
+	tag(mound)
+	-- (a wedge's high side is its +Z: the north side rises toward +z, the south one turned round,
+	-- the west end turned to rise toward +x)
+	local north = Geo.wedge(
+		m,
+		origin * CFrame.new(midX, bottom + h / 2, t.Z0 - t.Slope / 2),
+		Vector3.new(t.X1 - t.X0, h, t.Slope),
+		sand,
+		Enum.Material.Sand,
+		props
+	)
+	local south = Geo.wedge(
+		m,
+		origin * CFrame.new(midX, bottom + h / 2, t.Z1 + t.Slope / 2) * CFrame.Angles(0, math.pi, 0),
+		Vector3.new(t.X1 - t.X0, h, t.Slope),
+		sand,
+		Enum.Material.Sand,
+		props
+	)
+	local west = Geo.wedge(
+		m,
+		origin * CFrame.new(t.X0 - t.Slope / 2, bottom + h / 2, midZ) * CFrame.Angles(0, math.pi / 2, 0),
+		Vector3.new(t.Z1 - t.Z0 + 2 * t.Slope, h, t.Slope),
+		sand,
+		Enum.Material.Sand,
+		props
+	)
+	for _, w in { north, south, west } do
+		w.Name = "MoundSide"
+		tag(w)
+	end
+end
+
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
 	if not Diorama.has(Floor.Index) then
 		return buildParts(parent, origin, opts)
@@ -1235,6 +1283,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 		vipFrame(model, origin, lineE)
 		openingLinings(model, origin)
 		cornerHills(model, origin)
+		trackCover(model, origin)
 	end
 	for _, fill in Floor.DioramaFills do
 		local size = fill.Max - fill.Min
