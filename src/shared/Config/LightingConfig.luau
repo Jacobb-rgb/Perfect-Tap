@@ -143,7 +143,9 @@ local SUNSET_SKY = {
 -- smaller, softer halos. Reflections of the bright picture sky (EnvironmentSpecularScale) are
 -- halved in the caves, where they showed as white glints on crystals. Much of the mines' glare was
 -- also their floors drawing without textures (grey under bright lights, MeshAssets: texture packs);
--- with their real, darker textures the caves keep most of their exposure.
+-- with their real, darker textures the caves keep most of their exposure. (The Workbench, the Vault
+-- and the crate room keep their earlier light and bloom: his pictures were of the town, the quarry
+-- and the floors, and he had approved the crate's strong bloom; integrator review 2026-11-17.)
 --
 -- Owner 2026-11-15 evening (his Studio test, floor 3 nearly white: "from Location 3 to the last,
 -- slightly reduce the brightness ... crystals, rocks and objects clearly visible, proper contrast,
@@ -417,12 +419,12 @@ LightingConfig.Presets = {
 		Lighting = {},
 		Atmosphere = {},
 		ColorCorrection = {
-			Brightness = 0.02,
+			Brightness = 0.04,
 			Contrast = 0.12,
 			Saturation = 0.12,
 			TintColor = Color3.new(1, 0.95, 0.88),
 		},
-		Bloom = { Intensity = 0.45, Size = 20, Threshold = 1.2 },
+		Bloom = { Intensity = 0.6, Size = 24, Threshold = 1.1 },
 		SunRays = {},
 	},
 	-- Inside the Blaster Vault (a part tagged LightingZone with Preset =
@@ -442,7 +444,7 @@ LightingConfig.Presets = {
 			Saturation = 0.34,
 			TintColor = Color3.new(1, 0.95, 0.9),
 		},
-		Bloom = { Intensity = 0.45, Size = 22, Threshold = 1.15 },
+		Bloom = { Intensity = 0.6, Size = 24, Threshold = 1.05 },
 		SunRays = {},
 	},
 	-- The elevator's travel cinematic (ElevatorTravelController, owner 2026-11-15): inside the
@@ -484,7 +486,7 @@ LightingConfig.Presets = {
 			Brightness = 0.2,
 			Ambient = Color3.new(0.36, 0.36, 0.38),
 			OutdoorAmbient = Color3.new(0.15, 0.15, 0.16),
-			ExposureCompensation = 0.35,
+			ExposureCompensation = 0.47,
 			EnvironmentDiffuseScale = 0.1,
 			EnvironmentSpecularScale = 0.8,
 		},
@@ -502,7 +504,7 @@ LightingConfig.Presets = {
 			Saturation = 0.3,
 			TintColor = Color3.new(1, 1, 1),
 		},
-		Bloom = { Intensity = 0.7, Size = 28, Threshold = 1.1 },
+		Bloom = { Intensity = 0.9, Size = 32, Threshold = 1.0 },
 		SunRays = { Intensity = 0, Spread = 0.6 },
 	},
 } :: { [string]: Preset }

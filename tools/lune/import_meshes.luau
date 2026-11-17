@@ -16,6 +16,13 @@
 	Lune 0.8.9 can't read its zstd chunks and Content properties.
 
 	  lune run tools/lune/import_meshes.luau <hotovo.rbxl | .rbxm> [set name]
+	  lune run tools/lune/import_meshes.luau repack        (MeshAssets.rbxm again, nothing imported:
+	                                                         after a merge of two versions of it, say)
+
+	What ships (integrator review 2026-11-17: the file sent every client ~4.7 MB at join): only what
+	collides keeps its collision hull (Rock_* and Prop_MossyCliff, see `collides`), every other
+	template is CollisionFidelity Box and tools/meshy/strip_hulls.mjs drops its hull data; and a
+	floor's older tile sets go once a newer one is in whole (MineFloors.floorTiles never builds them).
 
 	Before it: python3 tools/meshy/glb_albedo.py tools/meshy/albedo.json <the set's .glb files> (each
 	template's fallback colour). The tool itself adds the file's texture packs to
@@ -33,7 +40,8 @@ local Loader = require("./lib/loader")
 local MeshLooks = require("./lib/mesh_looks")
 
 local path = process.args[1]
-assert(path, "usage: lune run tools/lune/import_meshes.luau <hotovo.rbxl|.rbxm> [set name]")
+assert(path, "usage: lune run tools/lune/import_meshes.luau <hotovo.rbxl|.rbxm> [set name] | repack")
+local repack = path == "repack"
 local setName = process.args[2] or (path:match("(3D_modely_[%w%-_]+)") or "")
 
 local root = process.cwd
@@ -43,14 +51,16 @@ local Catalog = Loader.requirePath("ReplicatedStorage.Shared.Config.MeshCatalog"
 local OUT = root .. "/src/shared/Assets/MeshAssets.rbxm"
 local UPLOAD = root .. "/src/shared/Config/MeshUpload.luau"
 
-local bytes = fs.readFile(path)
+local bytes = if repack then "" else fs.readFile(path)
 -- the file's texture packs (a Studio save carries one per SurfaceAppearance) into the table first
-do
+if not repack then
 	local packs = process.spawn("node", { root .. "/tools/meshy/texture_packs.mjs", "extract", path })
 	print((string.gsub(packs.stdout .. packs.stderr, "%s+$", "")))
 end
 local tops: { any }
-if path:lower():match("%.rbxlx?$") then
+if repack then
+	tops = {}
+elseif path:lower():match("%.rbxlx?$") then
 	local ok, game = pcall(roblox.deserializePlace, bytes)
 	if not ok then
 		-- a place from a current Studio (zstd chunks, Content properties): Lune 0.8.9 can't read it as
@@ -199,6 +209,13 @@ end
 	marzipan", the owner 2026-11-14). The floors and the elevator tower always draw at full detail
 	(about 160-300k triangles a floor, only one floor around a player at a time).
 ]]
+-- The templates whose clones collide or answer raycasts by their shape (RockBuilder's Rock1,
+-- Diorama.meshFill's walls); every other clone is a look only (or a click target, where its box will
+-- do: the ore items) and needs no collision hull.
+local function collides(name: string): boolean
+	return string.match(name, "^Rock_") ~= nil or name == "Prop_MossyCliff"
+end
+
 local function fidelity(t: any)
 	if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
 		t.RenderFidelity = roblox.Enum.RenderFidelity.Precise
@@ -233,7 +250,9 @@ if fs.isFile(OUT) then
 	end
 end
 local importYaw, yawPairs = yawFromTiles()
-if importYaw then
+if repack then
+	print("repack: " .. kept .. " templates from " .. OUT)
+elseif importYaw then
 	print(string.format("the importer turned the models by %d degrees (from %d floor tile pairs)", importYaw, yawPairs))
 else
 	importYaw = keptYaw or 180
@@ -285,9 +304,45 @@ for _, t in folder:GetChildren() do
 	end
 end
 
+-- a floor's older tile sets go once a newer one is in whole: MineFloors.floorTiles takes the
+-- newest whole set (FloorsNext, FloorsHD, Floors), the others would only load on every client
+local superseded: { [string]: boolean } = {}
+for id, first in Catalog.Floors do
+	local sets: { { string } } = {}
+	for _, tiles in { (Catalog.FloorsNext or {})[id] or {}, (Catalog.FloorsHD or {})[id] or {}, first } do
+		if #tiles > 0 then
+			table.insert(sets, tiles)
+		end
+	end
+	local inUse = false
+	for _, tiles in sets do
+		local whole = true
+		for _, name in tiles do
+			whole = whole and folder:FindFirstChild(name) ~= nil
+		end
+		for _, name in tiles do
+			if inUse then
+				superseded[name] = true
+			end
+		end
+		inUse = inUse or whole
+	end
+end
+local dropped = 0
+for name in superseded do
+	local t = folder:FindFirstChild(name)
+	if t then
+		t:Destroy()
+		dropped += 1
+	end
+end
+if dropped > 0 then
+	print(dropped .. " templates of older floor sets left out (a newer set of their floor is in whole)")
+end
+
 local missing: { string } = {}
 for name in Catalog.Assets do
-	if not folder:FindFirstChild(name) then
+	if not folder:FindFirstChild(name) and not superseded[name] then
 		table.insert(missing, name)
 	end
 end
@@ -334,6 +389,25 @@ if not fs.isDir(root .. "/src/shared/Assets") then
 	fs.writeDir(root .. "/src/shared/Assets")
 end
 fs.writeFile(OUT, roblox.serializeModel({ folder }))
+-- every template but the colliding ones Box and without its hull (Lune writes no CollisionFidelity
+-- and can't clear SharedStrings: tools/meshy/strip_hulls.mjs; a Lune write after it would drop the
+-- Box again, so it comes last)
+do
+	local args = { root .. "/tools/meshy/strip_hulls.mjs", "strip", OUT }
+	for _, t in folder:GetChildren() do
+		if collides(t.Name) then
+			table.insert(args, t.Name)
+		end
+	end
+	local result = process.spawn("node", args)
+	assert(result.ok, "strip_hulls.mjs failed: " .. result.stderr)
+	print((string.gsub(result.stdout, "%s+$", "")))
+	print(string.format("MeshAssets.rbxm: %.2f MB", #fs.readFile(OUT) / 1e6))
+end
+if repack then
+	print("wrote " .. OUT)
+	return
+end
 fs.writeFile(
 	UPLOAD,
 	"--!strict\n"

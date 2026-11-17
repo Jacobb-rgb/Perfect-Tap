@@ -64,6 +64,10 @@ MeshNature.TrunkWidth = 0.2
 MeshNature.TrunkHeight = 0.5
 -- The roots sink this much (of the tree's height) into the ground, so no root edge floats.
 MeshNature.TreeSink = 0.01
+-- (integrator review 2026-11-17: the town belts' plot-side row came out at about 40 % of its old
+-- height, its crowns at body height) a tree in a narrow strip may stand up to this much taller
+-- than its round crown's room allows (MeshNature.tree's `minHeight`)
+MeshNature.MaxStretch = 1.6
 
 -- The lily pond's open water (Prop_GardenPond, measured in the processed file), as fractions of
 -- the mesh's box: its surface over the ground, its size and its centre's offset (X, Z).
@@ -176,12 +180,15 @@ end
 	The part tree in `m` (built by its builder) -> the owner's tree. It stands on the foot of
 	`trunk` (a quarter turn picked from the spot), never taller than the old tree, its crown
 	`reach` studs round the trunk (the room its placement planned) or, without `reach`, as wide
-	as fits inside the old tree's box round the trunk. Where the old trunk collided an invisible box
+	as fits inside the old tree's box round the trunk. With `minHeight` (a share of the old tree's
+	height: the roadside belt trees, whose old trunks were lifted so the crowns clear the heads) it
+	stands at least that tall, stretched up (at most MaxStretch) where its room is narrow. Where the
+	old trunk collided an invisible box
 	named "Trunk" stands in the mesh's trunk (never wider than the old one). The mesh ("Leaves")
 	comes after it: the model's first non-colliding, shadow-casting part (Flora/Trees.crownPart
 	hangs the petals on it). Returns the mesh, or nil (no template: `m` keeps its parts).
 ]]
-function MeshNature.tree(m: Model, kind: string, trunk: BasePart, reach: number?): MeshPart?
+function MeshNature.tree(m: Model, kind: string, trunk: BasePart, reach: number?, minHeight: number?): MeshPart?
 	local asset = MeshNature.treeAsset(kind)
 	local own = MeshKit.box(asset)
 	if not MeshKit.has(asset) or not own then
@@ -196,6 +203,10 @@ function MeshNature.tree(m: Model, kind: string, trunk: BasePart, reach: number?
 	local room = reach or math.min(foot.X - lo.X, hi.X - foot.X, foot.Z - lo.Z, hi.Z - foot.Z)
 	local scale = math.min(height / own.Y, 2 * room / math.max(own.X, own.Z))
 	local size = own * scale
+	if minHeight then
+		local tall = math.min(height, size.Y * MeshNature.MaxStretch, math.max(size.Y, minHeight * height))
+		size = Vector3.new(size.X, tall, size.Z)
+	end
 	local cf = CFrame.new(foot.X, foot.Y + size.Y * (0.5 - MeshNature.TreeSink), foot.Z) * turnAt(foot)
 	local mesh = MeshKit.part(asset, size, cf, { Name = "Leaves" })
 	if not mesh then

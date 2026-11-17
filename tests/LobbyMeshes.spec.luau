@@ -22,6 +22,8 @@ return function(T, Loader)
 	local Style = Loader.requirePath("ServerScriptService.Server.World.Lobby.Style")
 	local Kit = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Kit")
 	local Meadow = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Meadow")
+	local Trees = Loader.requirePath("ServerScriptService.Server.World.Lobby.Flora.Trees")
+	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 
 	local function parts(root: any): { any }
 		local out = {}
@@ -176,18 +178,25 @@ return function(T, Loader)
 			T.truthy(collider and collider.CanCollide and collider.Transparency == 1 and collider.Anchored, label .. ": a solid trunk")
 			T.truthy(MeshNature.isCollider(collider) and not collider.CastShadow, label .. ": marked, no shadow")
 			T.truthy(collider.Size.X <= math.min(trunk.Size.X, trunk.Size.Z) + 1e-6, label .. ": never wider than the old trunk")
+			T.near(collider.CFrame.Position.X, p.X, 0.01, label .. ": in the mesh's trunk (x)")
+			T.near(collider.CFrame.Position.Z, p.Z, 0.01, label .. ": in the mesh's trunk (z)")
 			T.eq(mesh:GetChildren()[1], collider, label .. ": the trunk comes first (FindFirstChildWhichIsA)")
 		end
-		-- a leaning belt tree keeps inside its old crown's box (off the bases)
-		local plain, mesh = twice("lean", function(p, rng)
-			return Kit.beltTree(p, CFrame.new(75.5, 0, 20), "Green", rng, 1.15, Vector3.new(-1, 0, 0), 2.5)
-		end)
-		local lo, hi = MeshNature.bounds(plain)
-		local mlo, mhi = MeshNature.bounds(mesh)
-		T.truthy(
-			mlo.X >= lo.X - 0.01 and mhi.X <= hi.X + 0.01 and mlo.Z >= lo.Z - 0.01 and mhi.Z <= hi.Z + 0.01,
-			"the leaning crown stays in its box"
-		)
+		-- a leaning belt tree (the plot-side row, 3.5 studs from the pads; integrator review
+		-- 2026-11-17: it came out at ~40 % of its old height, its crown at body height) keeps its crown
+		-- Kit.LeanReach round the trunk (off the pads) and at least 0.7x its old height
+		for _, scale in { 1.0, 1.15 } do
+			local plain, mesh = twice(`lean {scale}`, function(p, rng)
+				return Kit.beltTree(p, CFrame.new(75.5, 0, 20), "Green", rng, scale, Vector3.new(-1, 0, 0), 2.5)
+			end)
+			local lo, hi = MeshNature.bounds(plain)
+			local mlo, mhi = MeshNature.bounds(mesh)
+			local leaves = mesh:FindFirstChild("Leaves")
+			T.near(math.max(leaves.Size.X, leaves.Size.Z), 2 * Kit.LeanReach, 0.01, `lean {scale}: its crown's room`)
+			T.truthy(mhi.X < WorldLayout.PlotGrid.FrontX, `lean {scale}: off the pads ({mhi.X})`)
+			T.truthy(mhi.Y - mlo.Y >= 0.7 * (hi.Y - lo.Y), `lean {scale}: at least 0.7x its old height`)
+			T.truthy(leaves.Size.Y <= leaves.Size.X * MeshNature.MaxStretch * 1.07, `lean {scale}: stretched up at most MaxStretch`)
+		end
 	end)
 
 	T.test("lobby meshes: no lake meshes, a pond keeps its part look with every model uploaded", function()
@@ -243,6 +252,56 @@ return function(T, Loader)
 	Fakes(Loader, true)
 	local map = world()
 	local lobby = map.Emberfall.Lobby
+
+	T.test("lobby meshes: the roadside belt trees stand tall, the plot-side row off the pads", function()
+		-- (integrator review 2026-11-17: the plot-side row came out at ~40 % of its old height, its
+		-- crowns at body height: the old crowns leaned over the road on lifted trunks)
+		local lifted: { [number]: boolean } = {}
+		local leanX = 0
+		for _, row in Trees.BeltRows do
+			if row.Lift then
+				lifted[row.X] = true
+			end
+			if row.Lean then
+				leanX = row.X
+			end
+		end
+		local function rowOf(p: any): number?
+			for x in lifted do
+				if math.abs(math.abs(p.X) - x) < 1 then
+					return x
+				end
+			end
+			return nil
+		end
+		local old: { [string]: number } = {}
+		for _, d in plainMap.Emberfall.Lobby.Flora:GetDescendants() do
+			local trunk = if d:IsA("Model") and d.Name == "Tree" and d.Parent.Name == "TownBelt" then d:FindFirstChild("Trunk") else nil
+			if trunk and rowOf(trunk.CFrame.Position) then
+				local _, hi = MeshNature.bounds(d)
+				local foot = trunk.CFrame.Position.Y - trunk.Size.Y / 2
+				old[string.format("%.1f,%.1f", trunk.CFrame.Position.X, trunk.CFrame.Position.Z)] = hi.Y - foot
+			end
+		end
+		local count, plotSide = 0, 0
+		for _, d in lobby.Flora:GetDescendants() do
+			local leaves = if d:IsA("Model") and d.Name == "Tree" and d.Parent.Name == "TownBelt" then d:FindFirstChild("Leaves") else nil
+			local p = leaves and leaves.CFrame.Position
+			local was = p and old[string.format("%.1f,%.1f", p.X, p.Z)]
+			if leaves and p and was then
+				count += 1
+				local label = string.format("the belt tree at (%.1f, %.1f)", p.X, p.Z)
+				local tall = leaves.Size.Y * (1 - MeshNature.TreeSink)
+				T.truthy(tall >= 0.7 * was, `{label}: at least 0.7x its old height ({tall} of {was})`)
+				if rowOf(p) == leanX then
+					plotSide += 1
+					local back = math.abs(p.X) + math.max(leaves.Size.X, leaves.Size.Z) / 2
+					T.truthy(back < WorldLayout.PlotGrid.FrontX, `{label}: off the pads ({back})`)
+				end
+			end
+		end
+		T.truthy(count >= 50 and plotSide >= 40, `the roadside rows have their trees ({count}, {plotSide} plot-side)`)
+	end)
 
 	T.test("lobby meshes: the town's trees are the owner's trees, sway-safe and on their old spots", function()
 		local feet: { [string]: boolean } = {}

@@ -484,7 +484,10 @@ return function(T, Loader)
 				-- cover or fills: a smooth lawn out to the mountains, the east bank over the old grotto
 				-- hollow, invisible walls on the model's west, east and back edges
 				if index == 1 and newest then
-					for _, gone in { "Room", "QuarryRim", "CornerHills", "TrackCover", "Fill" } do
+					-- (the old line modelled into his floor is covered as on the sharper set: the owner,
+					-- "remove all ... rails"; integrator review 2026-11-17)
+					T.truthy(model:FindFirstChild("TrackCover"), label .. " the old rails covered")
+					for _, gone in { "Room", "QuarryRim", "CornerHills", "Fill" } do
 						T.eq(model:FindFirstChild(gone), nil, label .. " no " .. gone)
 					end
 					for _, d in model:GetDescendants() do
@@ -516,7 +519,17 @@ return function(T, Loader)
 						end
 						T.truthy(d:HasTag("NoStuds"), label .. " smooth, no studs: " .. d.Name)
 						local mn, mx = bounds(d)
-						T.le(k.Back - 0.01, mn.Z, label .. " nothing past the Ember Caves' wall: " .. d.Name)
+						if d.Name == "BackFill" then
+							-- (beside the Ember Caves, never in them: their side walls end at |x| 66.7)
+							T.le(
+								k.BackFill.X0,
+								math.min(math.abs(mn.X), math.abs(mx.X)) + 0.01,
+								label .. " a back filler beside the Ember Caves"
+							)
+							T.le(mx.Z, k.Back + 0.01, label .. " a back filler behind the lawn")
+						else
+							T.le(k.Back - 0.01, mn.Z, label .. " nothing past the Ember Caves' wall: " .. d.Name)
+						end
 						if d.Name == "Turf" then
 							turfs += 1
 							T.near(mx.Y, k.TurfTop, 0.01, label .. " the lawn's grass at the town's level")
@@ -542,6 +555,29 @@ return function(T, Loader)
 					T.eq(turfs, 2, label .. " a lawn either side")
 					T.eq(bodies, 4, label .. " the walls: west, east, the back either side of the portal")
 					T.eq(slopes, 3, label .. " the east bank's three slopes")
+					-- (integrator review 2026-11-17) the lawn runs on under Land's ground (it starts at
+					-- WorldLayout.Quarry.Max.Z: no slot to fall through where the rim road meets it)
+					local townEdge = WorldLayout.Quarry.Max.Z - origin.Position.Z
+					T.le(townEdge + 0.3, k.TownEdge, label .. " the lawn tucks under the town's ground")
+					local fills, faces = 0, 0
+					for _, d in around:GetChildren() do
+						if d.Name == "BackFill" then
+							fills += 1
+							T.truthy(d.CanCollide, label .. " a back filler is solid")
+						elseif d.Name == "TownFace" then
+							faces += 1
+							local mn, mx = bounds(d)
+							-- the ramp (Land: WorldLayout.Quarry.RampWidth wide) stays clear
+							T.le(
+								WorldLayout.Quarry.RampWidth / 2,
+								math.min(math.abs(mn.X), math.abs(mx.X)),
+								label .. " the ramp stays clear"
+							)
+							T.le(mx.Y, WorldLayout.Quarry.Max.Y - origin.Position.Y, label .. " the face stops at the town's level")
+						end
+					end
+					T.eq(fills, 2, label .. " both back corners filled")
+					T.eq(faces, 2, label .. " the town side's face either side of the ramp")
 					-- the outline closed from the ground up over the tallest cliff: just outside the model's
 					-- west and east edges all along, and its back either side of the portal
 					local function walled(p: any): boolean
@@ -582,6 +618,49 @@ return function(T, Loader)
 							label .. " a rock spawn in the pit"
 						)
 					end
+				end
+				-- (integrator review 2026-11-17: a void cell of the walk data was a hole to the void) one
+				-- solid underlay under the lowest ground across the room, and a sweep: every spot of the
+				-- room has something solid under it
+				do
+					local underlay = model:FindFirstChild("Underlay")
+					T.truthy(underlay and underlay:IsA("BasePart") and underlay.CanCollide, label .. " a solid underlay")
+					local lineLo, lineHi = Diorama.lines(index)
+					local solids = {}
+					for _, d in model:GetDescendants() do
+						if d:IsA("BasePart") and d.CanCollide then
+							table.insert(solids, d)
+						end
+					end
+					local holes = 0
+					local x = lineLo.X + 0.3
+					while x < lineHi.X - 0.3 do
+						local z = lineLo.Y + 0.3
+						while z < lineHi.Y - 0.3 do
+							local p = origin * V3.new(x, data.Bottom - 0.5, z)
+							local covered = false
+							for _, part in solids do
+								local q = part.CFrame:PointToObjectSpace(p)
+								local h = part.Size / 2
+								-- (under it or round it, reaching down past it: a floor or a wall, not a ceiling)
+								if
+									math.abs(q.X) <= h.X + 0.01
+									and math.abs(q.Z) <= h.Z + 0.01
+									and q.Y <= h.Y + 0.01
+									and q.Y >= -h.Y - 3
+								then
+									covered = true
+									break
+								end
+							end
+							if not covered then
+								holes += 1
+							end
+							z += 1.5
+						end
+						x += 1.5
+					end
+					T.eq(holes, 0, label .. " no spot of the room without something solid under it")
 				end
 				-- budgets
 				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
@@ -1037,5 +1116,69 @@ return function(T, Loader)
 
 	T.test("diorama floors: the quarry from its newest set (the owner's whole model): contract and its smooth surroundings", function()
 		contract(true)
+	end)
+
+	-- (integrator review 2026-11-17: void pockets behind the lawn's back corners and a slot between the
+	-- lawn and the town's ground) In the whole world, with the owner's newest quarry: behind the lawn's
+	-- back edge and where it meets the town's ground something solid stands everywhere.
+	T.test("diorama floors: the newest quarry in the world leaves no void behind its lawns or by the town", function()
+		Fakes(Loader, true)
+		local ok, err = pcall(function()
+			T.truthy(MineFloors.usesNextSet(1), "the quarry from its newest set")
+			local WorldBuilder = Loader.requirePath("ServerScriptService.Server.World.WorldBuilder")
+			local Floor1 = Loader.requirePath("ServerScriptService.Server.World.Mine.Floor1Quarry")
+			local map = WorldBuilder.build(roblox.Instance.new("DataModel"):GetService("Workspace"))
+			local origin = MineFloors.Placement[1]
+			local solids = {}
+			for _, d in map:GetDescendants() do
+				if d:IsA("BasePart") and d.CanCollide then
+					table.insert(solids, d)
+				end
+			end
+			local function solidAt(p: any): boolean
+				local w = origin * p
+				for _, part in solids do
+					local q = part.CFrame:PointToObjectSpace(w)
+					local h = part.Size / 2
+					if math.abs(q.X) <= h.X + 0.01 and math.abs(q.Y) <= h.Y + 0.01 and math.abs(q.Z) <= h.Z + 0.01 then
+						return true
+					end
+				end
+				return false
+			end
+			local k = Floor1.Smooth
+			local lo, hi = Diorama.footprint(1)
+			local holes = {}
+			for _, side in { -1, 1 } do
+				local inner = (if side < 0 then lo.X else hi.X) - side * k.Under
+				-- just behind the lawn's back edge (where a step off it would land: the Ember Caves'
+				-- thin south wall stands 0.1 behind it, the fillers beside it), from its inner edge
+				-- out to its end, up to its top
+				local x = math.min(math.abs(inner), k.Out) + 0.2
+				while x < k.Out - 0.2 do
+					for _, y in { -1, 5, 11.5 } do
+						local p = V3.new(side * x, y, k.Back - 0.15)
+						if not solidAt(p) then
+							table.insert(holes, `back {side * x} {y}`)
+						end
+					end
+					x += 1
+				end
+				-- where the lawn meets the town's ground: under the grass across the meeting line
+				for xx = 61, 72 do
+					for z = math.floor(k.TownEdge) - 3, math.floor(k.TownEdge) + 2 do
+						local p = V3.new(side * xx, 11.5, z)
+						if not solidAt(p) then
+							table.insert(holes, `town {side * xx} {z}`)
+						end
+					end
+				end
+			end
+			T.eq(#holes, 0, "no void: " .. table.concat(holes, ", "):sub(1, 300))
+		end)
+		Fakes.unmount(Loader)
+		if not ok then
+			error(err, 0)
+		end
 	end)
 end

@@ -90,9 +90,25 @@ function AccessService.init()
 	MiningService.setMineGate(AccessService.mineRefusal)
 end
 
+-- A plot is let go (PlotService.onReleased runs before its owner is cleared): its cave's rocks go.
+function AccessService.released(plotId: number)
+	releasing[plotId] = true
+	refresh(plotId)
+	task.defer(function()
+		releasing[plotId] = nil
+	end)
+end
+
+-- A plot gets its owner (again: PlotService.reload, a rebirth, lets it go and assigns it in one
+-- thread, before the deferred clear above): it is owned now, so its cave grows for that owner.
+function AccessService.assigned(plotId: number)
+	releasing[plotId] = nil
+	refresh(plotId)
+end
+
 function AccessService.start()
 	PlotService.onAssigned(function(player: Player, plotId: number)
-		refresh(plotId)
+		AccessService.assigned(plotId)
 		if not perkWatch[player] then
 			perkWatch[player] = player:GetAttributeChangedSignal("Perk_ForgeVip"):Connect(function()
 				local id = PlotService.plotOf(player)
@@ -103,11 +119,7 @@ function AccessService.start()
 		end
 	end)
 	PlotService.onReleased(function(_player: Player, plotId: number)
-		releasing[plotId] = true
-		refresh(plotId)
-		task.defer(function()
-			releasing[plotId] = nil
-		end)
+		AccessService.released(plotId)
 	end)
 	Players.PlayerRemoving:Connect(function(player: Player)
 		local watch = perkWatch[player]

@@ -653,4 +653,48 @@ return function(T, Loader)
 			error(err, 0)
 		end
 	end)
+
+	-- (integrator review 2026-11-17: after a rebirth the cave stayed empty) PlotService.reload lets the
+	-- plot go and assigns it again in one thread, before the release's deferred clear
+	T.test("VIP cave: a rebirth (the plot let go and assigned again at once) grows its rocks back", function()
+		local mining = MiningService._test
+		local rocksFolder = Instance.new("Folder")
+		local markers = Instance.new("Folder")
+		local realBuild = OreNodeBuilder.buildRock
+		local realMarkers = WorldService.NodeSpawns
+		rawset(OreNodeBuilder, "buildRock", fakeRock)
+		mining.reset(rocksFolder)
+		WorldService.NodeSpawns = markers
+		local ok, err = pcall(function()
+			withOwners(function(owners)
+				AccessService.init()
+				for i, p in cave.Rocks do
+					local m = Instance.new("Part")
+					m.Size = Vector3.new(2, 2, 2)
+					m.CFrame = CFrame.new(p + Vector3.new(200, 1, 0))
+					m.Name = `Spot{i}`
+					m:SetAttribute("Zone", "Grotto")
+					m:SetAttribute("PlotId", 2)
+					m.Parent = markers
+				end
+				local owner = fakePlayer("Owner")
+				owner.attrs.Perk_ForgeVip = true
+				owners[2] = owner
+				AccessService.assigned(2)
+				T.eq(#rocksFolder:GetChildren(), #cave.Rocks, "the owner's cave grows")
+				-- PlotService.reload: the released callbacks (the owner still set), then the assigned ones
+				AccessService.released(2)
+				T.eq(#rocksFolder:GetChildren(), 0, "let go: the rocks go")
+				AccessService.assigned(2)
+				T.eq(#rocksFolder:GetChildren(), #cave.Rocks, "assigned again in the same thread: the rocks are back")
+				T.truthy(AccessService.mayEnter(owner, 2), "and the owner may go in (no release flag left)")
+			end)
+		end)
+		mining.reset(nil)
+		WorldService.NodeSpawns = realMarkers
+		rawset(OreNodeBuilder, "buildRock", realBuild)
+		if not ok then
+			error(err, 0)
+		end
+	end)
 end

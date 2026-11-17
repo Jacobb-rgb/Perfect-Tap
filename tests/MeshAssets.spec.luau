@@ -83,11 +83,87 @@ return function(T, Loader)
 				T.truthy(packs[key] ~= nil, t.Name .. "'s SurfaceAppearance has a known texture pack")
 			end
 		end
-		for name in Catalog.Assets do
-			-- (the sharper floors, NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra, wait for his import too:
-			-- MineFloors.floorTiles keeps the first set until every one of a floor's is in)
-			local waiting = WAITING[name] or string.match(name, "^Floor_%a+HD_%d+$") ~= nil
-			T.truthy(real:FindFirstChild(name) ~= nil or waiting, name .. " is uploaded (or waits for his next import)")
+		-- a floor's older tile sets stay out once a newer one is in whole (MineFloors.floorTiles never
+		-- builds them; integrator review 2026-11-17: 119 of them loaded on every client)
+		local superseded: { [string]: boolean } = {}
+		for id, first in Catalog.Floors do
+			local inUse = false
+			for _, tiles in { Catalog.FloorsNext[id] or {}, Catalog.FloorsHD[id] or {}, first } do
+				local whole = #tiles > 0
+				for _, name in tiles do
+					whole = whole and real:FindFirstChild(name) ~= nil
+					superseded[name] = inUse or nil
+				end
+				inUse = inUse or whole
+			end
 		end
+		for name in Catalog.Assets do
+			if superseded[name] then
+				T.eq(real:FindFirstChild(name), nil, name .. " stays out (a newer set of its floor is in)")
+			else
+				-- (the sharper floors, NAHRAJ_DO_ROBLOXU/3D_modely_2026-11-14_ostre_patra, wait for his import
+				-- too: MineFloors.floorTiles keeps the first set until every one of a floor's is in)
+				local waiting = WAITING[name] or string.match(name, "^Floor_%a+HD_%d+$") ~= nil
+				T.truthy(real:FindFirstChild(name) ~= nil or waiting, name .. " is uploaded (or waits for his next import)")
+			end
+		end
+	end)
+
+	-- The CollisionFidelity of every MeshPart in a binary model file, from its property chunk
+	-- (tools/meshy/strip_hulls.mjs writes it uncompressed; Lune can't read it): Box and Default counts.
+	local function fidelities(bytes: string): (number?, number)
+		local off = 33
+		while off < #bytes do
+			local name = string.sub(bytes, off, off + 3)
+			local packed, size = string.unpack("<I4I4", bytes, off + 4)
+			local start = off + 16
+			off = start + (if packed > 0 then packed else size)
+			if name == "PROP" and packed == 0 then
+				local len = string.unpack("<I4", bytes, start + 4)
+				if string.sub(bytes, start + 8, start + 7 + len) == "CollisionFidelity" then
+					local at = start + 9 + len
+					local n = (off - at) // 4
+					local boxes, defaults = 0, 0
+					for i = 0, n - 1 do
+						local b = {
+							string.byte(bytes, at + i),
+							string.byte(bytes, at + n + i),
+							string.byte(bytes, at + 2 * n + i),
+							string.byte(bytes, at + 3 * n + i),
+						}
+						local v = b[1] * 16777216 + b[2] * 65536 + b[3] * 256 + b[4]
+						if v == 2 then
+							boxes += 1
+						elseif v == 0 then
+							defaults += 1
+						end
+					end
+					return boxes, defaults
+				end
+			end
+		end
+		return nil, 0
+	end
+
+	T.test("MeshAssets: only the templates that collide carry a collision hull", function()
+		-- (integrator review 2026-11-17: the file sent every client ~4.7 MB of hulls at join; only
+		-- RockBuilder's rocks and Diorama.meshFill's mossy cliff walls collide, everything else is a look
+		-- or a click target its box will do for)
+		if not real then
+			return
+		end
+		local fs = require("@lune/fs")
+		local bytes = fs.readFile("src/shared/Assets/MeshAssets.rbxm")
+		T.truthy(#bytes < 1.5e6, `MeshAssets.rbxm stays small ({#bytes} bytes; a hull for every template made it 4.7 MB)`)
+		local colliding, total = 0, 0
+		for _, t in real:GetChildren() do
+			total += 1
+			if string.match(t.Name, "^Rock_") or t.Name == "Prop_MossyCliff" then
+				colliding += 1
+			end
+		end
+		local boxes, defaults = fidelities(bytes)
+		T.eq(boxes, total - colliding, "every template that never collides is CollisionFidelity Box")
+		T.eq(defaults, colliding, "the rocks and the mossy cliff keep their hulls")
 	end)
 end

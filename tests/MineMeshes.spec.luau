@@ -26,6 +26,18 @@ return function(T, Loader)
 		T.near(tower.Size.Y, MineKit.ElevatorTowerHeight, 1e-3, "tower height")
 		T.near(tower.CFrame.Position.Y - tower.Size.Y / 2, 2.6, 1e-3, "standing on the platform")
 		T.falsy(tower.CanCollide or tower.CanQuery, "the tower is a look")
+		-- (integrator review 2026-11-17: players walked into it) an invisible box players bump into,
+		-- inside the mesh's box; the camera's rays and the prompts' line of sight go through it
+		local collider = stop:FindFirstChild("TowerCollider")
+		T.truthy(collider and collider.CanCollide and collider.Anchored and collider.Transparency == 1, "a solid invisible tower")
+		T.falsy(collider.CanQuery or collider.CanTouch or collider.CastShadow, "no rays, touches or shadow")
+		local inside = tower.CFrame:PointToObjectSpace(collider.CFrame.Position)
+		T.truthy(inside.Magnitude < 1e-3, "in the tower")
+		T.truthy(
+			collider.Size.X <= tower.Size.X and collider.Size.Z <= tower.Size.Z and collider.Size.Y <= tower.Size.Y + 1e-3,
+			"inside its box"
+		)
+		T.truthy(collider.Size.X >= tower.Size.X * 0.85 and collider.Size.Z >= tower.Size.Z * 0.85, "about as big")
 		T.eq(stop.PrimaryPart and stop.PrimaryPart.Name, "Base", "PrimaryPart Base (arrival)")
 		local panel = stop:FindFirstChild("CallPanel")
 		T.truthy(panel and panel:FindFirstChild("PromptPoint"), "call panel prompt")

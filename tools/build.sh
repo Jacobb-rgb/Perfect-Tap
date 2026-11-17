@@ -12,3 +12,6 @@ lune run tools/lune/bake.luau "$base" build/TerraForge.rbxl
 # grey in the published game; tools/meshy/texture_packs.mjs) and fail if one has none
 node tools/meshy/texture_packs.mjs inject build/TerraForge.rbxl
 node tools/meshy/texture_packs.mjs check build/TerraForge.rbxl
+# nor CollisionFidelity: every MeshPart without a collision hull (the owner's models but the rocks and
+# the mossy cliff, tools/lune/import_meshes.luau) gets its Box back (tools/meshy/strip_hulls.mjs)
+node tools/meshy/strip_hulls.mjs boxes build/TerraForge.rbxl

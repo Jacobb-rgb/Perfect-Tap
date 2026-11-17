@@ -54,8 +54,9 @@ RockBuilder.MeshSize = {
 	Giant = 22,
 } :: { [string]: number }
 RockBuilder.MeshFloorScale = { SunkenPalace = 1.05, StormglassRift = 1.05, HeartstoneCore = 1.15 } :: { [string]: number }
--- Each crack stage shrinks a mesh rock by this much (a chunk broke off), keeping its foot on the ground.
-RockBuilder.MeshStageShrink = 0.93
+-- (integrator review 2026-11-17) A crack stage never moves or resizes what a mesh rock already has:
+-- the clients' tremble (Effects/RockFx.shake) holds every part's frame and wrote the old ones back,
+-- so a shrunk rock floated with its glints off it; a stage adds its cracks and breaks bits off.
 
 -- Part budgets per kind (a floor streams in on its own; ~26 rocks per floor).
 RockBuilder.Budget = {
@@ -984,24 +985,13 @@ local function crackAt(model: Model, p: Vector3, n: Vector3, length: number, col
 	branch.Name = "Crack"
 end
 
--- applyStage for a mesh rock: cracks in the stage ore's colour on its surface spots, the rock
--- shrinks a little (a chunk broke off; everything on it follows) and 2-3 rock bits fly off.
+-- applyStage for a mesh rock: cracks in the stage ore's colour on its surface spots and 2-3 rock
+-- bits fly off; nothing already on the rock moves (the note by RockBuilder.MeshFloorScale).
 local function meshStage(model: Model, rock1: BasePart, stage: number, seed: number | string, color: Color3): { BasePart }
 	local broken: { BasePart } = {}
 	local rng = Rng.new(tostring(seed) .. ":" .. stage)
 	local spots = spotsOf(rock1)
 	local longest = math.max(rock1.Size.X, rock1.Size.Y, rock1.Size.Z)
-	-- shrink around the foot; the glints and older cracks move with the surface
-	local k = RockBuilder.MeshStageShrink
-	local foot = rock1.CFrame * CFrame.new(0, -rock1.Size.Y / 2, 0)
-	for _, child in model:GetChildren() do
-		if child:IsA("BasePart") and child ~= rock1 then
-			local rel = foot:PointToObjectSpace(child.CFrame.Position)
-			child.CFrame = (child.CFrame - child.CFrame.Position) + foot:PointToWorldSpace(rel * k)
-		end
-	end
-	rock1.Size *= k
-	rock1.CFrame = foot * CFrame.new(0, rock1.Size.Y / 2, 0)
 	if #spots > 0 then
 		local cracks = math.clamp(stage + 1, 2, 4)
 		for i = 1, cracks do

@@ -316,6 +316,9 @@ Diorama.LightRange = 48
 Diorama.BoxDepth = 6 -- collision boxes reach this far under their top (and below the lowest ground)
 
 local GROUND = { CanTouch = false, CanQuery = true, CanCollide = true, CastShadow = false, Transparency = 1 }
+-- a room's underlay (Diorama.build): solid, never seen, never raycast (the beam and the camera)
+local UNDERLAY = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
+Diorama.UnderlayGap = 0.05 -- the underlay's top this far under the floor's lowest ground
 -- a mesh-faced wall's body (Diorama.MeshBodyIn): solid, never seen, never clicked or shot
 local BODY = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
 -- a floor-level mesh-faced wall piece's body for Diorama.ledges: its side, its span along the wall,
@@ -937,6 +940,24 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 		local cf = at(origin, Vector3.new((x0 + x1) / 2, y + rise / 2, (z0 + z1) / 2)) * CFrame.Angles(0, RAMP_TURN[dir], 0)
 		local ramp = Geo.wedge(groundFolder, cf, Vector3.new(across, rise, along), floor.Palette.Ground, nil, GROUND)
 		ramp.Name = "Ramp"
+	end
+
+	-- (integrator review 2026-11-17: the walk data gives a void cell no box, and the Deep Hollow's
+	-- front-left corner was a hole to the void) one solid invisible underlay just under the floor's
+	-- lowest ground across the whole room: a cell without a box drops you onto it, never out
+	do
+		local lineLo, lineHi = Diorama.lines(index)
+		local top = data.Bottom - Diorama.UnderlayGap
+		local bottom = data.Bottom - Diorama.BoxDepth - 1
+		local underlay = Geo.block(
+			model,
+			at(origin, Vector3.new((lineLo.X + lineHi.X) / 2, (top + bottom) / 2, (lineLo.Y + lineHi.Y) / 2)),
+			Vector3.new(lineHi.X - lineLo.X, top - bottom, lineHi.Y - lineLo.Y),
+			floor.Palette.Ground,
+			nil,
+			UNDERLAY
+		)
+		underlay.Name = "Underlay"
 	end
 
 	-- the rock spawns and the Giant Crystal's spot

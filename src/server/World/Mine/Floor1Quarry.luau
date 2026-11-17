@@ -1282,7 +1282,16 @@ end
 	          a jump: nobody climbs out of the pit or drops behind it (the back stays open for the
 	          DEPTHS portal's block, the town side as the model is: its ramp and low corners)
 	  Under   one sand underlay a hair under the model's lowest ground and the DEPTHS portal's floor
-	Smooth (NoStuds); nothing past the Ember Caves' south wall.
+	  Back    (integrator review 2026-11-17: void pockets behind the lawn's back corners, between the
+	          Ember Caves' side walls at |x| 66.7 and the massif / Land's mountains, where a player
+	          fell to the void and the black showed) a filler in the massif's foot colour from the
+	          lawn's back edge back under the massif, up to its rock
+	  Town    (the same review: with no Quarry S wall and Land's QuarryEdge dropped, the town ground's
+	          flat green face showed either side of the ramp) a face of the lawn's stone in front of it
+	          from the pit floor to the town's level, the ramp left clear
+	  Rails   the old line modelled into his floor is covered west of the still train, as on the
+	          sharper set (trackCover: the owner, "remove all ... rails")
+	Smooth (NoStuds); nothing past the Ember Caves' south wall but the back fillers beside it.
 ]]
 Floor.Smooth = {
 	Town = 12, -- the town's ground level (local; world 0)
@@ -1290,7 +1299,8 @@ Floor.Smooth = {
 	Turf = 0.8,
 	Under = 1.5, -- the lawn runs this far in under the model's side cliffs
 	Out = 86, -- out to |x| (Land's mountains round the quarry stand from about 80)
-	TownEdge = 56, -- the town's ground (Land) from local z 56 on
+	-- (Land's ground starts at local z 58: the lawn runs on under it, its grass top a hair lower)
+	TownEdge = 58.5,
 	Back = -59.9, -- the Ember Caves' south wall faces the quarry at -59.97
 	Top = 40, -- the invisible walls up to here (the model's tallest cliff 27.8 and a jump)
 	Depth = 1.5,
@@ -1299,6 +1309,13 @@ Floor.Smooth = {
 	Grass = Color3.fromRGB(110, 170, 70), -- and its grass
 	-- the east bank's top (X0 .. X1, Z0 .. Z1 at Top) and its slopes' run down to the lawn
 	Bank = { X0 = 69.5, X1 = 92, Z0 = -45, Z1 = 41, Top = 27.6, Run = 7.5 },
+	-- the back corners' fillers: from the Ember Caves' side walls (|x| 66.7) out to Out, from the
+	-- lawn's back edge back to Z0 (under the massif's rock), from the void up to Top (its rock's
+	-- foot), in the massif's foot colours (east pink, west orange: Lobby/Backdrop ForgeMountain)
+	BackFill = { X0 = 66.6, Z0 = -80, Bottom = -8, Top = 34.05, East = Color3.fromRGB(199, 70, 124), West = Color3.fromRGB(213, 78, 38) },
+	-- the town side's face: in front of Land's ground at local z 58, from the pit floor to just
+	-- under the town's level, |x| from the ramp's edge (Land: 16 wide) out to the model's corner walls
+	TownFace = { X0 = 8.5, X1 = 36, Z0 = 57.4, Z1 = 58.05 },
 }
 
 local function smoothSurround(model: Model, origin: CFrame)
@@ -1375,6 +1392,27 @@ local function smoothSurround(model: Model, origin: CFrame)
 	end
 	local under = box("Under", Vector3.new(lo.X, -3, k.Back), Vector3.new(hi.X, -0.45, hi.Y), Floor.FillSand, Enum.Material.Sand, SOLID)
 	under.CastShadow = false
+	-- the back corners' fillers and the town side's face
+	local fill = k.BackFill
+	local face = k.TownFace
+	for _, side in { -1, 1 } do
+		box(
+			"BackFill",
+			Vector3.new(side * fill.X0, fill.Bottom, fill.Z0),
+			Vector3.new(side * k.Out, fill.Top, k.Back),
+			if side > 0 then fill.East else fill.West,
+			Enum.Material.SmoothPlastic,
+			SOLID
+		)
+		box(
+			"TownFace",
+			Vector3.new(side * face.X0, -0.5, face.Z0),
+			Vector3.new(side * face.X1, k.TurfTop, face.Z1),
+			k.Stone,
+			Enum.Material.Slate,
+			SOLID
+		)
+	end
 end
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
@@ -1384,6 +1422,7 @@ function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean?
 	local model = Diorama.build(Floor.Index, parent, origin, opts)
 	if MineFloors.usesNextSet(Floor.Index) then
 		smoothSurround(model, origin)
+		trackCover(model, origin)
 		return model
 	end
 	local rim = buildParts(model, origin, opts)

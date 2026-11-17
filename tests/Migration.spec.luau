@@ -1243,4 +1243,43 @@ return function(T, Loader)
 		Migrations.run(none)
 		T.eq(none.Coins, 7, "no levels, no coins")
 	end)
+
+	T.test("Migrations: the Royal Railway's artifacts pay their coins once, its chapter and pick go", function()
+		-- (owner 2026-11-13: the collection went; integrator review 2026-11-17 asked for this spec)
+		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = Migrations.Latest
+		data.Coins = 100
+		data.Artifacts.Found = {
+			GoldenSpike = 1, -- Common 1,000
+			ConductorWhistle = 0, -- none found: nothing
+			RailLantern = 0 / 0, -- broken: nothing
+			LastTicket = 3, -- Uncommon 2,500 once (the duplicates paid their shards when found)
+			RoyalTimetable = 1, -- Rare 6,000
+			LocomotiveCrest = 2, -- Epic 15,000
+			CrownCoin = 2, -- another collection's: kept
+		}
+		data.Artifacts.Chapters = { RoyalRailway = true, CrownOfKaldrum = true }
+		data.Artifacts.Equipped = "RoyalRailway"
+		Migrations.run(data)
+		local paid = 1000 + 2500 + 6000 + 15000
+		T.eq(data.Coins, 100 + paid, "each artifact found paid once by its rarity")
+		for _, id in { "GoldenSpike", "ConductorWhistle", "RailLantern", "LastTicket", "RoyalTimetable", "LocomotiveCrest" } do
+			T.eq(data.Artifacts.Found[id], nil, id .. " left the save")
+		end
+		T.eq(data.Artifacts.Found.CrownCoin, 2, "the other collections' artifacts stay")
+		T.eq(data.Artifacts.Chapters.RoyalRailway, nil, "its chapter went")
+		T.eq(data.Artifacts.Chapters.CrownOfKaldrum, true, "the other chapters stay")
+		T.truthy(data.Artifacts.Equipped ~= "RoyalRailway", "its pick fell back")
+		-- the second load (and every later one): nothing more
+		Migrations.run(data)
+		T.eq(data.Coins, 100 + paid, "paid once")
+		T.eq(data.Artifacts.Found.CrownCoin, 2, "still kept")
+		-- broken coins become the payment, never NaN
+		local broken = ProfileStore.deepCopy(DataTemplate)
+		broken.Version = Migrations.Latest
+		broken.Coins = 0 / 0
+		broken.Artifacts.Found = { GoldenSpike = 1 }
+		Migrations.run(broken)
+		T.truthy(broken.Coins == broken.Coins and broken.Coins >= 1000, `a number of coins ({broken.Coins})`)
+	end)
 end

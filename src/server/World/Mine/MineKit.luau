@@ -44,6 +44,7 @@ local MineAmbience = require(Shared:WaitForChild("Config"):WaitForChild("MineAmb
 local MovementConfig = require(Shared:WaitForChild("Config"):WaitForChild("MovementConfig"))
 local World = ServerScriptService:WaitForChild("Server"):WaitForChild("World")
 local Style = require(World:WaitForChild("Lobby"):WaitForChild("Style"))
+local MeshNature = require(World:WaitForChild("MeshNature"))
 local MeshKit = require(Shared:WaitForChild("Builders"):WaitForChild("MeshKit"))
 
 local MineKit = {}
@@ -351,6 +352,10 @@ function MineKit.elevator(parent: Instance, cf: CFrame, floorIndex: number, opts
 	if tower and towerSize then
 		tower.Name = "Tower"
 		tower.Parent = m
+		-- the mesh is a look only: an invisible box players bump into (the camera's rays and the
+		-- prompts' line of sight go through it), a little inside the mesh's box (integrator review
+		-- 2026-11-17: players walked into the tower)
+		MeshNature.collider(m, tower.CFrame, Vector3.new(towerSize.X * 0.9, towerH, towerSize.Z * 0.9), "TowerCollider")
 		-- riders arrive on the plate in front of the tower (ElevatorService.arrivalCFrame)
 		m:SetAttribute("ArrivalZ", -(towerSize.Z / 2 + 1))
 		-- warm lamp bars up the tower's front (the first by the cabin door), glowing strips up its

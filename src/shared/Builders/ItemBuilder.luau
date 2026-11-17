@@ -1131,8 +1131,10 @@ local function meshSize(oreId: string, name: string, extent: Vector3): Vector3?
 	return own * math.min(sum, longest)
 end
 
-local MESH_DECOR: MeshKit.Opts = { Name = "OreMesh", Anchored = false, CanQuery = true, Massless = true }
-local MESH_DISPLAY: MeshKit.Opts = { Name = "OreMesh" }
+-- (no shadows, like the recipes' decor parts: up to 40 podium heroes of ~10k triangles each would be
+-- drawn again in the shadow pass; integrator review 2026-11-17)
+local MESH_DECOR: MeshKit.Opts = { Name = "OreMesh", Anchored = false, CanQuery = true, Massless = true, CastShadow = false }
+local MESH_DISPLAY: MeshKit.Opts = { Name = "OreMesh", CastShadow = false }
 
 --[[
 	A clean ore in its model (build and buildLight): the invisible Body a

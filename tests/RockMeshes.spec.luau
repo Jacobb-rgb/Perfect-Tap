@@ -77,7 +77,7 @@ return function(T, Loader)
 		Fakes.unmount(Loader)
 	end)
 
-	T.test("rock meshes: stages crack, shrink and break bits off", function()
+	T.test("rock meshes: stages crack and break bits off, nothing already there moves", function()
 		Fakes(Loader, true)
 		local model = RockBuilder.build(2, "Big", ORES, CF.new(0, 5, 0), 42)
 		local rock1 = model.PrimaryPart
@@ -94,9 +94,12 @@ return function(T, Loader)
 			end
 			T.eq(model:GetAttribute("Stage"), stage, "stage attribute")
 		end
-		T.near(rock1.Size.X, size0.X * RockBuilder.MeshStageShrink ^ 3, 1e-3, "shrunk three times")
-		T.near(rock1.CFrame.Position.Y - rock1.Size.Y / 2, foot0, 1e-3, "the foot stays on the ground")
-		T.near(glint.CFrame.Position.Y - foot0, glintHeight0 * RockBuilder.MeshStageShrink ^ 3, 1e-3, "glints follow the surface")
+		-- (integrator review 2026-11-17: the clients' tremble holds each part's frame, a moved part
+		-- snapped back and the rock floated) the body and its glints stay exactly where they were
+		T.eq(model.PrimaryPart, rock1, "the same body")
+		T.near((rock1.Size - size0).Magnitude, 0, 1e-6, "its size unchanged")
+		T.near(rock1.CFrame.Position.Y - rock1.Size.Y / 2, foot0, 1e-6, "its foot on the ground")
+		T.near(glint.CFrame.Position.Y - foot0, glintHeight0, 1e-6, "the glints where they were")
 		local cracks = 0
 		for _, child in model:GetChildren() do
 			if child.Name == "Crack" then
