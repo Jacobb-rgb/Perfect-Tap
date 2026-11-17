@@ -347,7 +347,8 @@ return function(T, Loader)
 			for x = gate.Width / 2 + 0.6, line, 1 do
 				check(gate.CenterX + s * x, line, "pad/yard")
 			end
-			-- (closed all along since the train stop's opening went, 2026-11-17)
+			-- (closed all along since the train stop's opening went, 2026-11-17; the VIP cave's door in
+			-- the middle is solid on the server, AccessController opens it for its owner only)
 			for x = 0, line - chamfer, 1 do
 				check(s * x, back, "back")
 			end

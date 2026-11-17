@@ -403,7 +403,7 @@ end
 -- The odds panel's lines for a paid random product (or one that opens odds: the pass's Grotto).
 local function oddsFor(product: MonetizationConfig.Product): { string }
 	if product.Key == "BigPass" then
-		return { "The pass opens the Glimmer Grotto:", MonetizationConfig.grottoOddsText() }
+		return { "The pass opens the Glimmer Grotto, the VIP cave on your plot:", MonetizationConfig.grottoOddsText() }
 	end
 	if product.Capsule then
 		local lucky = tripleLuckyNow()

@@ -139,7 +139,8 @@ local function card(spec: CardSpec): CardSpec
 end
 
 -- the Forgemaster's Pass's lines (its Perks: Podiums, OfflineExtension, StrongBack, ForgeVip, Workshop)
-local BIG_PASS_LINES = { "Podiums 4 and 5", "50% income while away, 12 h", "Double backpack space", "Glimmer Grotto + machine slots" }
+-- (owner 2026-11-17: the Glimmer Grotto is a VIP cave on every plot now, World/PlotCave)
+local BIG_PASS_LINES = { "Podiums 4 and 5", "50% income while away, 12 h", "Double backpack space", "Plot VIP cave + machine slots" }
 local BIG_PASS_ICONS = { "star", "moon", "backpack", "gem" }
 
 StoreConfig.Cards = {

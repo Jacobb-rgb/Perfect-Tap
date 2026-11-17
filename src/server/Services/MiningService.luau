@@ -13,7 +13,8 @@
 	MineFloors.GiantCrystal.Interval seconds, everyone on the server can blast
 	it, and when it shatters every player who dealt at least MinDamageShare of
 	its HP gets OreCount.Giant ores from the floor's CrystalOres.
-	Markers without a Floor (the VIP Grotto) keep the older rules below.
+	Markers without a Floor (the Glimmer Grotto's: the VIP cave on every plot since 2026-11-17, their
+	PlotId on them, AccessService's gates) keep the older rules below.
 
 	- A rock grows at every NodeSpawn marker. It holds 1-3 ores
 	  (BlasterData.oreCount) rolled by the marker zone's ore weights. The ores
@@ -145,6 +146,10 @@ local rocks: { [Model]: Rock } = {}
 local shooters: { [Player]: Shooter } = {}
 local active: { [Player]: Shooter } = {} -- only players with a target
 local respawns: { Respawn } = {}
+-- (owner 2026-11-17: the VIP cave on every plot) whether a marker may grow its rock now, and who
+-- may mine a rock: World/PlotCave's markers carry their plot (AccessService sets both)
+local spawnGate: ((BasePart) -> boolean)? = nil
+local mineGate: ((Player, BasePart) -> string?)? = nil
 local giants: { Giant } = {}
 local nextRespawnCheck = 0
 local rocksFolder: Instance? = nil
@@ -334,6 +339,10 @@ local function spawnRock(marker: BasePart): Rock?
 	local zone = if type(zoneId) == "string" then WorldLayout.ZoneById[zoneId] else nil
 	local folder = rocksFolder
 	if not zone or not folder then
+		return nil
+	end
+	local gate = spawnGate
+	if gate and not gate(marker) then
 		return nil
 	end
 	local floorIndex = marker:GetAttribute("Floor")
@@ -773,6 +782,13 @@ local function tickShooter(player: Player, shooter: Shooter, now: number)
 		refuse(player, shooter, rock, zone.Name .. " rocks are for Forge VIPs.", from, now)
 		return
 	end
+	local gate = mineGate
+	local marker = rock.Marker
+	local denied = if gate and marker then gate(player, marker) else nil
+	if denied then
+		refuse(player, shooter, rock, denied, from, now)
+		return
+	end
 	if blaster.Level < rock.MinBlaster then
 		refuse(player, shooter, rock, "Needs a Level " .. rock.MinBlaster .. " blaster", from, now)
 		return
@@ -928,6 +944,66 @@ function MiningService.nearestNode(position: Vector3, oreId: string?): Model?
 	return best
 end
 
+--[[
+	(owner 2026-11-17: the VIP cave on every plot) AccessService's hooks:
+	  setSpawnGate(fn)     fn(marker) -> may its rock grow now? (spawn, respawn, refresh)
+	  setMineGate(fn)      fn(player, marker) -> a refusal toast, or nil to let them mine
+	  refreshMarkers(fn)   every marker with fn(marker) true: grows its rock if the spawn gate lets
+	                       it and none stands there, takes it away (and its pending regrowth) if not
+]]
+function MiningService.setSpawnGate(gate: ((BasePart) -> boolean)?)
+	spawnGate = gate
+end
+
+function MiningService.setMineGate(gate: ((Player, BasePart) -> string?)?)
+	mineGate = gate
+end
+
+function MiningService.refreshMarkers(match: (BasePart) -> boolean)
+	local markers = WorldService.NodeSpawns
+	if not markers then
+		return
+	end
+	local gate = spawnGate
+	for _, marker in markers:GetChildren() do
+		if not marker:IsA("BasePart") or not match(marker) then
+			continue
+		end
+		local allowed = gate == nil or gate(marker)
+		-- (compared, not looked up: Lune hands out a new wrapper per instance access)
+		local rock: Rock? = nil
+		for _, r in rocks do
+			if r.Alive and r.Marker == marker then
+				rock = r
+				break
+			end
+		end
+		if allowed and not rock then
+			local pending = false
+			for _, entry in respawns do
+				if entry.Marker == marker then
+					pending = true
+				end
+			end
+			if not pending then
+				spawnRock(marker)
+			end
+		elseif not allowed then
+			for i = #respawns, 1, -1 do
+				if respawns[i].Marker == marker then
+					table.remove(respawns, i)
+				end
+			end
+			if rock then
+				rock.Alive = false
+				stopShootersOf(rock)
+				rocks[rock.Model] = nil
+				rock.Model:Destroy()
+			end
+		end
+	end
+end
+
 -- Internals for the Lune tests only (tests/Mining.spec.luau).
 MiningService._test = {
 	-- forget every rock, shooter and respawn; `folder` holds the rocks
@@ -941,6 +1017,8 @@ MiningService._test = {
 		table.clear(artifactCallbacks)
 		table.clear(glowCache)
 		table.clear(healthDirty)
+		spawnGate = nil
+		mineGate = nil
 		BeamSight._test.reset() -- an empty world (BeamSight._test.setRaycast adds walls)
 		nextRespawnCheck = 0
 		brokenStages = false
@@ -965,7 +1043,17 @@ MiningService._test = {
 	tick = tick,
 	forget = forgetPlayer,
 	rock = function(model: Model): Rock?
-		return rocks[model]
+		-- (compared too: Lune hands out a new wrapper per instance access, e.g. from GetChildren)
+		local found = rocks[model]
+		if found then
+			return found
+		end
+		for m, r in rocks do
+			if m == model then
+				return r
+			end
+		end
+		return nil
 	end,
 	target = function(player: Player): Model?
 		local shooter = active[player]

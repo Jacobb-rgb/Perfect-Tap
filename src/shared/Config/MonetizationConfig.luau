@@ -158,7 +158,8 @@ export type Entry = Product
 local MonetizationConfig = {}
 
 --[[
-	The Glimmer Grotto's ore odds in numbers, from its node weights in
+	The Glimmer Grotto's ore odds in numbers (the VIP cave on every plot since
+	2026-11-17, World/PlotCave), from its node weights in
 	WorldLayout (docs/COMPLIANCE.md 2.6 "Forge VIP and ore odds": a paid item
 	that opens better odds says the odds before purchase). Built from the
 	map data, so the Forgemaster's Pass text never goes stale.
@@ -201,7 +202,7 @@ local LIST: { Product } = {
 		Id = 0,
 		Robux = 560,
 		Name = "Forgemaster's Pass",
-		Description = "Podiums 4 and 5, podiums earn 50% offline for 12 hours, double backpack space, the Glimmer Grotto and extra machine slots. "
+		Description = "Podiums 4 and 5, podiums earn 50% offline for 12 hours, double backpack space, your own Glimmer Grotto VIP cave on your plot and extra machine slots. "
 			.. MonetizationConfig.grottoOddsText(),
 		Perks = { "Podiums", "OfflineExtension", "StrongBack", "ForgeVip", "Workshop" },
 	},

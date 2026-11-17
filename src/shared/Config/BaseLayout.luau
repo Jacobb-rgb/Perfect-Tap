@@ -109,6 +109,32 @@ BaseLayout.RailZ = YARD_Z0 + 37
 -- yard wall (x -12 at 12 cells), so its look and part count never change.
 BaseLayout.Museum = rect(-(GRID_HALF + 1) + 13, YARD_Z0 + 26, 22, 10, 8)
 
+--[[
+	The VIP cave behind every yard (owner 2026-11-17: in place of the VIP mine at the quarry, "a
+	little cave on every plot where the train unloaded ore ... it opens only with the pass", built
+	"in the rainbow mountain style with waterfalls round it"; only the plot's owner with the
+	Forgemaster's Pass goes in, 5 rocks of the Glimmer Grotto's ore inside). Plot-local:
+	  Door   the glowing curtain in the middle of the back wall (PlotBuilder.BackWallZ), tagged
+	         VipDoor: solid for everyone but the owner who has the pass (AccessController)
+	  Room   the cave inside the mound, from the back wall back to the island's edge
+	  Mound  the rainbow voxel mountain round it (World/PlotCave)
+	  Rocks  the 5 rock spots, past the yard's pickup margin (ItemService.onBase)
+]]
+BaseLayout.VipCave = {
+	Door = { CenterX = 0, Width = 8, Height = 7.6 },
+	-- (its back wall in front of the island's coastal rocks, Map.Land.Cliffs from about z 75)
+	Room = { Min = Vector3.new(-11, 0, 64.2), Max = Vector3.new(11, 9, 74.8) },
+	Mound = { Min = Vector3.new(-20, 0, 63.8), Max = Vector3.new(20, 24, 84) },
+	-- (a U round the middle: the way in from the door stays clear)
+	Rocks = {
+		Vector3.new(-8, 0, 68.4),
+		Vector3.new(-5.4, 0, 72.4),
+		Vector3.new(0, 0, 72.6),
+		Vector3.new(5.4, 0, 72.4),
+		Vector3.new(8, 0, 68.4),
+	},
+}
+
 -- Every fixed piece, for overlap tests.
 function BaseLayout.pieces(): { [string]: Rect }
 	local list: { [string]: Rect } = {

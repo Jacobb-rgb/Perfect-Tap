@@ -114,8 +114,13 @@ LobbyLayout.Budget = {
 	-- the Vault is island again, its cliffs gone, its lawn planted: 14,301 measured with the museums)
 	-- (owner 2026-10-24, "quality over the limits": the town's lawn back to its full density, Meadow.Max,
 	-- +217 in the lobby area: 14,347 + museums 352 = 14,699 measured, + ~30: 14,500 -> 14,730)
-	LobbyParts = 14730, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
-	LobbyLights = 62, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
+	-- (owner 2026-11-17: the VIP cave on every plot, PlotCave: 8 x 78 parts, 65 of each in the area;
+	-- the railway that went the same day freed room for most of them: 14,357 measured with the museums
+	-- before the caves, 14,877 with them, + ~30: 14,730 -> 14,910)
+	LobbyParts = 14910, -- integrator plan 2026-10-18: + the blaster gallery (Kenney-shape guns: +174), + the plaza life, + the yard museums
+	-- (owner 2026-11-17: the VIP cave on every plot, one crystal light each inside its closed room, no
+	-- shadows: 59 measured before the caves, 67 with them, + 3: 62 -> 70)
+	LobbyLights = 70, -- (2026-10-20: + ~20 street lamp lights, every other lamp along the roads; shadows off)
 	-- phones (integrator 2026-10-18): what streams in around a player in the lobby, i.e. the
 	-- lobby area plus every Persistent model's parts anywhere, plus the 8 yard museums
 	-- (steps 6-7): ~15,510 parts (tests/PhoneBudget.spec.luau, map v26)
@@ -135,7 +140,10 @@ LobbyLayout.Budget = {
 	-- golems still built there 264 (within HideDistance) = 25,577 (its counter 25,566),
 	-- tests/Backpacks.spec.luau, + ~30: 25,240 -> 25,610)
 	-- (2026-11-10, the billboard in the mountains, always streamed: that gateway measures 25,628 (review 11-10), + ~70: 25,610 -> 25,700)
-	StreamParts = 25700,
+	-- (owner 2026-11-17: the VIP cave on every plot, all 8 inside the gateway's radius: 8 x 78 parts; the
+	-- railway that went the same day freed most of that room: the gateway measures 25,137 before the
+	-- caves, 25,761 with them, + ~30: 25,700 -> 25,790)
+	StreamParts = 25790,
 	-- per package: Parts = all parts in Map.Emberfall.Lobby.<Package>,
 	-- LobbyParts = those of them inside LobbyLayout.Area,
 	-- Lights = all PointLights/SpotLights of that package,

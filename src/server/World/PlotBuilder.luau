@@ -390,18 +390,38 @@ end
 -- a 45-degree corner run at each back corner and the back walls meeting at
 -- one post in the middle (the train stop's opening there went with the
 -- train, owner 2026-11-17: the back of the yard is closed).
+-- (owner 2026-11-17) the VIP cave's door in the middle of the back wall (BaseLayout.VipCave): a
+-- glowing curtain, opaque and solid for everyone (AccessController lets the plot's owner with the
+-- Forgemaster's Pass through on their own screen), a post either side
+PlotBuilder.DoorPost = 1.7
 local function fence(yard: Model, cf: CFrame)
 	local f = model("Fence", yard)
 	local k = PLOT_WALL
 	local L = WALL_LINE
 	local backZ = PlotBuilder.BackWallZ
+	local door = BaseLayout.VipCave.Door
+	local half = door.Width / 2
+	local postX = half + PlotBuilder.DoorPost / 2
 	for _, s in { -1, 1 } do
 		local turnA = Vector3.new(s * L, 0, backZ - CHAMFER)
 		local turnB = Vector3.new(s * (L - CHAMFER), 0, backZ)
 		wall(f, cf, k, turnA, turnB, TURN, TURN)
-		wall(f, cf, k, turnB, Vector3.new(0, 0, backZ), TURN, nil)
+		wall(f, cf, k, turnB, Vector3.new(door.CenterX + s * postX, 0, backZ), TURN, nil)
+		post(f, cf, k, Vector3.new(door.CenterX + s * postX, 0, backZ), { D = PlotBuilder.DoorPost, Top = door.Height + 0.2 })
 	end
-	post(f, cf, k, Vector3.new(0, 0, backZ))
+	local curtain = Instance.new("Part")
+	curtain.Name = "VipDoor"
+	curtain.Anchored = true
+	curtain.CanCollide = true
+	curtain.CanQuery = false
+	curtain.CanTouch = false
+	curtain.CastShadow = false
+	curtain.Material = Enum.Material.Neon
+	curtain.Color = Palette.Vip
+	curtain.Size = Vector3.new(door.Width, door.Height, 0.5)
+	curtain.CFrame = cf * CFrame.new(door.CenterX, door.Height / 2, backZ)
+	curtain:AddTag("VipDoor")
+	curtain.Parent = f
 end
 
 --[[
@@ -942,7 +962,13 @@ function PlotBuilder.buildPlot(parent: Instance, plot: WorldLayout.Plot, rng: Rn
 		})
 	banner.Name = "Banner"
 
-	PlotBuilder.buildYard(m, cf)
+	local yard = PlotBuilder.buildYard(m, cf)
+	-- (the VIP cave's door knows its plot: only that plot's owner may pass, AccessController)
+	local fenceModel = yard:FindFirstChild("Fence")
+	local vipDoor = fenceModel and fenceModel:FindFirstChild("VipDoor")
+	if vipDoor then
+		vipDoor:SetAttribute("PlotId", plot.Id)
+	end
 
 	local machines = Instance.new("Folder")
 	machines.Name = "Machines"

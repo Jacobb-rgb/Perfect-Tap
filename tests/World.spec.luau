@@ -109,11 +109,12 @@ return function(T, Loader)
 				tags[tag] = (tags[tag] or 0) + 1
 			end
 		end
-		-- (no "VipDoor" since the VIP mine went, owner 2026-11-17: the plots' VIP caves bring it back)
-		for _, tag in { "SellBin", "SellCounter", "ShopCounter", "EmberChest", "GuildBoard", "Plot", "NodeSpawn" } do
+		-- ("VipDoor": the VIP cave's door in every yard's back wall since the VIP mine went, owner 2026-11-17)
+		for _, tag in { "SellBin", "SellCounter", "ShopCounter", "EmberChest", "GuildBoard", "Plot", "NodeSpawn", "VipDoor" } do
 			T.truthy(tags[tag], "tag " .. tag)
 		end
 		T.eq(tags.Plot, #WorldLayout.Plots, "plot models")
+		T.eq(tags.VipDoor, #WorldLayout.Plots, "a VIP cave door per plot")
 	end)
 
 	T.test("nothing from outside a cave intrudes into its walkable space", function()

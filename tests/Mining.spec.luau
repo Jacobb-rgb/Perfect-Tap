@@ -406,6 +406,68 @@ return function(T, Loader)
 		T.near(rock.Health, 1000 - BlasterData.damage(10, "") * TICK, 1e-6, "VIPs mine")
 	end)
 
+	-- (owner 2026-11-17: the VIP cave on every plot; AccessService sets the gates, tests/VipCave.spec.luau)
+	withWorld("Mining: a plot cave's rocks are its owner's (the mine gate)", function(w)
+		local rock = w.rock("Grotto", { "Silver" }, 1000)
+		rock.Marker:SetAttribute("PlotId", 4)
+		local owner, guest = w.player, w.other
+		for _, p in { owner, guest } do
+			p.data.BlasterLevel = 10
+			p.attrs.Perk_ForgeVip = true
+		end
+		MiningService.setMineGate(function(p: any, marker: any): string?
+			return if marker:GetAttribute("PlotId") == 4 and p ~= owner then "Only this plot's owner mines its Glimmer Grotto." else nil
+		end)
+		mining.blast(guest, rock.Model)
+		w.step()
+		T.eq(rock.Health, 1000, "a guest with the pass does no damage in another plot's cave")
+		local note = last(w, "Notify")
+		T.eq(note.Player, guest, "the guest hears why")
+		T.truthy(note.Args[1].Text:find("owner"), "the owner-only toast")
+		mining.blast(guest, nil)
+		mining.blast(owner, rock.Model)
+		w.step()
+		T.near(rock.Health, 1000 - BlasterData.damage(10, "") * TICK, 1e-6, "the plot's owner mines")
+	end)
+
+	withWorld("Mining: the spawn gate holds a marker's rock back, on its regrowth too, until refreshMarkers", function(w)
+		local WorldService = Loader.requirePath("ServerScriptService.Server.Services.WorldService")
+		local hadMarkers = WorldService.NodeSpawns
+		WorldService.NodeSpawns = w.markers
+		local ok, err = pcall(function()
+			local open = false
+			MiningService.setSpawnGate(function(marker: any): boolean
+				return open or marker:GetAttribute("PlotId") == nil
+			end)
+			local marker = Instance.new("Part")
+			marker.Size = Vector3.new(2, 2, 2)
+			marker.CFrame = CFrame.new(0, 1, 0)
+			marker:SetAttribute("Zone", "Grotto")
+			marker:SetAttribute("PlotId", 4)
+			marker.Parent = w.markers
+			T.eq(mining.spawnRock(marker), nil, "the gate holds the rock back")
+			-- its regrowth comes due while the gate is shut: nothing grows, nothing stays queued
+			table.insert(mining.respawns(), { At = w.now, Marker = marker })
+			w.step()
+			T.eq(#mining.respawns(), 0, "the regrowth is spent")
+			T.eq(#w.folder:GetChildren(), 0, "no rock")
+			open = true
+			MiningService.refreshMarkers(function(m: any): boolean
+				return m:GetAttribute("PlotId") == 4
+			end)
+			T.eq(#w.folder:GetChildren(), 1, "the gate open: refreshMarkers grows it")
+			open = false
+			MiningService.refreshMarkers(function(m: any): boolean
+				return m:GetAttribute("PlotId") == 4
+			end)
+			T.eq(#w.folder:GetChildren(), 0, "the gate shut: refreshMarkers takes it away")
+		end)
+		WorldService.NodeSpawns = hadMarkers
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
 	withWorld("Mining: stages drop the rolled ores (1, 2 or 3) to whoever crossed them", function(w)
 		local dps = BlasterData.damage(10, "")
 		local perTick = dps * TICK -- 99 HP
