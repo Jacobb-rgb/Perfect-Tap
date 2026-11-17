@@ -325,6 +325,7 @@ LightingController.PortalTag = "LightingPortal"
 LightingController.PortalReach = 80 -- studs either side of a portal's plane (past the max zoom)
 LightingController.PortalMargin = 6 -- studs round its edges
 LightingController.PortalBand = 1 -- studs either side of its plane where the camera's view decides
+LightingController.CutDistance = 20 -- studs the camera moves in one frame that make a cut (a teleport)
 
 -- The preset of the side of `portal` the camera (its CFrame) is on, or nil where the portal does not
 -- decide (or without both presets). `focus`: the camera's focus (Camera.Focus), the character's end
@@ -346,18 +347,23 @@ function LightingController.portalSide(portal: BasePart, camera: CFrame, focus: 
 	local half = portal.Size / 2
 	local margin = LightingController.PortalMargin
 	local reach = LightingController.PortalReach
+	-- its face: its own edges and margin, or the whole wall it stands in (attributes FaceX / FaceY)
+	local faceX, faceY = portal:GetAttribute("FaceX"), portal:GetAttribute("FaceY")
+	local limX = math.max(half.X + margin, if type(faceX) == "number" then faceX else 0)
+	local limY = math.max(half.Y + margin, if type(faceY) == "number" then faceY else 0)
 	local function onFace(q: Vector3): boolean
-		return math.abs(q.X) <= half.X + margin and math.abs(q.Y) <= half.Y + margin
+		return math.abs(q.X) <= limX and math.abs(q.Y) <= limY
 	end
-	local near = onFace(p) and math.abs(p.Z) <= reach and (f == nil or math.abs(f.Z) <= reach)
-	if not near then
-		-- away from it, only a camera seen through it from the character's side decides
-		if not f or (f.Z < 0) == (p.Z < 0) then
-			return nil
-		end
-		if not onFace(f:Lerp(p, f.Z / (f.Z - p.Z))) then
-			return nil
-		end
+	local decides
+	if f then
+		-- the character before its face (within reach), or a camera seen through the face from the
+		-- character's side (a zoomed-out camera high over the quarry, the character just inside)
+		decides = (onFace(f) and math.abs(f.Z) <= reach) or ((f.Z < 0) ~= (p.Z < 0) and onFace(f:Lerp(p, f.Z / (f.Z - p.Z))))
+	else
+		decides = onFace(p) and math.abs(p.Z) <= reach
+	end
+	if not decides then
+		return nil
 	end
 	local isInside = p.Z < 0
 	if math.abs(p.Z) <= LightingController.PortalBand then
@@ -436,16 +442,28 @@ end
 --[[
 	One frame of the portals (start() runs it every frame after the camera moves). Sets the light at
 	once, a tween still on its way there finished too, when the camera passes through a portal, when
-	a portal starts deciding while another zone's light (or a tween) shows, and when it stops
-	deciding while the character's zone is another. Returns the preset it set, or nil.
+	a portal starts deciding while another zone's light (or a tween) shows, and when a cut (a
+	teleport, a film) takes the camera away from it while the character's zone is another. Returns
+	the preset it set, or nil.
 ]]
 local lastPortal: string? = nil
+local lastCameraAt: Vector3? = nil
 function LightingController.portalStep(camera: Camera?): string?
 	local preset = if camera then portalPreset(camera) else nil
 	local crossed = preset ~= nil and lastPortal ~= nil and preset ~= lastPortal
 	local entered = preset ~= nil and lastPortal == nil
 	local left = preset == nil and lastPortal ~= nil
 	lastPortal = preset
+	-- (a cut: no camera, a scripted one, or one that jumped; a portal left any other way leaves the
+	-- light to the zone's poll, near its plane the zone boxes and the plane part by a hair)
+	local at = if camera then camera.CFrame.Position else nil
+	local cut = camera == nil
+		or camera.CameraType == Enum.CameraType.Scriptable
+		or (at ~= nil and lastCameraAt ~= nil and (at - lastCameraAt).Magnitude > LightingController.CutDistance)
+	lastCameraAt = at
+	if left and not cut then
+		return nil
+	end
 	local want = if left then characterPreset() else preset
 	if want and (crossed or want ~= currentZonePreset or (entered and os.clock() < tweenEndsAt)) then
 		currentZonePreset = want

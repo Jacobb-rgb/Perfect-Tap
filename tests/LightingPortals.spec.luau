@@ -59,7 +59,12 @@ return function(T, Loader)
 		T.eq(side(p, cam(V3.new(0, 8, -(reach + 1)), V3.new(0, 8, -200))), nil, "deep in the cave: the zone decides")
 		T.eq(side(p, cam(V3.new(10 + margin + 1, 8, -3), V3.new(40, 8, -3))), nil, "beside it: the zone decides")
 		local high = V3.new(0, 8 + 8.5 + margin + 12, 34)
-		T.eq(side(p, cam(high, V3.new(0, 8, -4)), V3.new(0, 4, 4)), nil, "over it, the character outside too: the zone decides")
+		T.eq(side(p, cam(high, V3.new(0, 8, -4)), V3.new(0, 4, 4)), "Quarry", "over it, the character just outside: the camera's side")
+		T.eq(
+			side(p, cam(V3.new(0, 30, reach + 60), V3.new(0, 8, -4)), V3.new(0, 4, reach + 20)),
+			nil,
+			"the character far out too: the zone decides"
+		)
 		T.eq(side(p, cam(high, V3.new(0, 8, -4)), V3.new(0, 4, -4)), "Quarry", "zoomed out high over the quarry, the character inside")
 		T.eq(
 			side(p, cam(V3.new(0, 30, 34), V3.new(0, 30, -4)), V3.new(0, 30, -4)),
@@ -72,6 +77,19 @@ return function(T, Loader)
 		walled:SetAttribute("PlaneZ", -0.22)
 		T.eq(side(walled, cam(V3.new(12, 6, -0.11), V3.new(12.1, -30, -0.2))), "Quarry", "stopped on the wall's outer face, looking down")
 		T.eq(side(walled, cam(V3.new(12, 6, -0.33), V3.new(12.1, -30, -0.4))), "EmberCaves", "stopped on its inner face, looking down")
+		-- the character a hair past the dividing plane, the camera far up over the quarry: the
+		-- camera's side, never the zone boxes (they part a hair away from the plane)
+		T.eq(
+			side(walled, cam(V3.new(0, 50, 60), V3.new(0, 4, 0)), V3.new(0, 4, -0.2)),
+			"Quarry",
+			"a hair outside the plane: the camera's side"
+		)
+		-- the whole wall round it as its face (FaceX): a camera seen through the wall beside the
+		-- opening, out in the quarry, the character inside
+		local wide = portal("EmberCaves", "Quarry")
+		wide:SetAttribute("FaceX", 60)
+		T.eq(side(wide, cam(V3.new(40, 30, 85), V3.new(40, 4, -4)), V3.new(40, 4, -84)), "Quarry", "through the wall beside it")
+		T.eq(side(p, cam(V3.new(40, 30, 85), V3.new(40, 4, -4)), V3.new(40, 4, -84)), nil, "without the wall's face: the zone")
 		-- the character far off: a town camera hanging out over the quarry is not the portal's
 		T.eq(side(p, cam(V3.new(0, 8, 40), V3.new(0, 8, 60)), V3.new(0, 8, reach + 37)), nil, "the focus out of reach: the zone decides")
 		T.eq(side(p, cam(V3.new(0, 8, 40), V3.new(0, 8, 60)), V3.new(0, 8, 46)), "Quarry", "the focus near: the camera's side")
@@ -131,6 +149,39 @@ return function(T, Loader)
 			T.eq(LightingController.portalStep(camera), "Quarry", "the frame it passes through")
 			T.truthy(lit("Quarry"), "the quarry's light that same frame")
 			T.eq(LightingController.portalStep(camera), nil, "nothing more to do on the next frame")
+			-- leaving it without a cut (walking away, the camera following) leaves the light to the poll
+			for z = 10, 140, 10 do
+				at(V3.new(0, 8, z), V3.new(0, 8, z + 20))
+				LightingController.portalStep(camera)
+			end
+			T.eq(LightingController.currentZone(), "Quarry", "walked away: the light stays")
+			-- a tween still on its way there when it starts deciding again ends at once
+			local Tweens = Loader.game:GetService("TweenService")
+			local hadCreate = rawget(Tweens, "Create")
+			local made: { any } = {}
+			rawset(Tweens, "Create", function()
+				local tween = { Cancelled = false }
+				function tween.Play() end
+				function tween.Cancel()
+					tween.Cancelled = true
+				end
+				table.insert(made, tween)
+				return tween
+			end)
+			-- (an override pushed and popped with the usual tween: back to the zone's light over
+			-- LightingConfig.TweenTime)
+			local tweened = pcall(function()
+				local pop = LightingController.push("Workbench")
+				pop()
+			end)
+			rawset(Tweens, "Create", hadCreate)
+			T.truthy(tweened, "popping an override tweens back")
+			T.truthy(#made > 0, "a tween runs back to the zone's light")
+			at(V3.new(0, 8, 60), V3.new(0, 8, 80))
+			T.eq(LightingController.portalStep(camera), "Quarry", "it decides again: the tween ends at once")
+			T.truthy(made[#made].Cancelled and lit("Quarry"), "the quarry's light that frame")
+			LightingController.untrackPortal()
+			LightingController.trackPortal(p)
 			-- a cut away to the town (a teleport, a film's end): the character's zone at once
 			-- (a stand-in root: Lune's parts have no Position)
 			local root = { Position = V3.new(0, 4, 40) }
@@ -193,13 +244,19 @@ return function(T, Loader)
 			T.eq(veil:GetAttribute("Outside"), "Quarry", "the quarry's light outside")
 			-- its LookVector points into the room (the DEPTHS tunnel is south of it, +Z)
 			T.truthy(veil.CFrame.LookVector.Z < -0.99, "the veil faces into the caves")
-			-- its sides part at the middle of the thin wall round it
-			T.near(
-				veil:GetAttribute("PlaneZ"),
-				-(Diorama.ThinWall / 2 + 0.01 + Diorama.VeilThickness / 2),
-				1e-6,
-				"the dividing plane in the wall"
-			)
+			-- its sides part at the middle of the thin wall round it: the lintel over it, as built
+			local planeZ = veil:GetAttribute("PlaneZ")
+			local lintel = nil
+			for _, d in model:GetDescendants() do
+				local q = if d.Name == "Lintel" then veil.CFrame:PointToObjectSpace(d.CFrame.Position) else nil
+				if q and math.abs(q.X) < 1 and math.abs(q.Z) < 2 then
+					lintel = d
+				end
+			end
+			T.truthy(lintel ~= nil, "the lintel over the veil")
+			T.near(veil.CFrame:PointToObjectSpace(lintel.CFrame.Position).Z, planeZ, 1e-3, "the dividing plane in the wall's middle")
+			-- its face is the whole wall it stands in
+			T.truthy(veil:GetAttribute("FaceX") >= 60 and veil:GetAttribute("FaceY") >= 20, "the whole wall is its face")
 			-- walking the DEPTHS way from the quarry into the caves at eye height: wherever the
 			-- camera's side decides, it is the zone's own light there
 			local checked = 0
@@ -210,7 +267,7 @@ return function(T, Loader)
 					local side = LightingController.portalSide(veil, CF.lookAt(p, p + V3.new(0, 0, -1)))
 					local zone = WorldLayout.zoneAt(p)
 					-- (within the band round its plane the camera's view decides, not the zone)
-					local band = math.abs(veil.CFrame:PointToObjectSpace(p).Z) <= LightingController.PortalBand
+					local band = math.abs(veil.CFrame:PointToObjectSpace(p).Z - planeZ) <= LightingController.PortalBand
 					if side and zone and not band then
 						checked += 1
 						T.eq(side, zone.Lighting, `the portal's light at {x}, {z} is the zone's`)
