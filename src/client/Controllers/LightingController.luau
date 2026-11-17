@@ -354,16 +354,26 @@ function LightingController.portalSide(portal: BasePart, camera: CFrame, focus: 
 	local function onFace(q: Vector3): boolean
 		return math.abs(q.X) <= limX and math.abs(q.Y) <= limY
 	end
-	local decides
+	local decides, byFocus = false, false
 	if f then
-		-- the character before its face (within reach), or a camera seen through the face from the
-		-- character's side (a zoomed-out camera high over the quarry, the character just inside)
-		decides = (onFace(f) and math.abs(f.Z) <= reach) or ((f.Z < 0) ~= (p.Z < 0) and onFace(f:Lerp(p, f.Z / (f.Z - p.Z))))
+		-- the camera's side: a camera seen through the face from the character's side (a zoomed-out
+		-- camera high over the quarry, the character just inside), or both before the face within
+		-- reach; the character's side: the character before it, the camera off its face (over the
+		-- wall's top or the mountain behind it, looking down at the character's side)
+		local crosses = (f.Z < 0) ~= (p.Z < 0) and onFace(f:Lerp(p, f.Z / (f.Z - p.Z)))
+		if crosses or (onFace(p) and math.abs(p.Z) <= reach and math.abs(f.Z) <= reach) then
+			decides = true
+		elseif onFace(f) and math.abs(f.Z) <= reach then
+			decides, byFocus = true, true
+		end
 	else
 		decides = onFace(p) and math.abs(p.Z) <= reach
 	end
 	if not decides then
 		return nil
+	end
+	if byFocus then
+		return if (f :: Vector3).Z < 0 then inside else outside
 	end
 	local isInside = p.Z < 0
 	if math.abs(p.Z) <= LightingController.PortalBand then

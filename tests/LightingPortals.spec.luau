@@ -84,6 +84,14 @@ return function(T, Loader)
 			"Quarry",
 			"a hair outside the plane: the camera's side"
 		)
+		-- a camera off its face, high over the wall's top on the cave's side (over the mountain), the
+		-- character outside: it looks down at the quarry, the character's side
+		T.eq(
+			side(walled, cam(V3.new(0, 50, -6), V3.new(0, 4, 20)), V3.new(0, 4, 20)),
+			"Quarry",
+			"over the wall's top: the character's side"
+		)
+		T.eq(side(walled, cam(V3.new(0, 50, 6), V3.new(0, 4, -20)), V3.new(0, 4, -20)), "EmberCaves", "and the other way round")
 		-- the whole wall round it as its face (FaceX): a camera seen through the wall beside the
 		-- opening, out in the quarry, the character inside
 		local wide = portal("EmberCaves", "Quarry")
