@@ -72,7 +72,7 @@ return function(T, Loader)
 				local n = #partsOf(yard:FindFirstChild("Podium" .. slot))
 				T.le(n, if locked then budget.PodiumLocked else budget.Podium, `plot {plot.Id} podium {slot}`)
 			end
-			T.le(#partsOf(yard.TrainStop), budget.TrainStop, `plot {plot.Id} train stop (with the Track placeholder)`)
+			T.eq(yard:FindFirstChild("TrainStop"), nil, `plot {plot.Id}: no train stop (owner 2026-11-17)`)
 			-- the whole plot: 300 before style A, now with room to spare
 			T.le(#partsOf(model), 260, `plot {plot.Id} parts`)
 		end
@@ -83,13 +83,13 @@ return function(T, Loader)
 		local model = buildPlot(plot)
 		local plotCF = WorldLayout.plotCFrame(plot)
 		local yard = model.Yard
-		-- PlotService.setSignText: the PlotSign's Text label; TrainService: the Banner
+		-- PlotService.setSignText: the PlotSign's Text label; the Banner
 		local sign = model:FindFirstChild("PlotSign")
 		T.truthy(sign and sign:IsA("BasePart"), "PlotSign")
 		local text = sign:FindFirstChild("Text", true)
 		T.truthy(text and text:IsA("TextLabel") and text.Text == "Free Plot", "the sign's Text label")
 		T.eq(sign.Color, P.Frame, "a slate sign")
-		T.truthy(model:FindFirstChild("Banner", true), "the banner (the trains' colour)")
+		T.truthy(model:FindFirstChild("Banner", true), "the banner")
 		-- the plot's only light hangs in the left road entrance post's lamp ball
 		local lights = {}
 		for _, d in model:GetDescendants() do
@@ -139,16 +139,8 @@ return function(T, Loader)
 			local a, b, c = podium.Base.Color, podium.Column.Color, podium.Top.Color
 			T.truthy(a ~= b and b ~= c and a ~= c, "Base, Column and Top in three colours")
 		end
-		-- the train stop: a solid platform, the TRAIN STOP sign, the railway's placeholder track
-		local stop = yard.TrainStop
-		local platform = stop:FindFirstChild("Platform")
-		T.truthy(platform and platform.CanCollide and platform.CanQuery, "a solid platform")
-		local stopSign = stop:FindFirstChild("Sign")
-		T.eq(labelOf(stopSign).Text, "TRAIN STOP", "the TRAIN STOP sign")
-		local track = stop:FindFirstChild("Track")
-		T.truthy(track and track:GetAttribute("RailwayPlaceholder") == true and track:FindFirstChild("BufferStop"), "the Track placeholder")
 		-- the walls and pieces in KitMachines' palette roles
-		for _, root in { model.Walls, yard.Fence, yard.Pen, yard.Podium1, stop } do
+		for _, root in { model.Walls, yard.Fence, yard.Pen, yard.Podium1 } do
 			checkRoles(root)
 		end
 	end)

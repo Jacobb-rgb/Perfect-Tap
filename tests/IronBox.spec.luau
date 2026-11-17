@@ -749,8 +749,9 @@ return function(T, Loader)
 		IronBoxService.refreshBoard(w.player)
 		T.eq(IronBoxService.boardOf(PLOT), nil, "removed")
 		T.eq(PlotService.model(PLOT):FindFirstChild(IronBoxService.BoardName), nil, "out of the world")
-		-- level 2 (Direct Unload) keeps it; a released plot drops it
-		data.Upgrades.PenAutomation = EconomyConfig.PenAutomation.DirectUnload
+		-- a higher level (a newer build's; level 2 was the train's Direct Unload) keeps it; a released
+		-- plot drops it
+		data.Upgrades.PenAutomation = 2
 		IronBoxService.refreshBoard(w.player)
 		T.truthy(IronBoxService.boardOf(PLOT), "level 2 has it too")
 		box.removeBoard(PLOT)

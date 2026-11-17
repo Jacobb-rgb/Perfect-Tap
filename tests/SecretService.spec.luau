@@ -241,7 +241,6 @@ return function(T, Loader)
 		}
 		data.BackpackItems = { ["Clean|TidecrownPearl|Flawless|"] = 2, ["Raw|Coal||"] = 5 }
 		data.Podiums = { "Clean|HeartOfTerra|Flawless|", "Clean|Gold|Rough|", "", "", "" }
-		data.Train.Cargo = { { K = "Raw", O = "CagedLightning" }, { K = "Raw", O = "Tin" } }
 		data.Discovered = { HollowEye = true, Coal = true }
 		data.Stats.SecretsFound = 4
 		RebirthConfig.reset(data)
@@ -250,12 +249,11 @@ return function(T, Loader)
 			table.insert(pen, item.K .. "|" .. item.O)
 		end
 		table.sort(pen)
-		T.eq(table.concat(pen, ","), "Clean|RainbowNova,Raw|CagedLightning,Raw|HollowEye", "the pen: its secrets + the train's")
+		T.eq(table.concat(pen, ","), "Clean|RainbowNova,Raw|HollowEye", "the pen: its secrets")
 		T.eq(data.BackpackItems["Clean|TidecrownPearl|Flawless|"], 2, "the backpack's secrets stay in it")
 		T.eq(data.BackpackItems["Raw|Coal||"], nil, "the rest of the backpack goes")
 		T.eq(data.Podiums[1], "Clean|HeartOfTerra|Flawless|", "a secret stays on its podium")
 		T.eq(data.Podiums[2], "", "other podiums empty")
-		T.eq(#data.Train.Cargo, 0, "the train is empty")
 		T.truthy(data.Discovered.HollowEye, "still discovered")
 		T.eq(data.Stats.SecretsFound, 4, "the count stays")
 	end)

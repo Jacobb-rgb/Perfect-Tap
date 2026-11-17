@@ -23,7 +23,7 @@ from the description.
 | Cleaning Station: spray-wash the dirt off, grades up to Flawless | c | [ ] TODO |
 | 36 ores to discover | V2 | [ ] TODO |
 | Podiums that earn coins every second | V2 | [ ] TODO |
-| Your own ore train and the Ore Pen | V2 | [ ] TODO |
+| The Ore Pen (the ore train went 2026-11-17) | V2 | [ ] TODO |
 | Machines, belts and power on your own plot (the factory) | d, V2 | [ ] TODO |
 | Blasters up to level 10 from the Blaster Vault (no Foundry since 2026-10-24) | V2 | [ ] TODO |
 | Badges (only once their ids are in BadgeConfig, `NAHRAJ_DO_ROBLOXU/odznaky`) | f | [ ] TODO |
@@ -124,7 +124,7 @@ The Heartstone, the heart of Terra, has shattered into glowing ore. Join the For
 • Blast ore rocks with your laser blaster: the chunks jump into your backpack
 • Clean each ore by hand: blast the dirt off with your spray wand. Can you get Flawless?
 • Show your best ores on podiums: they earn coins every second
-• Ride your own ore train, fill the Ore Pen, build machines, belts and power
+• Fill your Ore Pen, build machines, belts and power
 • Earn coins and buy better blasters, up to level 10, in the Blaster Vault
 • Walk near your ore and it jumps into your backpack: bigger backpacks hold up to 1000
 • 36 ores to discover
@@ -133,7 +133,7 @@ The Heartstone, the heart of Terra, has shattered into glowing ore. Join the For
 🎮 Play on PC, phone, tablet and console
 
 🆕 WHAT'S NEW (v1.0, TODO date)
-• Launch! Blasters, 36 ores, trains, podiums, your own factory and the Blaster Vault
+• Launch! Blasters, 36 ores, podiums, your own factory and the Blaster Vault
 ```
 
 The "What's new" block: replace it with every update and keep it to 1–2 lines, so the whole text stays under the limit.
@@ -150,7 +150,7 @@ on-screen hints.
 | Mine | Left click, aim with the mouse | Tap | R2 |
 | Pick up ore (into the backpack) | Walk near it | Walk near it | Walk near it |
 | Use the Cleaning Station (and every other prompt: shops, machines, pen, podiums) | E | Tap the prompt | Y |
-| Take the raw ore back out of the station (and every second prompt: Open Pen, Send Train) | G | Tap "Take Ore Back" | B |
+| Take the raw ore back out of the station (and every second prompt: Open Pen) | G | Tap "Take Ore Back" | B |
 | Cleaning: spray the dirt off | Hold left mouse button and drag | Hold your finger on the dirt and drag | Left stick moves the ring, hold A (or R2) |
 | Leave cleaning (press twice once some dirt is off) / collect the result | Leave button or Backspace / E or Enter | Leave / Collect buttons | B / A |
 | Other machines, build mode | TODO (step d) | TODO | TODO |
@@ -227,7 +227,7 @@ That is TERRA FORGE's loop: gather and process ore, sell it, upgrade, and grow y
 
 ### Keywords
 
-Already in the descriptions: mining, ore, blaster, crafting, tycoon, clean, spray, wash, smelt, ingots, forge, train, podiums, factory, machines, belts.
+Already in the descriptions: mining, ore, blaster, crafting, tycoon, clean, spray, wash, smelt, ingots, forge, podiums, factory, machines, belts.
 
 **Search ads** (Ads Manager → new campaign with the **Visits** objective → ad set placement **Search Experience**;
 up to **10 keywords per ad set**, and an ad only shows when the search exactly matches a keyword).
@@ -236,7 +236,7 @@ Choose from the suggestions Roblox shows while you type; if a word isn't suggest
 | Ad set | Keywords (English) |
 |---|---|
 | Core | mining, mine, ore, blaster, forge, blacksmith, crafting, smelting, mining tycoon, mining game |
-| Feel | satisfying, cleaning, washing, crystals, factory, conveyor, furnace, train, podium, cozy |
+| Feel | satisfying, cleaning, washing, crystals, factory, conveyor, furnace, podium, cozy |
 
 | Sada | Klíčová slova (čeština) |
 |---|---|

@@ -286,7 +286,7 @@ return function(T, Loader)
 		local hud = init:find('"HudController"', 1, true) :: number
 		local night = init:find('"NightShiftController"', 1, true) :: number
 		T.truthy(hud < night, "after the HUD")
-		for _, other in { "PenController", "SellController", "WheelController", "CapsuleController", "TrainController" } do
+		for _, other in { "PenController", "SellController", "WheelController", "CapsuleController" } do
 			local at = init:find(`"{other}"`, 1, true)
 			T.truthy(at and night < at, `before {other}: it must stay the first OpenUI listener`)
 		end

@@ -1589,7 +1589,6 @@ return function(T, Loader)
 			BigPass = 560,
 			Podiums = 100,
 			OfflineExtension = 99,
-			TrainExpress = 199,
 			RoyalCapsule1 = 49,
 			EnchantHeartfire = 20,
 			EnchantStarbreaker = 20,
@@ -1723,8 +1722,8 @@ return function(T, Loader)
 		-- bigger plots' grid move (Migrations)
 		T.eq(
 			DataTemplate.Version,
-			17,
-			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack, 10 secret ores, 11 the golems' auto-delete, 12 the HUGE golems, 13 the rarer golems' auto-delete flags, 14 Night Shift, 15 the one belt's level, 16 the Ore Feeder, 17 floors bought one by one"
+			18,
+			"no steps 6-7 bump: version 4 is the grid move, 5 the player levels, 6 one Furnace, 7 five podiums, 8 no Foundry, 9 the backpack, 10 secret ores, 11 the golems' auto-delete, 12 the HUGE golems, 13 the rarer golems' auto-delete flags, 14 Night Shift, 15 the one belt's level, 16 the Ore Feeder, 17 floors bought one by one, 18 no train"
 		)
 		T.eq(DataTemplate.CarryLevel, nil, "CarryLevel is gone")
 		T.eq(DataTemplate.Daily, nil, "the 7-day chest streak is gone (the wheel replaced it)")

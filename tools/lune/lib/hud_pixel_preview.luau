@@ -2,7 +2,7 @@
 	The HUD in the pixel reels' look (owner 2026-10-22) with nothing else on
 	screen (scene "hud_quick" for tools/lune/export_scene.luau: no world, fast
 	UI iteration). Drawn with the game's own code (HudBubble, TeleportView,
-	TrainView, BoostView, WheelView). UI overlays (build/preview/<name>.json):
+	BoostView, WheelView). UI overlays (build/preview/<name>.json):
 	  ui_hud_pixel_pc       PC: the top bar, the left tiles with the TRAIN and
 	                        boost chips, the FREE SPIN chip, a full hotbar
 	  ui_hud_pixel_phone    667 x 375 pt phone (uiScale 0.62)
@@ -41,7 +41,7 @@ function Preview.build(Loader: any): { [string]: any }
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 	local SideMenuView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.SideMenuView")
 	local BoostView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.BoostView")
-	local TrainView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TrainView")
+	local ChipSlot = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.ChipSlot")
 	local WheelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.WheelView")
 	local PopTheme = Loader.requirePath("ReplicatedStorage.Shared.Config.PopTheme")
 	local LevelView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.LevelView")
@@ -108,19 +108,9 @@ function Preview.build(Loader: any): { [string]: any }
 		HudView.setBlasterKey(refs, if compact then nil else "1")
 		HudView.setBlasterEquipped(refs, equipped == true)
 		local list = { refs.Gui }
-		-- the TRAIN chip and the boost chips (TrainController / BoostController place them)
-		TrainView.useHud(refs.Gui) -- (HudController: under the tiles, as wide as them)
-		-- (TrainController: the compact chip on a touch screen or a small one)
+		-- the chip slot under the tiles (HudController), where BoostController puts the boost chips
+		ChipSlot.useHud(refs.Gui)
 		local chipCompact = compact or touch
-		local train = TrainView.build(chipCompact)
-		train.Chip.Scale.Scale = renderScale
-		train.Gui.Scale.Scale = renderScale
-		TrainView.layout(train, chipCompact, screen.X / uiScale, screen.Y / uiScale)
-		train.ChipKey.Visible = not chipCompact
-		TrainView.setStatus(train, TrainView.status(TrainView.read({ Cargo = 5, Capacity = 8, Moving = 0 }), NOW, nil))
-		train.Gui.Enabled = false
-		train.Chip.Enabled = true
-		table.insert(list, train.Chip)
 		-- the tutorial card's place (TutorialController), for the boost corner as BoostController keeps it
 		local tutorialTop: number?, tutorialRect: any = nil, nil
 		local tutorialLayout = if extra.Tutorial then TutorialView.layout(uiScale, screen, touch, input == "TV", nil) else nil
@@ -147,7 +137,7 @@ function Preview.build(Loader: any): { [string]: any }
 		end
 		local boost = BoostView.buildChips()
 		boost.Gui.Scale.Scale = renderScale
-		BoostView.placeChips(boost, BoostView.chipsTop(train.ChipFrame, compact), BoostView.chipsLeft(train.ChipFrame))
+		BoostView.placeChips(boost, BoostView.chipsTop(chipCompact), BoostView.chipsLeft(chipCompact))
 		if boost.Row:GetAttribute("Corner") then
 			-- the boost corner as BoostController puts it (the owner's photo: Triple Lucky running)
 			local pill = refs.Gui:FindFirstChild("ShopPill") :: any
@@ -270,7 +260,7 @@ function Preview.build(Loader: any): { [string]: any }
 	exports.ui_hud_round_pc768 =
 		UiExport.export(hud(laptop * 900 / 768, laptop, roblox.Vector2.new(1366, 768 - 58 * 768 / 900), 1, false, false, "Mouse"))
 	exports.ui_hud_round_phone844 = UiExport.export(hud(0.62 * 900 / 390, 0.62, roblox.Vector2.new(844, 390 - 58), 1, true, false, "Touch"))
-	TrainView.useHud(nil)
+	ChipSlot.useHud(nil)
 	-- the owner's Studio window from his log (2026-11-07): 1402 x 490 points on a mouse, 1402 x 368 with
 	-- a taller Output panel, drawn 1990 px wide: as the game shows it (his top row and tile images are
 	-- uploaded, the icon sheets aren't), with More shut and open, and with every icon. The renderer's

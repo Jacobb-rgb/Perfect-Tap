@@ -16,7 +16,7 @@
 	"Main" E / gamepad Y for shops, stalls and machine prompts; "Second" G /
 	gamepad B for the second prompt on a spot, like the Cleaning Station's
 	"Take Ore Back" (always shown, its own keys, so it never fires together
-	with "Clean Ore"); "Panel" T / L3 for the Train panel. Taken elsewhere:
+	with "Clean Ore"); "Panel" T / L3 for a machine's Upgrades. Taken elsewhere:
 	F / X Grab, Q / R1 the backpack window; B is also Leave inside the cleaning minigame,
 	while the prompts are suppressed. A modal that binds E itself (the
 	cleaning result card's Collect) suppresses the prompts

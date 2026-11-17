@@ -46,12 +46,16 @@
 	  newer build's, up to MAX_PODIUM_SLOTS_KEPT) stay when "" or four-part.
 	- Coins, TotalEarned and LastSeen are finite numbers >= 0.
 
-	Trains (step 2, same Version 3; DataTemplate fills the record in):
-	- Train levels are whole numbers 0..MAX_LEVEL_KEPT; Cargo and TripCargo
-	  keep well-formed items of known kinds/ores (unknown ones wait in the
-	  pen), together at most TrainConfig.MaxCargoSaved (the rest goes to
-	  the pen);
-	  trip times are finite and >= 0, and 0 when nothing is on the move.
+	No train (Version 18, owner 2026-11-17: "completely remove this system";
+	the trains were step 2's): a save's data.Train goes on its first load
+	here. Its cargo (waiting at the station or on the way: Cargo and
+	TripCargo, every well-formed item) goes into the pen; the coins its
+	capacity and speed levels cost come back (OLD_TRAIN_*_PRICES, frozen),
+	and, once (Version < 18), so do the coins of the pen's level 2 (the
+	train's Direct Unload: Upgrades.PenAutomation 2 -> 1) and the Forge
+	Stars of the Star Shop's Express Rails (StarPerks.ExpressRails); the
+	tutorial's step number moves down past the train's two steps (one
+	"Take it home" step now).
 
 	Machines + automation (step 3, same Version 3; DataTemplate fills the
 	records in):
@@ -259,19 +263,17 @@ local WheelConfig = require(Shared.Config.WheelConfig)
 local ItemData = require(Shared.Config.ItemData)
 local MachineData = require(Shared.Config.MachineData)
 local MineFloors = require(Shared.Config.MineFloors)
-local TrainConfig = require(Shared.Config.TrainConfig)
 local OreData = require(Shared.Config.OreData)
 local DataTemplate = require(script.Parent.DataTemplate)
 
 local Migrations = {}
 
-Migrations.Latest = 17 -- 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once; 14: Night Shift's crate (no step: a new field, so an older server refuses the save; data.NightShift is repaired below on every load); 15: the one belt's level (no step: MachineUpgrades.Conveyor.Speed is a new value a save can name, so an older server, where a bought level would run at 1x, refuses the save); 16: the Ore Feeder (no step: a new machine id, its queue and its Capacity level are names a save can hold, so an older server refuses the save); 17: floors bought one by one (Upgrades.Floors; an old bought Upgrades.Elevator owns every floor with a price, on every load, see run())
+Migrations.Latest = 18 -- 18: no train (data.Train, the Direct Unload level and the Express Rails perk go once, paid back, see run()); 5: the player LEVEL record (repaired below on every load); 6: one Furnace, a Crusher once; 7: five podiums (3 free); 8: no Foundry; 9: the backpack; 10: secret ores (no step: new ore ids a save can name, so an older server refuses the save; Stats.SecretsFound comes in by reconcile); 11: the golems' auto-delete (a no-op step, see run()); 12: the HUGE golems (no step: new golem kinds a save can name, so an older server refuses the save); 13: the auto-delete flags of the golems that got rarer go once; 14: Night Shift's crate (no step: a new field, so an older server refuses the save; data.NightShift is repaired below on every load); 15: the one belt's level (no step: MachineUpgrades.Conveyor.Speed is a new value a save can name, so an older server, where a bought level would run at 1x, refuses the save); 16: the Ore Feeder (no step: a new machine id, its queue and its Capacity level are names a save can hold, so an older server refuses the save); 17: floors bought one by one (Upgrades.Floors; an old bought Upgrades.Elevator owns every floor with a price, on every load, see run())
 
 export type Report = { Moved: number, Dropped: number }
 
 local MAX_INVENTORY = MachineData.MaxInventory
--- Highest saved level of any upgrade line (readers clamp to what is sold;
--- TrainService uses the same GameConfig number).
+-- Highest saved level of any upgrade line (readers clamp to what is sold).
 local MAX_LEVEL_KEPT = GameConfig.MaxLevelKept
 local PODIUM_SLOTS = 5 -- EconomyConfig.Podiums.Max (Version 7: 3 free + 2 for Robux; 4 before)
 -- Version 4: the 12 -> 16 grid move of a placed machine's cell. Frozen numbers of
@@ -313,6 +315,13 @@ local OLD_BACKPACK_PRICES = { 800, 5000, 30000, 180000, 1100000 }
 -- what the retired ToolData carry levels 1..5 cost (frozen): a save that still had CarryLevel
 -- (folded into Gear.Backpack this load) paid these, not the Gear shop's prices
 local OLD_CARRY_PRICES = { 0, 300, 1500, 6000, 25000 }
+-- Version 18: what the train's capacity levels 1..9 and speed levels 1..5 cost (frozen, the
+-- old TrainConfig), the pen's level 2 (the train's Direct Unload) and each level of the Star
+-- Shop's Express Rails (Forge Stars): all paid back when the train goes
+local OLD_TRAIN_CAPACITY_PRICES = { 2000, 15000, 120000, 900000, 6e6, 40e6, 250e6, 1.5e9, 10e9 }
+local OLD_TRAIN_SPEED_PRICES = { 3000, 25000, 200000, 1.5e6, 10e6 }
+local OLD_DIRECT_UNLOAD_PRICE = 250000
+local OLD_EXPRESS_RAILS_STARS = { 2, 2, 2 }
 -- the most of one item a backpack keeps (2x the biggest pack with Strong Back, and room
 -- for a newer build's bigger packs)
 local MAX_BACKPACK_KEPT = 5000
@@ -1003,6 +1012,8 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	local v9Step = not (isFinite(loadedVersion) and loadedVersion >= 9)
 	-- a save from before the golems' new rarities: their auto-delete flags go once (Version 13)
 	local v13Step = not (isFinite(loadedVersion) and loadedVersion >= 13)
+	-- a save from before the train went: its Direct Unload level and Express Rails perk are paid back once (Version 18)
+	local v18Step = not (isFinite(loadedVersion) and loadedVersion >= 18)
 	local report: Report = { Moved = 0, Dropped = 0 }
 	local clock = math.floor(if isFinite(now) then now :: number else os.time())
 
@@ -1330,51 +1341,43 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		end
 	end
 
-	-- trains: levels in range, clean cargo lists, sane trip times
+	-- Version 18: no train (owner 2026-11-17). Its cargo goes into the pen and its levels are paid
+	-- back in coins; then the record goes (only a save from before still has one: any load)
 	local train = data.Train
-	if type(train) ~= "table" then
-		if train ~= nil then
-			report.Dropped += 1
-		end
-		train = {}
-		data.Train = train
-	end
-	-- levels above what this server sells stay (TrainConfig clamps for the readers)
-	for _, field in { "CapacityLevel", "SpeedLevel" } do
-		local v = train[field]
-		train[field] = if isFinite(v) then math.clamp(math.floor(v), 0, MAX_LEVEL_KEPT) else 0
-	end
-	local cargoKept = 0
-	for _, field in { "Cargo", "TripCargo" } do
-		local list = train[field]
-		local clean = {}
-		if type(list) == "table" then
-			for _, item in values(list) do
-				if not wellFormed(item) then
-					report.Dropped += 1
-				elseif not (ItemData.Kinds[item.K] and OreData.ById[item.O]) or cargoKept >= TrainConfig.MaxCargoSaved then
-					-- a newer build's item waits in the pen (the unload can't store what it can't read), so does the overflow
-					table.insert(storage, item)
-					report.Moved += 1
-				else
-					table.insert(clean, item)
-					cargoKept += 1
+	if train ~= nil then
+		if type(train) == "table" then
+			for _, field in { "Cargo", "TripCargo" } do
+				local list = train[field]
+				if type(list) == "table" then
+					for _, item in values(list) do
+						if wellFormed(item) then
+							table.insert(storage, item)
+							report.Moved += 1
+						else
+							report.Dropped += 1
+						end
+					end
 				end
 			end
-		elseif list ~= nil then
+			local function paid(level: any, prices: { number }): number
+				local sum = 0
+				for i = 1, math.min(wholeIn(level, 0, MAX_LEVEL_KEPT) or 0, #prices) do
+					sum += prices[i]
+				end
+				return sum
+			end
+			local refund = paid(train.CapacityLevel, OLD_TRAIN_CAPACITY_PRICES) + paid(train.SpeedLevel, OLD_TRAIN_SPEED_PRICES)
+			if refund > 0 then
+				data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + refund
+			end
+		else
 			report.Dropped += 1
 		end
-		train[field] = clean
-	end
-	for _, field in { "TripDepartAt", "TripArriveAt" } do
-		local v = train[field]
-		if not isFinite(v) or v < 0 then
-			train[field] = 0
+		data.Train = nil
+		-- (the trips' counter goes with it: no quest, badge or level reads it now)
+		if type(data.Stats) == "table" then
+			data.Stats.TrainTrips = nil
 		end
-	end
-	if #train.TripCargo == 0 then
-		train.TripDepartAt = 0
-		train.TripArriveAt = 0
 	end
 
 	-- step 3: machine upgrades, whole levels in range (unknown ones kept for newer servers)
@@ -1473,6 +1476,34 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 	end
 	local automation = bought.PenAutomation
 	bought.PenAutomation = if isFinite(automation) then math.clamp(math.floor(automation), 0, MAX_LEVEL_KEPT) else 0
+	-- Version 18, once: the pen's level 2 was the train's Direct Unload (no train now): back to
+	-- level 1 and its coins back; the Star Shop's Express Rails (shorter train trips) gives its
+	-- Forge Stars back (before the perks' repair in steps 6-7 keeps it as a newer build's)
+	if v18Step then
+		if bought.PenAutomation >= 2 then
+			bought.PenAutomation = 1
+			data.Coins = (if isFinite(data.Coins) then data.Coins else 0) + OLD_DIRECT_UNLOAD_PRICE
+		end
+		local perks = data.StarPerks
+		local rails = if type(perks) == "table" then wholeIn(perks.ExpressRails, 0, MAX_LEVEL_KEPT) else nil
+		if rails then
+			local stars = 0
+			for i = 1, math.min(rails, #OLD_EXPRESS_RAILS_STARS) do
+				stars += OLD_EXPRESS_RAILS_STARS[i]
+			end
+			data.Stars = (if isFinite(data.Stars) then data.Stars else 0) + stars
+		end
+		if type(perks) == "table" then
+			perks.ExpressRails = nil
+		end
+		-- the tutorial lost a step with the train (Load 3 and Off it goes 4 -> Take it home 3; Clean
+		-- 5 and every later step one lower: a player half way through keeps their place)
+		local tutorial = data.Tutorial
+		local step = if type(tutorial) == "table" then tutorial.Step else nil
+		if isFinite(step) and step >= 4 then
+			tutorial.Step = if step >= 5 then math.floor(step) - 1 else 3
+		end
+	end
 
 	-- Version 17: the elevator floors bought, a set of short string ids (a newer build's too)
 	local floors = subTable(bought, "Floors", report)

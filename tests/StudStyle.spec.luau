@@ -185,7 +185,6 @@ return function(T, Loader)
 				Display_Clean_Copper = false,
 				Display = false,
 				Artifact = false,
-				ClientTrains = false,
 				CleaningClient = false,
 				CrateOpening = false,
 				FireCrystalRing = true,

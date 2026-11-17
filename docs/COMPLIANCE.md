@@ -296,7 +296,6 @@ What Terra Forge sells (design v2; the source of truth is
 | Forgemaster's Pass (~560 R$) | Game pass | `BigPass` | Podiums 4-5, podiums earn 50 % offline for 12 h, 2× backpack space (`StrongBack`), the Glimmer Grotto (`ForgeVip`), extra machine slots (`Workshop`) | No |
 | Two More Podiums (100 R$) | Game pass | `Podiums` | Podiums 4 and 5 (3 are free, owner 2026-10-24) | No |
 | Night Shift (99 R$) | Game pass | `OfflineExtension` | The podiums earn 50 % for up to 12 h while away, instead of 25 % for 8 | No |
-| Express Train (199 R$) | Game pass | `TrainExpress` | Faster, bigger ore train | No |
 | 2x Money (199 R$) | Game pass | `DoubleMoney` | Podium income (offline too) and sell value x2, a separate multiplier on top of the capped bonuses (`Bonuses.moneyMult`: EconomyService income factor `MoneyPass`, `Bonuses.sellMult`) | No |
 | Terra Forge Custom Hoverboard (49 R$) | Game pass | `HoverboardCustom` | The fastest hoverboard (speed 48), rainbow trail (the carry slowdown it skipped went with the backpack, 2026-10-24) | No |
 | Starter Pack (99 R$) | Developer product, once per account | `StarterPack` | The Rare golem Gilded Porter (fixed, not rolled), 20 min of podium income in coins (at least 15,000; `PaidCoins`), the Pioneer podium skin + title. Offered only during the first hour of play (`data.Stats.PlaySeconds`), only while coins are buyable; "Owned" after the purchase (`data.StarterPack`) | No (nothing random: Triple Lucky was left out on purpose so the pack is sold in every policy region) |
@@ -431,7 +430,7 @@ choices marked *(ours)*):
   `ProcessReceipt` and the pass checks, and every entry in
   `MonetizationConfig` names its handler in `Grant`, registered in the
   owning service's `init()`: `Perks` (Forgemaster's Pass, Two More Podiums,
-  Night Shift, Express Train: player perks, set again on every join and on
+  Night Shift: player perks, set again on every join and on
   `PromptGamePassPurchaseFinished`, never consumed), `Enchant` (Heartfire /
   Starbreaker: the Mythic enchant forever, `EnchantService`), `Hoverboard`
   (`HoverboardService`), `Capsule` (Royal x1/x3/x5/x10 and the limited
@@ -574,7 +573,7 @@ placeholder ids). The code (`CapsuleService`, `CapsuleController`,
   step 8 grants receipts and passes; with none of the three live
   the tab shows the odds and "Coming soon!" instead of buttons.
   **The gate only blocks in-game prompts.** Game passes (`BigPass`,
-  `Podiums`, `OfflineExtension`, `TrainExpress`, `EnchantHeartfire`,
+  `Podiums`, `OfflineExtension`, `EnchantHeartfire`,
   `EnchantStarbreaker`) are also sold on the game page's **Store tab**
   (website and app) with no prompt at all, and nothing grants a pass before
   step 8 (`Perks` are set by the coming MonetizationService, the Mythic

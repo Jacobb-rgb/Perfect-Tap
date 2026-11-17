@@ -21,7 +21,8 @@ return function(T, Loader)
 	-- the chute cells on the back row (they move with a bigger grid)
 	local BACK = CELLS - 1
 	local PX = BaseLayout.chuteCell("Pen")
-	local TX = BaseLayout.chuteCell("Train")
+	-- the old TRAIN chute's cell (an ordinary cell since the train went, owner 2026-11-17)
+	local TX = PX + 3
 	-- the old FOUNDRY chute's cell (an ordinary cell since the Foundry went, owner 2026-10-24)
 	local FX = 9 + (CELLS - 12) / 2
 
@@ -31,8 +32,8 @@ return function(T, Loader)
 
 	---------------------------------------------------------------- chutes
 
-	T.test("Step 3: two distinct chute cells on the back row (the FOUNDRY one went with the Foundry)", function()
-		T.eq(#BaseLayout.ChuteNames, 2)
+	T.test("Step 3: one chute cell on the back row (the FOUNDRY one went with the Foundry, the TRAIN one with the train)", function()
+		T.eq(#BaseLayout.ChuteNames, 1)
 		local seen = {}
 		for _, name in BaseLayout.ChuteNames do
 			local chute = BaseLayout.Chutes[name]
@@ -50,15 +51,15 @@ return function(T, Loader)
 		for _ in BaseLayout.Chutes do
 			count += 1
 		end
-		T.eq(count, 2, "Chutes and ChuteNames agree")
-		-- the precise decisions: 3 / 6 on a 12-cell grid, moved with a bigger one
+		T.eq(count, 1, "Chutes and ChuteNames agree")
+		-- the precise decisions: 3 on a 12-cell grid, moved with a bigger one
 		local shift = (CELLS - 12) / 2
 		T.eq(BaseLayout.Chutes.Pen.X, 3 + shift)
-		T.eq(BaseLayout.Chutes.Train.X, 6 + shift)
+		T.eq(BaseLayout.Chutes.Train, nil, "no TRAIN chute (owner 2026-11-17)")
+		T.eq(BaseLayout.chuteAt(TX, BACK), nil, "its old cell is an ordinary cell")
 		T.eq(BaseLayout.Chutes.Foundry, nil, "no FOUNDRY chute")
 		T.eq(BaseLayout.chuteAt(FX, BACK), nil, "its old cell is an ordinary cell")
 		T.eq(BaseLayout.Chutes.Pen.Kind, "Source")
-		T.eq(BaseLayout.Chutes.Train.Kind, "Source")
 		local dx, dz = Grid.dir(BaseLayout.SinkRotation)
 		T.eq(dx, 0)
 		T.eq(dz, 1, "SinkRotation faces +Z, toward the yard")
@@ -92,10 +93,7 @@ return function(T, Loader)
 		T.eq(BaseLayout.GridShift, (CELLS - 12) / 2)
 		-- the chutes keep their plot-local x, in line with the pen gate and the yard gate
 		T.near(BaseLayout.chuteLocal("Pen").X, -10, 1e-9, "PEN chute x")
-		T.near(BaseLayout.chuteLocal("Train").X, 2, 1e-9, "TRAIN chute x")
 		T.le(math.abs(BaseLayout.chuteLocal("Pen").X - BaseLayout.Pen.PromptPoint.X), 3, "PEN chute by the pen gate")
-		local gate = BaseLayout.YardGate
-		T.lt(math.abs(BaseLayout.chuteLocal("Train").X - gate.CenterX) + CELL / 2, gate.Width / 2 + 1e-9, "TRAIN chute in the yard gate")
 		-- the yard starts at the pad's back wall line and is as wide as the pad
 		local yard = BaseLayout.Yard
 		T.eq(BaseLayout.YardZ0, HALF + 1)
@@ -105,7 +103,7 @@ return function(T, Loader)
 			T.le(HALF + 1, piece.Center.Z - piece.Size.Z / 2, name .. " in the yard")
 			T.le(math.abs(piece.Center.X) + piece.Size.X / 2, HALF + 1, name .. " between the yard walls")
 		end
-		T.lt(BaseLayout.TrainStop.Center.Z + BaseLayout.TrainStop.Size.Z / 2, BaseLayout.RailZ - 2.95, "train stop off the rail")
+		T.eq(BaseLayout.TrainStop, nil, "no train stop (owner 2026-11-17)")
 		-- the pen: closed by the left yard wall (PlotBuilder's pen), its right edge at x -1
 		local pen = BaseLayout.Pen.Area
 		T.lt(pen.Center.X - pen.Size.X / 2 + HALF + 1, 2.5, "the left yard wall closes the pen")
@@ -173,8 +171,8 @@ return function(T, Loader)
 			end
 		end
 		-- next to a chute is fine, and the back row between chutes too
-		T.truthy(Placement.validate({}, "ClayFurnace", PX + 1, BACK - 1, 0), "2x2 between the pen and train chutes")
-		T.truthy(Placement.validate({}, "IronBox", TX + 1, BACK - 1, 0), "2x2 right of the train chute")
+		T.truthy(Placement.validate({}, "ClayFurnace", PX + 1, BACK - 1, 0), "2x2 right of the pen chute")
+		T.truthy(Placement.validate({}, "IronBox", TX - 1, BACK - 1, 0), "2x2 on the old TRAIN cell")
 		T.truthy(Placement.validate({}, "IronBox", FX - 1, BACK - 1, 0), "2x2 on the old FOUNDRY cell")
 		T.truthy(Placement.validate({}, "Crusher", PX, BACK - 2, 0), "right in front of a chute")
 		-- a move onto a chute is refused and changes nothing
@@ -186,7 +184,7 @@ return function(T, Loader)
 		T.eq(furnace.X, 0, "unchanged")
 		-- a placement onto a chute keeps the machine in the inventory
 		local buy = { PlacedMachines = {}, MachineInventory = { IronBox = 1 }, Storage = {} }
-		local placed, reason = Placement.commitPlace(buy, "IronBox", TX - 1, BACK - 1, 0, Placement.limits(0, false))
+		local placed, reason = Placement.commitPlace(buy, "IronBox", PX - 1, BACK - 1, 0, Placement.limits(0, false))
 		T.eq(placed, nil)
 		T.eq(reason, "Chute")
 		T.eq(buy.MachineInventory.IronBox, 1)
@@ -196,7 +194,7 @@ return function(T, Loader)
 		local blocker = entry("Crusher", PX - 1, BACK - 1)
 		blocker.In = { { K = "Clean", O = "Copper", G = "Rough" } }
 		blocker.Out = { { K = "Crushed", O = "Copper", G = "Rough" } }
-		local belt = entry("Conveyor", TX, BACK, 2)
+		local belt = entry("Conveyor", TX, BACK, 2) -- (on the old TRAIN cell: an ordinary belt)
 		local sink = entry("Conveyor", FX, BACK, BaseLayout.SinkRotation)
 		local fine = entry("ClayFurnace", 4, 4)
 		local data = {
@@ -225,7 +223,7 @@ return function(T, Loader)
 				entry("Crusher", 0, 0),
 				entry("ClayFurnace", 1, 1), -- overlaps the Crusher
 				entry("BlastFurnace", CELLS - 2, CELLS - 2), -- off the plot
-				entry("IronBox", TX - 1, BACK - 1), -- on the TRAIN chute
+				entry("IronBox", PX - 1, BACK - 1), -- on the PEN chute
 				{ Id = "Crusher", X = 4, Z = 4, R = 7 }, -- broken rotation
 			},
 			MachineInventory = {},
@@ -275,7 +273,7 @@ return function(T, Loader)
 		T.eq(batch.MachineInventory.Crusher, cap)
 		-- sanitize moving a machine off a chute at the cap refunds it too
 		local onChute =
-			{ PlacedMachines = { entry("IronBox", TX - 1, BACK - 1) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
+			{ PlacedMachines = { entry("IronBox", PX - 1, BACK - 1) }, MachineInventory = { IronBox = cap }, Storage = {}, Coins = 0 }
 		Placement.sanitize(onChute)
 		T.eq(onChute.MachineInventory.IronBox, cap)
 		T.eq(onChute.Coins, MachineData.ById.IronBox.Price)
@@ -653,9 +651,9 @@ return function(T, Loader)
 		T.eq(items.Slots.Prices, MachineData.SlotUpgrade.Prices, "Slots keep their prices")
 		T.eq(items.PenAutomation.Prices, EconomyConfig.PenAutomation.Prices)
 		T.eq(EconomyConfig.PenAutomation.Prices[1], 25000)
-		T.eq(EconomyConfig.PenAutomation.Prices[2], 250000)
+		T.eq(#EconomyConfig.PenAutomation.Prices, 1, "one level: the train's Direct Unload went with the train (2026-11-17)")
 		T.eq(EconomyConfig.PenAutomation.Billboard, 1)
-		T.eq(EconomyConfig.PenAutomation.DirectUnload, 2)
+		T.eq(EconomyConfig.PenAutomation.DirectUnload, nil)
 		for _, item in shop.Items do
 			local prices = item.Prices
 			if prices then
@@ -716,7 +714,7 @@ return function(T, Loader)
 		local pen = EconomyConfig.techItem("PenAutomation")
 		T.eq(EconomyConfig.techPrice(pen, data), 25000)
 		data.Upgrades.PenAutomation = 1
-		T.eq(EconomyConfig.techPrice(pen, data), 250000)
+		T.eq(select(2, EconomyConfig.techPrice(pen, data)), "Max", "one level since the train went")
 		data.Upgrades.PenAutomation = 2
 		T.eq(select(2, EconomyConfig.techPrice(pen, data)), "Max")
 		local bellows = EconomyConfig.techItem("Bellows")
@@ -812,8 +810,8 @@ return function(T, Loader)
 		-- plots' grid move (Migrations), which an old save needs once
 		T.eq(
 			DataTemplate.Version,
-			17,
-			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry, 9: the backpack, 10: secret ores, 11: the golems' auto-delete, 12: the HUGE golems, 13: the rarer golems' auto-delete flags, 14: Night Shift, 15: the one belt's level, 16: the Ore Feeder, 17: floors bought one by one)"
+			18,
+			"no step 3 bump: reconcile fills the records (4: the grid move, 5: levels, 6: one Furnace, 7: five podiums, 8: no Foundry, 9: the backpack, 10: secret ores, 11: the golems' auto-delete, 12: the HUGE golems, 13: the rarer golems' auto-delete flags, 14: Night Shift, 15: the one belt's level, 16: the Ore Feeder, 17: floors bought one by one, 18: no train)"
 		)
 		T.eq(type(DataTemplate.MachineUpgrades), "table")
 		T.eq(next(DataTemplate.MachineUpgrades), nil, "no upgrades at first")

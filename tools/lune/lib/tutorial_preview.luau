@@ -11,9 +11,9 @@
 	(TutorialConfig.layoutPoint) and a chevron with the target's name over it.
 
 	  tutorial         step 1: a player at the foot of the quarry ramp, the
-	                   guide on the Mine Station
-	  tutorial_hopper  step 3: on the station platform carrying ore, the guide
-	                   on the hopper
+	                   guide on the quarry floor by the still train
+	                   (TutorialConfig.MinePoint; tutorial_hopper is the same
+	                   since the train went, 2026-11-17)
 
 	UI overlays (build/preview/<name>.json):
 	  ui_tutorial_pc           PC 1600 x 900: step 1, bubble at the bottom right
@@ -98,15 +98,14 @@ function Preview.guide(parent: any, CF: any, from: any, to: any, name: string, e
 	label.Parent = gui
 end
 
--- The world part of the scene: the dummy and the guide (`variant` = "station" | "hopper").
+-- The world part of the scene: the dummy and the guide (`variant` = "station" | "golems"; the
+-- old "hopper" step went with the train, 2026-11-17: it shows the station step).
 function Preview.scene(Loader: any, workspace: any, variant: string)
 	local CF = Loader.CFrame
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
 	local props = Instance.new("Folder")
 	props.Name = "TutorialProps"
 	props.Parent = workspace
-	local station = TrainConfig.Station.Platform.Center
 	if variant == "golems" then
 		-- step 9 (the golem hint): on the plaza, the guide on the CapsuleStall
 		local stall = nil
@@ -127,20 +126,6 @@ function Preview.scene(Loader: any, workspace: any, variant: string)
 			TutorialConfig.TargetNames.Capsules,
 			Vector3.new(-2, 7, 30),
 			TutorialConfig.arrowHeight("Capsules")
-		)
-	elseif variant == "hopper" then
-		local deck = station.Y + TrainConfig.Station.Platform.Size.Y
-		local feet = Vector3.new(station.X - 8, deck, station.Z + 1.5)
-		local target = TutorialConfig.layoutPoint("Hopper", nil)
-		Dummy.build(props, CF, CF.lookAt(feet, Vector3.new(target.X, feet.Y, target.Z)), "carry")
-		Preview.guide(
-			props,
-			CF,
-			feet + Vector3.new(0, 0.6, 0),
-			target,
-			TutorialConfig.TargetNames.Hopper,
-			Vector3.new(14, -3, -133),
-			TutorialConfig.arrowHeight("Hopper")
 		)
 	else
 		local feet = Vector3.new(5, -12, -141)

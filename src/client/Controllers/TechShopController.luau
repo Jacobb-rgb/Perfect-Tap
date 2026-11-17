@@ -30,7 +30,7 @@
 	- Closes with the X button, B (gamepad), Backspace, walking away from the
 	  counter (or from your plot, for a shop with no counter: always, past
 	  TechShopView.baseCloseRange of where it opened), the counter
-	  streaming out, respawning or another panel (Pen, Sell, Train...)
+	  streaming out, respawning or another panel (Pen, Sell...)
 	  opening. Other prompts are hidden while it is open.
 	- Build mode (PlacementController) takes the screen and the controls,
 	  so the shop never sits over it: openMachines() from build mode LEAVES

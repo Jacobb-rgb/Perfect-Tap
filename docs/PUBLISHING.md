@@ -65,14 +65,14 @@ build (STORE_PAGE.md section 0) and update the "What's new" line.
 8. **Sky** (optional): `NAHRAJ_DO_ROBLOXU/obloha_mlecna_draha/NAVOD.md` (6 faces; ids go into LightingConfig.Skybox).
 9. **Store art and text**: section 1 and 2 above.
 10. **Test with friends**: Audience **Limited -> Playtesters** (needs the 16+ steps, COMPLIANCE.md 2.9), 2-4 people
-    on PC + phone (+ controller) for 30 minutes: tutorial, mining, cleaning, podiums, train, factory, vault, saving
+    on PC + phone (+ controller) for 30 minutes: tutorial, mining, cleaning, podiums, factory, vault, saving
     after a rejoin. Fix, republish.
 11. **Public**: switch Audience to Public, post the update (STORE_PAGE.md section 7).
 12. **Every later update**: publish, then **Game Settings > Places > ... > "Migrate To Latest Update"** (or
     "Shut Down All Servers"). Never leave old servers running: a save a newer server wrote is refused by an older
     one ("The game just updated, please rejoin"), so players would be bounced until the old servers close.
     An update that adds **anything a save can name** bumps the save version: ore ids, grades, recipes, item kinds,
-    machine ids, keep modes, blaster / train / upgrade levels, new save fields. Bump **`DataTemplate.Version` and
+    machine ids, keep modes, blaster / upgrade levels, new save fields. Bump **`DataTemplate.Version` and
     `Migrations.Latest` together** (tests/SaveSafety.spec.luau fails while they differ; docs/SAVE_AUDIT.md #1).
     **A broken update is fixed forward**: republish the newest code with the broken feature switched off. **Never
     run an older build on saves a newer build wrote**: its Migrations don't know the new ids and drop them for

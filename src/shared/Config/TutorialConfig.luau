@@ -1,6 +1,9 @@
 --[[
-	The first-time tutorial (V2_PLAN step 8: mine -> train -> pen -> clean ->
-	podium, in under 3 minutes). TutorialService moves data.Tutorial.Step on
+	The first-time tutorial (V2_PLAN step 8: mine -> home -> clean -> podium,
+	in under 3 minutes; no train since 2026-11-17: the dirty ore goes home in
+	the backpack and is cleaned straight out of it at the yard's Cleaning
+	Station, owner 2026-11-17: "keeps it in the backpack and cleans it right
+	away"). TutorialService moves data.Tutorial.Step on
 	from the save data and a few server signals, never from what a client
 	claims; TutorialController shows the step in a bubble and points a 3D
 	guide beam at its target.
@@ -25,7 +28,6 @@
 
 local BaseLayout = require(script.Parent.BaseLayout)
 local LobbyLayout = require(script.Parent.LobbyLayout)
-local TrainConfig = require(script.Parent.TrainConfig)
 local WorldLayout = require(script.Parent.WorldLayout)
 
 local TutorialConfig = {}
@@ -34,13 +36,14 @@ export type Data = { [string]: any }
 
 -- What the server knows beyond the save data (TutorialService fills it in).
 export type Signals = {
-	NearStation: boolean?, -- the character has stood within StationRadius of the Mine Station
+	NearStation: boolean?, -- the character has stood within StationRadius of MinePoint (the quarry floor)
+	NearPen: boolean?, -- the character has stood within PenRadius of their own Ore Pen
 	Carrying: number?, -- the CarryCount attribute: items in the backpack (CarryService)
 }
 
 export type Input = string -- "Mouse" | "Touch" | "Gamepad"
 
--- "Station" | "Rock" | "Hopper" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Vault" | "Capsules" | "Wheel"
+-- "Station" | "Rock" | "Pen" | "Cleaning" | "Podium" | "Sell" | "Vault" | "Capsules" | "Wheel"
 export type Target = string
 
 export type Step = {
@@ -55,7 +58,11 @@ export type Step = {
 	done: (data: Data, signals: Signals) -> boolean,
 }
 
-TutorialConfig.StationRadius = 30 -- studs from the Mine Station's platform centre that count as "there"
+-- The quarry floor by the still train, east of the ramp's foot (where the Mine Station stood):
+-- the "Station" step's target, and how near counts as "there"
+TutorialConfig.MinePoint = Vector3.new(26, WorldLayout.Quarry.Min.Y, -150)
+TutorialConfig.StationRadius = 30
+TutorialConfig.PenRadius = 16 -- studs from your Ore Pen that count as "home"
 TutorialConfig.PollSeconds = 1 -- how often the server checks where the player stands (step 1 only)
 TutorialConfig.Reward = 250 -- coins for finishing every step (GAME_DESIGN.md: 250); skipping gives none
 TutorialConfig.ArriveRadius = 9 -- the guide beam fades out this close to its target (the arrow stays)
@@ -72,28 +79,17 @@ local function count(list: any): number
 	return if type(list) == "table" then #list else 0
 end
 
-local function train(data: Data): { [string]: any }
-	return if type(data.Train) == "table" then data.Train else {}
-end
-
 -- Mined anything yet?
 function TutorialConfig.mined(data: Data): boolean
 	return stat(data, "OresMined") > 0 or stat(data, "RocksBroken") > 0
 end
 
--- Ore on the train (waiting at the station or on its way), or a trip done.
-function TutorialConfig.loaded(data: Data): boolean
-	local t = train(data)
-	return count(t.Cargo) > 0 or count(t.TripCargo) > 0 or stat(data, "TrainTrips") > 0
-end
-
--- Ore at home: a train trip unloaded, or the Ore Pen holds ore that came
--- home some other way (carried by hand, a save from before the train). The
--- daily wheel's ore prize goes straight into the pen (Stats.WheelOres), so
--- the pen counts only with more in it than the wheel ever gave: a new
--- player's wheel ore never skips the mine, hopper and train steps.
+-- Ore at home: the Ore Pen holds ore (put in from the backpack). The daily
+-- wheel's ore prize goes straight into the pen (Stats.WheelOres), so the pen
+-- counts only with more in it than the wheel ever gave: a new player's wheel
+-- ore never skips the mine and home steps.
 function TutorialConfig.home(data: Data): boolean
-	return stat(data, "TrainTrips") > 0 or count(data.Storage) > stat(data, "WheelOres")
+	return count(data.Storage) > stat(data, "WheelOres")
 end
 
 function TutorialConfig.cleaned(data: Data): boolean
@@ -102,7 +98,7 @@ end
 
 -- Cleaned more ores than the wheel gave, so one of them came out of a rock:
 -- the first four steps' shortcut for an old save (cleaning a wheel ore early
--- teaches cleaning, not mining or the train).
+-- teaches cleaning, not mining).
 function TutorialConfig.cleanedMined(data: Data): boolean
 	return stat(data, "OresCleaned") > stat(data, "WheelOres")
 end
@@ -197,10 +193,10 @@ TutorialConfig.Steps = {
 	{
 		Id = "Station",
 		Title = "To the mine!",
-		Text = "Walk to the Mine Station down in the quarry.",
+		Text = "Walk down into the quarry: that is the mine.",
 		Target = "Station",
 		done = function(data: Data, signals: Signals): boolean
-			return signals.NearStation == true or M.mined(data) or M.loaded(data) or M.home(data) or M.cleanedMined(data)
+			return signals.NearStation == true or M.mined(data) or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
@@ -214,39 +210,26 @@ TutorialConfig.Steps = {
 		},
 		Target = "Rock",
 		done = function(data: Data, signals: Signals): boolean
-			return (signals.Carrying or 0) > 0 or M.loaded(data) or M.home(data) or M.cleanedMined(data)
+			return (signals.Carrying or 0) > 0 or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
-		Id = "Load",
-		Title = "Load the train",
-		Text = "Load the ore from your backpack onto your train at the station.",
-		Hint = { Mouse = "E at the station", Touch = "Tap Load Train at the station", Gamepad = "Y at the station" },
-		Target = "Hopper",
-		done = function(data: Data, _signals: Signals): boolean
-			return M.loaded(data) or M.home(data) or M.cleanedMined(data)
-		end,
-	},
-	{
-		Id = "Train",
-		Title = "Off it goes!",
-		Text = "The train takes your ore home to your Ore Pen. Go to your base!",
+		Id = "Home",
+		Title = "Take it home",
+		Text = "Your dirty ore is in your backpack. Go back to your base!",
 		Hint = { Mouse = "BASE at the top takes you home", Touch = "Tap BASE at the top", Gamepad = "D-pad down, then BASE" },
-		Target = "Pen",
-		done = function(data: Data, _signals: Signals): boolean
-			return M.home(data) or M.cleanedMined(data)
+		Target = "Cleaning",
+		done = function(data: Data, signals: Signals): boolean
+			return signals.NearPen == true or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
 		Id = "Clean",
 		Title = "Clean your ore",
-		Text = "Take an ore out of your Ore Pen into your backpack, then clean it at the Cleaning Station.",
-		Hint = {
-			-- the pen's "Open Pen" is the second prompt (G / B), the station's "Clean Ore" the main one (E / Y)
-			Mouse = "G opens the pen · E cleans it",
-			Touch = "Tap the buttons that pop up",
-			Gamepad = "B opens the pen · Y cleans it",
-		},
+		Text = "Clean the dirty ore from your backpack at your Cleaning Station.",
+		-- (the station's "Clean Ore" is the main prompt, E / Y; an empty backpack: the guide points
+		-- at the pen, where ore may wait)
+		Hint = { Mouse = "E at the Cleaning Station", Touch = "Tap Clean Ore at the station", Gamepad = "Y at the Cleaning Station" },
 		Target = "Cleaning",
 		EmptyTarget = "Pen",
 		done = function(data: Data, _signals: Signals): boolean
@@ -374,9 +357,8 @@ end
 
 -- The name over the guide's arrow.
 TutorialConfig.TargetNames = {
-	Station = "Mine Station",
+	Station = "Mine",
 	Rock = "Rock",
-	Hopper = "Hopper",
 	Pen = "Ore Pen",
 	Cleaning = "Cleaning Station",
 	Podium = "Podium",
@@ -387,11 +369,10 @@ TutorialConfig.TargetNames = {
 } :: { [string]: string }
 
 -- How high the guide's arrow floats over the target point (studs; ArrowHeight
--- when not listed): over the Mine Station's canopy and sign, not under it.
+-- when not listed): over the still train in the quarry, not in it.
 TutorialConfig.ArrowHeight = 5
 TutorialConfig.ArrowHeights = {
 	Station = 13,
-	Hopper = 9,
 	Capsules = 9,
 	Wheel = 7,
 } :: { [string]: number }
@@ -403,7 +384,6 @@ end
 -- What the client's guide looks for first (CollectionService tags).
 TutorialConfig.Tags = {
 	Rock = "Rock", -- MiningService.RockTag (attributes MinBlaster, VipOnly)
-	Hopper = "TrainHopper", -- the station's (and the lifts') invisible Intake
 	Cleaning = "Machine", -- attribute MachineId "CleaningStation", Owner = your UserId
 	Sell = "SellCounter", -- Tobin's counter in the lobby
 	Vault = "VaultCounter", -- the Blaster Vault's counter in the lobby (VaultService.Tag)
@@ -425,9 +405,7 @@ end
 -- doesn't say (Rock away from the quarry, the lobby's stall, no plot yet).
 function TutorialConfig.layoutPoint(target: Target, plotId: number?): Vector3?
 	if target == "Station" then
-		return TrainConfig.Station.Platform.Center + Vector3.new(0, 3, 0)
-	elseif target == "Hopper" then
-		return TrainConfig.Station.Hopper + Vector3.new(0, 3, 0)
+		return TutorialConfig.MinePoint + Vector3.new(0, 3, 0)
 	elseif target == "Rock" then
 		local q = WorldLayout.Quarry
 		return Vector3.new((q.Min.X + q.Max.X) / 2, q.Min.Y + 2, (q.Min.Z + q.Max.Z) / 2)

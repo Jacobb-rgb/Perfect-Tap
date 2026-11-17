@@ -6,12 +6,11 @@
 
 	  Role    keyboard  gamepad  used by
 	  Main    E         Y        shops, stalls, counters, machines: "Put In",
-	                             "Clean Ore", "Load Train", "Place Ore"...
+	                             "Clean Ore", "Place Ore"...
 	  Second  G         B        the second prompt on the same spot: "Open
-	                             Pen", "Send Train", "Take Ore
-	                             Back", "Keep List", "Change Sort"
-	  Panel   T         L3       the client's "Train" panel prompt at a station;
-	                             a machine's "Upgrades" while "Put In" has E
+	                             Pen", "Take Ore Back", "Keep List",
+	                             "Change Sort"
+	  Panel   T         L3       a machine's "Upgrades" while "Put In" has E
 
 	Taken elsewhere: F / gamepad X is Grab / Drop (InteractController), Q /
 	RB Throw. Gamepad Y stays the main prompt button because Roblox's own

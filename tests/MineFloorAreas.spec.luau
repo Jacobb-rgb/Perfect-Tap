@@ -218,10 +218,8 @@ return function(T, Loader)
 				end
 			end
 		end
-		-- (no ore lift on any floor since 2026-11-14: TrainConfig has none, the floor builds none; its
-		-- crane beam stays over the old spot as decoration)
-		local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
-		T.eq(#TrainConfig.Lifts, 0, "no Mine Lifts")
+		-- (no ore lift on any floor since 2026-11-14, and no train since 2026-11-17: the floor builds
+		-- none; its crane beam stays over the old spot as decoration)
 		T.eq(Floor.LiftSpot, MineFloors.LiftSpots[Floor.Index], "MineFloors.LiftSpots[5]")
 		local built = Floor.build(roblox.Instance.new("Folder"), origin, { Cutaway = false })
 		T.eq(built:FindFirstChild("OreLiftSpot", true), nil, "no ore lift spot")

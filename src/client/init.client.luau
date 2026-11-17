@@ -31,7 +31,6 @@ local ORDER = {
 	"SellController",
 	"BackpackController", -- the backpack inventory window: the HUD's backpack button, Q, gamepad R1
 	"BlasterSlotController", -- the light HUD's BLASTER slot left of the backpack (Roblox's hotbar off): click, tap, 1
-	"TrainController",
 	"TechShopController",
 	"MachineUpgradeController", -- a machine's upgrades at the machine (owner 2026-11-07)
 	"FeederController", -- the Ore Feeder's counter on its side (owner 2026-11-07)

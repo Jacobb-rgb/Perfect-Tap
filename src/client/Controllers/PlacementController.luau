@@ -2270,8 +2270,8 @@ local function hideHud(on: boolean)
 	if not hud then
 		return
 	end
-	-- the train chip and the boost chips hide too (owner 2026-10-24: no TRAIN words in build
-	-- mode): TrainController and BoostController read the HUD's Building attribute
+	-- the boost chips hide too (owner 2026-10-24: nothing of the HUD in build mode):
+	-- BoostController reads the HUD's Building attribute
 	hud.Gui:SetAttribute("Building", if on then true else nil)
 	if on then
 		for _, gui in { hud.CarryPanel :: GuiObject, hud.Menu :: GuiObject, hud.TopBar :: GuiObject } do

@@ -4,7 +4,7 @@
 	GuiService.ReducedMotionEnabled, whether UI motion (Config/AnimConfig.UIMotion)
 	is on or off.
 
-	Motion.reduced() is read by the Level, HUD, Train, Wheel and Placement
+	Motion.reduced() is read by the Level, HUD, Wheel and Placement
 	controllers (and the shopkeepers). UIMotionController used to be the only
 	one that set the flag, and it returns at once while UI motion is off, so
 	Motion.reduced() stayed false and Reduce motion did nothing there (review

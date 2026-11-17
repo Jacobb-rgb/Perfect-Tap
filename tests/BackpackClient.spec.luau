@@ -6,7 +6,7 @@
 	                  attributes: stacks parsed (relics too, junk skipped),
 	                  sorted, the attribute leading the snapshot, the
 	                  capacity fallbacks, the prompt rules' predicates
-	  prompt rules    Load Train / Put In (anything but a relic), Put On
+	  prompt rules    the pen's Put In (anything but a relic), Put On
 	                  Podium (a cleaned ore), the machines' Put In (anything)
 	  BackpackView    named frames, the merged Dirty Ore row that keeps its
 	                  secret, relic rows, rows reused in place, FULL, empty;
@@ -131,7 +131,6 @@ return function(T, Loader)
 	end)
 
 	T.test("Backpack client: the prompt rules read the backpack", function()
-		local TrainController = client("Controllers.TrainController")
 		-- (the Pen and Podium controllers load the world's effects: their rules are read from the source)
 		local penSource = fs.readFile(Loader.root .. "/src/client/Controllers/PenController.luau")
 		local podiumSource = fs.readFile(Loader.root .. "/src/client/Controllers/PodiumController.luau")
@@ -164,13 +163,10 @@ return function(T, Loader)
 		local dirtyOnly = BackpackState.read({ Backpacks = { Count = 2, Capacity = 5, Items = { [key("Raw", COMMON)] = 2 } } })
 		local stale = BackpackState.read(state(), 0) -- CarryCount 0, an older snapshot
 		local loading = BackpackState.read({ Backpacks = { Count = 0, Items = {} } }, 1) -- CarryCount first, items not here yet
-		-- Load Train / Put In: anything but a relic
-		T.truthy(TrainController.canLoad(full), "Load Train: ore inside")
-		T.truthy(TrainController.canLoad(dirtyOnly))
-		T.falsy(TrainController.canLoad(relicOnly), "a relic is never shipped")
-		T.falsy(TrainController.canLoad(stale), "an empty backpack")
-		T.falsy(TrainController.canLoad(loading), "until the State push brings the items")
+		-- Put In: anything but a relic
 		T.truthy(PenController.canPutIn(full), "Put In: ore inside")
+		T.truthy(PenController.canPutIn(dirtyOnly))
+		T.falsy(PenController.canPutIn(loading), "until the State push brings the items")
 		T.falsy(PenController.canPutIn(relicOnly), "a relic is never stored")
 		T.falsy(PenController.canPutIn(stale))
 		-- Put On Podium: a cleaned ore
@@ -187,23 +183,6 @@ return function(T, Loader)
 			)
 		)
 		T.falsy(BackpackState.has(nil, stale), "nothing in an empty backpack")
-		-- the Load prompt follows the rule's answer; other prompts are left alone
-		local load = Instance.new("ProximityPrompt")
-		load:AddTag(TrainController.PromptTag)
-		load:SetAttribute("Action", "Load")
-		T.truthy(TrainController.applyLoadPrompt(load, false), "a Load prompt")
-		T.falsy(load.Enabled, "nothing to load")
-		TrainController.applyLoadPrompt(load, true)
-		T.truthy(load.Enabled, "ore to load")
-		for _, junk in { nil, 3, "true" } do
-			TrainController.applyLoadPrompt(load, junk)
-			T.falsy(load.Enabled, "junk is nothing to load")
-		end
-		local send = Instance.new("ProximityPrompt")
-		send:AddTag(TrainController.PromptTag)
-		send:SetAttribute("Action", "Send")
-		T.falsy(TrainController.applyLoadPrompt(send, false), "Send is no Load prompt")
-		T.truthy(send.Enabled, "and keeps showing")
 		-- the machines' Put In: only while the backpack holds a kind that machine takes
 		local PromptController = client("Controllers.PromptController")
 		local ME = 7

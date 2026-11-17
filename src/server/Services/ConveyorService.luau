@@ -47,8 +47,7 @@
 	  so a full line never takes the room its machines need for their
 	  finished items: they keep emitting, the line keeps draining, and the
 	  Sources wait ("TooMany") instead of locking it. A Source never drops
-	  an item loose. PenService's send queue (both lanes: the pen's Send
-	  and the train's Direct Unload) uses them. spawnable(desc) says whether
+	  an item loose. PenService's send queue (the pen's Send) uses them. spawnable(desc) says whether
 	  a saved desc can become an item at all (known kind, ore, grade,
 	  recipe); spawnAtSource refuses any other with "Bad" (the caller keeps
 	  it and moves on), and an error half way through never leaves a
@@ -122,7 +121,6 @@ ConveyorService.SpawnBack = 0.6 -- studs toward the belt's back end (it rides th
 -- (the Hint is far too long for a plaque; build mode and toasts carry it)
 ConveyorService.SignLines = {
 	Pen = "ORE OUT",
-	Train = "ORE OUT",
 } :: { [string]: string }
 ConveyorService.YardText = "Turn the belt away from the yard" -- toasts, the pen panel
 ConveyorService.YardSign = "TURN BELT" -- the plaque's line meanwhile

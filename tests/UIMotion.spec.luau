@@ -444,11 +444,11 @@ return function(T, Loader)
 		T.truthy(hud:find("not Motion.isCounting(refs.Coins) and not Motion.reduced()", 1, true), "the coin panel pop")
 		T.truthy(hud:find("if not Motion.reduced() then -- (Reduce motion: it just goes)", 1, true), "the toast exit")
 		T.falsy(hud:find("scale.Scale = 0.6", 1, true), "no own offline pop left")
-		for _, name in { "Controllers/WheelController", "Controllers/TrainController", "Controllers/PlacementController" } do
+		for _, name in { "Controllers/WheelController", "Controllers/PlacementController" } do
 			T.truthy(source(name):find("if not Motion.reduced() then -- (Reduce motion:", 1, true), name .. ": its endless pulse")
 		end
 		-- the names calm stills are exactly the ones those controllers use
-		for _, name in { "Controllers/WheelController", "Controllers/TrainController", "Controllers/PlacementController" } do
+		for _, name in { "Controllers/WheelController", "Controllers/PlacementController" } do
 			T.truthy(source(name):find('"Pulse"', 1, true), name .. " names its pulse Pulse")
 		end
 		T.truthy(source("UI/Motion"):find("local CALM = { OpenPop = true, Pulse = true }", 1, true))

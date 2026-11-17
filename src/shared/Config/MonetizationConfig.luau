@@ -235,16 +235,6 @@ local LIST: { Product } = {
 		Description = "Double coins forever: your podiums earn twice as much (offline too) and Tobin pays twice as much for everything you sell.",
 		Perks = { "DoubleMoney" },
 	},
-	{
-		Key = "TrainExpress",
-		Grant = "Perks",
-		Kind = "GamePass",
-		Id = 0,
-		Robux = 199,
-		Name = "Express Train",
-		Description = "Your ore train runs twice as fast and carries half as much again.",
-		Perks = { "TrainExpress" },
-	},
 	-- the Robux hoverboard (HoverboardData): owned forever, so a pass. Owner 2026-10-25: the Neon
 	-- Comet left and the Royal Phoenix became a coin board; the one Robux board is the Terra
 	-- Forge Custom (no hoverboard pass id was ever made, so nobody owned the old two)

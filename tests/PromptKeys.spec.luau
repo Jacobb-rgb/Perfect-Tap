@@ -122,8 +122,8 @@ return function(T, Loader)
 				T.eq(count(text, "ProximityPromptStyle%.Custom"), 0, rel .. ": the stock prompt look")
 			end
 		end
-		-- the sites live in 19 files: 17 server services, CodexController and TrainController
-		-- (FoundryService went with the Foundry, owner 2026-10-24)
+		-- the sites live in 19+ files: server services and client controllers (FoundryService went
+		-- with the Foundry, owner 2026-10-24; TrainService and TrainController with the train, 2026-11-17)
 		T.truthy(makers >= 19, "the prompt sites use the helper (" .. makers .. " files)")
 	end)
 
@@ -252,9 +252,6 @@ return function(T, Loader)
 		T.eq(panel.KeyboardKeyCode, Enum.KeyCode.T)
 		T.eq(panel.UIOffset, Vector2.new(0, 144), "slot 2")
 		T.eq(PromptConfig.SlotHeight, 72, "the step every stacked prompt uses")
-		-- the slot step is the one the trains use
-		local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
-		T.eq(TrainConfig.PromptSlotHeight, PromptConfig.SlotHeight, "TrainConfig's slot step")
 		-- (the HoldDuration/Text set before Parent: make() parents last; the setter order is in the helper)
 		local helper = files[HELPER]
 		local parentAt = string.find(helper, "prompt.Parent = spec.Parent", 1, true)

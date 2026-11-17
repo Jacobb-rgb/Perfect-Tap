@@ -44,9 +44,10 @@
 	in its colour, the tag and the time left: [clover] TRIPLE 4:59, [gem]
 	HEXA 1h 05m: shape, word and colour each tell them apart), or a BOOSTS
 	launcher when none runs; a tap opens the view. They sit in the
-	left column under the TRAIN chip (chipsTop), which sits under the
-	coins and their "+$X" popups; the 72-unit touch area grows down from
-	the pill only, so it never reaches over the train chip.
+	left column's chip slot (ChipSlot: where the TRAIN chip stood until
+	2026-11-17), under the light HUD's tiles or under the coins and their
+	"+$X" popups (chipsTop); the 72-unit touch area grows down from the
+	pill only.
 
 	Designed for 720 design units of height (HudController.uiScale). The
 	compact layout (phones, TVs) makes every button at least 72 units
@@ -82,7 +83,7 @@ local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
 local HudBubble = require(script.Parent.HudBubble)
 local TechShopView = require(script.Parent.TechShopView)
-local TrainView = require(script.Parent.TrainView)
+local ChipSlot = require(script.Parent.ChipSlot)
 
 local BoostView = {}
 
@@ -208,10 +209,8 @@ BoostView.TabTitles = { TripleLucky = "TRIPLE LUCKY", HexaLucky = "HEXA LUCKY" }
 BoostView.MinHeight = 380
 BoostView.CoinsBottom = 96 -- HudView's coins panel (16..90) and a gap
 BoostView.FloatersBottom = 96 + 60 -- HudView's "+$X" popups (Floaters at 16, 96, 60 tall)
--- TrainView's chip (at TrainView.ChipTop) is this tall (its CHIP metrics); the boost chips go under it
-BoostView.TrainChipHeight = { Normal = 66, Compact = 84 } :: { [string]: number }
-BoostView.ChipGap = 8 -- between the train chip and the boost chips
-BoostView.ChipLeft = 16 -- lines up with the coins and the train chip
+BoostView.ChipGap = 8 -- under the coins' "+$X" popups (or the touch MENU's row) and the boost chips
+BoostView.ChipLeft = 16 -- lines up with the coins
 BoostView.ChipHeight = 40 -- the visible pill
 BoostView.ChipHit = 72 -- the touch area: the pill and below it (44 pt at the phone scale)
 BoostView.Separator = TechShopView.Separator
@@ -2933,20 +2932,15 @@ function BoostView.setChipText(button: TextButton, tag: string, text: string, sm
 end
 
 --[[
-	The top of the chips' row (design units): under the train chip
-	(`trainChip`: its frame, else where TrainView puts it on this layout),
-	and never above the coins' "+$X" popups.
+	The top of the chips' row (design units): the chip slot under the light
+	HUD's tiles (ChipSlot), else under the coins' "+$X" popups; on touch
+	layouts under the slot's row, where the side menu's MENU button sits.
 ]]
-function BoostView.chipsTop(trainChip: GuiObject?, compact: boolean): number
-	if TrainView.HudChipTop and trainChip then
-		return trainChip.Position.Y.Offset -- the light HUD: the chips beside the train chip
+function BoostView.chipsTop(compact: boolean): number
+	if ChipSlot.HudTop then
+		return ChipSlot.HudTop
 	end
-	local bottom: number
-	if trainChip then
-		bottom = trainChip.Position.Y.Offset + trainChip.Size.Y.Offset * (1 - trainChip.AnchorPoint.Y)
-	else
-		bottom = TrainView.ChipTop + (if compact then BoostView.TrainChipHeight.Compact else BoostView.TrainChipHeight.Normal)
-	end
+	local bottom = if compact then ChipSlot.Top + ChipSlot.RowHeight.Compact else ChipSlot.Top
 	return math.max(bottom, BoostView.FloatersBottom) + BoostView.ChipGap
 end
 
@@ -2976,11 +2970,11 @@ function BoostView.chipsVisible(hudShown: boolean, panelOpen: boolean, gridOpen:
 	return hudShown and not panelOpen and gridOpen ~= true
 end
 
--- Where the chips' row starts (design units): ChipLeft, or right of the train
--- chip on the light HUD (the left column holds the menu tiles there).
-function BoostView.chipsLeft(trainChip: GuiObject?): number
-	if TrainView.HudChipTop and trainChip then
-		return trainChip.Position.X.Offset + trainChip.Size.X.Offset + BoostView.ChipGap
+-- Where the chips' row starts (design units): ChipLeft, or the chip slot's left edge on the
+-- light HUD (under its tiles, or beside their last row).
+function BoostView.chipsLeft(compact: boolean): number
+	if ChipSlot.HudTop then
+		return ChipSlot.left(compact)
 	end
 	return BoostView.ChipLeft
 end
@@ -2996,8 +2990,7 @@ end
 
 --[[
 	The chips' own ScreenGui (attribute TerraForge: HudController scales
-	it with the HUD): a row in the left column under the train chip
-	(placeChips). Each chip is a TextButton 72 units tall (the touch area)
+	it with the HUD): a row in the left column's chip slot (placeChips). Each chip is a TextButton 72 units tall (the touch area)
 	with the 40-unit pill at its top: the touch area grows down only.
 ]]
 function BoostView.buildChips(): ChipRefs
@@ -3005,7 +2998,7 @@ function BoostView.buildChips(): ChipRefs
 	gui:SetAttribute("TerraForge", true)
 	local row = UIKit.new("Frame", {
 		Name = "Row",
-		Position = UDim2.fromOffset(BoostView.ChipLeft, BoostView.chipsTop(nil, false)),
+		Position = UDim2.fromOffset(BoostView.ChipLeft, BoostView.chipsTop(false)),
 		Size = UDim2.fromOffset(HudView.CoinsWidth + 200, BoostView.ChipHit),
 		BackgroundTransparency = 1,
 	}, gui)
@@ -3217,8 +3210,8 @@ local function pixelPill(button: TextButton, look: { Face: string, Dot: string }
 end
 
 --[[
-	The corner look (owner 2026-10-24, his Studio photo: not a pill next to
-	the train chip, only the four-leaf picture with the time counting down
+	The corner look (owner 2026-10-24, his Studio photo: not a pill in the
+	left column, only the four-leaf picture with the time counting down
 	under it, bottom right): with the light UI each running boost is its
 	picture alone (BoostView.art: the clover, Hexa's gem) over its time left
 	in white pixel letters, in a row at the bottom-right corner that grows

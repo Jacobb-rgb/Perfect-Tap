@@ -14,8 +14,7 @@
 	                (conveyors: BUY 1 and BUY 5)
 	    UPGRADES    machine Slots (a machine's own upgrades and Bellows are
 	                bought at the machine: MachineUpgradeView, owner 2026-11-07)
-	    AUTOMATION  pen automation level 1 "Auto-Sort Billboard" and level 2
-	                "Train Direct Unload" (level 2 needs level 1)
+	    AUTOMATION  pen automation level 1 "Auto-Sort Billboard"
 	  footer   the control hint (not on phones); with a gamepad the
 	           platform's own button glyphs (TechShopView.setHint)
 
@@ -68,13 +67,11 @@ local MachineData = require(Shared.Config.MachineData)
 local Theme = require(Shared.Config.UITheme)
 local PopTheme = require(Shared.Config.PopTheme)
 local IconAssets = require(Shared.Config.IconAssets)
-local PictureModels = require(Shared.Builders.PictureModels)
 local Format = require(Shared.Util.Format)
 local UIKit = require(script.Parent.UIKit)
 local Pop = require(script.Parent.Pop)
 local TouchControls = require(script.Parent.Parent.Util.TouchControls)
 local HudView = require(script.Parent.HudView)
-local TrainView = require(script.Parent.TrainView)
 local BuildView = require(script.Parent.BuildView)
 
 local TechShopView = {}
@@ -235,9 +232,7 @@ end
 	runs them (WP-Belts): level 1 sends everything MachineData.keeps doesn't
 	keep (dirty and crushed ore, ingots, clean ore off the Keep List) out of
 	the PEN chute as it lands in the pen, while a belt feeds from there, and
-	unlocks "Send unkept"; level 2 sends the train's dirty ore out of the
-	TRAIN chute after it unloaded into the pen as before (same capacity rule).
-	Where the Keep List is set: the pen's board (WP-CleanerBox's sorting
+	unlocks "Send unkept". Where the Keep List is set: the pen's board (WP-CleanerBox's sorting
 	board has a "Keep List" prompt) or an Iron Box. ShopService.boughtText
 	says the same.
 ]]
@@ -248,13 +243,6 @@ TechShopView.Automation = {
 		Description = 'Everything you don\'t keep rides out of your PEN chute by itself (when a belt is there): dirty ore, ingots and clean ore off your Keep List. Unlocks "Send unkept".',
 		Next = "Mark what to keep at the pen board or an Iron Box",
 		Active = "Active: mark what to keep at the pen board or an Iron Box",
-	},
-	{
-		Name = "Train Direct Unload",
-		Icon = "Train",
-		Description = "Your train's dirty ore pours out of the TRAIN chute onto your belts (it still unloads into the pen first; no belt there: it stays in the pen).",
-		Next = "Put a belt on your TRAIN chute to use it",
-		Active = "Active: train ore pours out of the TRAIN chute",
 	},
 }
 
@@ -1183,34 +1171,24 @@ local DRAW: { [string]: (Frame) -> () } = {
 			bit(a, "Keep" .. i, 0.71, y, 0.84, y + 0.11, if i == 2 then Theme.PanelDark else C.Green, 0.2)
 		end
 	end,
-	Train = function(a: Frame)
-		local icon = TrainView.icon(a, 10)
-		icon.Size = UDim2.fromScale(0.86, 0.86 / 1.36)
-		icon.Position = UDim2.fromScale(0.07, 0.06)
-		bit(a, "Belt", 0.04, 0.76, 0.96, 0.94, C.Belt, 0.5)
-		glyph(a, ">>", 0.3, 0.77, 0.7, 0.93, C.Hazard)
-	end,
 }
 
 --[[
 	The kind's live 3D picture (the Pop look): a machine id is the build
 	tray's own picture (BuildView.picture: the placed model; an uploaded
-	machine icon when there is one), "Train" the shop's locomotive
-	(PictureModels); nil for the kinds drawn from frames (DRAW: Bellows,
-	Slots, Billboard).
+	machine icon when there is one); nil for the kinds drawn from frames
+	(DRAW: Bellows, Slots, Billboard).
 ]]
 local function pictureName(kind: string): string?
 	if MachineData.ById[kind] then
 		return if BuildView.hasIcon(kind) then BuildView.iconFor(kind) else "machine_" .. kind
-	elseif kind == "Train" then
-		return "train"
 	end
 	return nil
 end
 
 --[[
 	A square icon (`size` design units): a light burst and a soft glow with
-	the picture of `kind` on them: a machine's (or the train's) live 3D
+	the picture of `kind` on them: a machine's live 3D
 	picture (pictureName; the model is built once the card first shows:
 	TechShopView.fillPicture), else a little picture drawn from frames
 	("Bellows", "Slots", "Billboard"; an unknown kind gets a plain tile).
@@ -1324,11 +1302,6 @@ function TechShopView.fillPicture(tile: Frame)
 			end)
 			model.Parent = view
 		end
-	elseif kind == "Train" then
-		local model, from = PictureModels.build("train")
-		if model then
-			Pop.show(view, model, from)
-		end
 	end
 end
 
@@ -1340,7 +1313,7 @@ TechShopView.TabPaints = { Machines = "Orange", Upgrades = "Blue", Automation = 
 -- the cards' paints: a machine (and its upgrades) by category, the rest by item
 TechShopView.CategoryPaints =
 	{ Processing = "Orange", Logistics = "Blue", Selling = "Green", Power = "Teal", Droppers = "Purple" } :: { [string]: string }
-TechShopView.ItemPaints = { Bellows = "Pink", Slots = "Purple", Billboard = "Purple", Train = "Pink" } :: { [string]: string }
+TechShopView.ItemPaints = { Bellows = "Pink", Slots = "Purple", Billboard = "Purple" } :: { [string]: string }
 
 local WHITE = Color3.new(1, 1, 1)
 local SOFT = Color3.fromRGB(214, 220, 232) -- quieter white text (hints)

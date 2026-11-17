@@ -120,13 +120,6 @@ local SoundConfig: { [string]: SoundDef } = {
 	UIClick = { Id = "rbxassetid://12221976", Volume = 0.4, Pitch = { 1.0, 1.1 } },
 	UIDeny = { Id = "rbxassetid://12221967", Volume = 0.4, Pitch = { 0.6, 0.7 } },
 	Discovery = { Id = "rbxassetid://12221990", Volume = 0.55, Pitch = { 0.9, 0.9 } },
-	-- ore trains: TrainController plays both on its own looping sounds (never the shared pool):
-	-- the chuff pulses with the wheels (Pitch = slow..fast), the whistle is a short double toot.
-	-- TODO(owner): both are the built-in falling-wind loop as a quiet, short-range stand-in (the
-	-- "toot" is a soft hiss). Upload or pick a steam chuff loop and a steam whistle in the Creator
-	-- Store and paste their rbxassetid:// ids here (then Volume ~0.4 / 0.35, whistle Pitch { 0.95, 1.05 }).
-	TrainChuff = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.22, Pitch = { 0.45, 0.85 }, Looped = true },
-	TrainWhistle = { Id = "rbxasset://sounds/action_falling.ogg", Volume = 0.14, Pitch = { 1.75, 1.9 }, Looped = true },
 	-- the Blaster Vault's crate opening (VaultController): the case lands, hums while it charges, bursts
 	-- (glass crash + a soft boom), the blaster rises. Ids that play in today's clients: files shipped in
 	-- content/sounds, or Roblox's own uploads of the classic sounds (12222005 = glassbreak.wav, 12222200 = swoosh.wav).

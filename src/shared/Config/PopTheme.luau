@@ -149,7 +149,6 @@ local PopTheme = {
 		TerraForgeHoverboards = { Paint = "Sky", Icon = "hoverboard" },
 		TerraForgeHallOfFame = { Paint = "Amber", Icon = "trophy" }, -- (reel: Trade amber)
 		TerraForgeBoosts = { Paint = "Amber", Icon = "clover" },
-		TerraForgeTrainPanel = { Paint = "Amber", Icon = "train" },
 		TerraForgeWheel = { Paint = "Teal", Icon = "wheel" },
 	} :: { [string]: WindowLook },
 

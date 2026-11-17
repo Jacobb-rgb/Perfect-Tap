@@ -54,13 +54,11 @@ function EconomyConfig.sellCap(from: any): number
 end
 
 -- Pen automation (Tech shop, data.Upgrades.PenAutomation): level 1 = the sorting
--- billboard at the pen (marks the ore types to keep, data.KeepList), level 2 =
--- also the train's Direct Unload (raw cargo goes onto the TRAIN chute cell,
--- BaseLayout.Chutes.Train, instead of into the pen).
+-- billboard at the pen (marks the ore types to keep, data.KeepList). (Level 2 was
+-- the train's Direct Unload: no train since 2026-11-17, Migrations pays it back.)
 EconomyConfig.PenAutomation = {
-	Prices = { 25000, 250000 }, -- levels 1..2
+	Prices = { 25000 }, -- level 1
 	Billboard = 1, -- the level that brings the sorting billboard
-	DirectUnload = 2, -- the level that brings Direct Unload
 }
 
 -- Big numbers: one award can never be bigger than this (a bug, never a real payout).

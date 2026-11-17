@@ -73,20 +73,21 @@ return function(T, Loader)
 
 	T.test("Shop: a row's cards share its width by their span, a hidden one closes the row", function()
 		local refs = StoreView.build()
-		local passes = { "Podiums", "NightShift", "DoubleMoney", "Train", "CustomBoard" }
+		-- (four since the Express Train went with the train, 2026-11-17)
+		local passes = { "Podiums", "NightShift", "DoubleMoney", "CustomBoard" }
 		local w = refs.Cards.Podiums.Holder.Size.X.Offset
 		for _, id in passes do
-			T.near(refs.Cards[id].Holder.Size.X.Offset, w, 1, id .. ": five equal pass cards")
+			T.near(refs.Cards[id].Holder.Size.X.Offset, w, 1, id .. ": four equal pass cards")
 		end
-		T.near(5 * w + 4 * StoreView.Gap, StoreView.ContentWidth, 5, "the row fills the page")
+		T.near(4 * w + 3 * StoreView.Gap, StoreView.ContentWidth, 5, "the row fills the page")
 		-- the Forgemaster's Pass is 1.75 wide next to the Starter Pack; alone it takes the row
 		local pass = refs.Cards.BigPass.Holder.Size.X.Offset
 		local starter = refs.Cards.StarterPack.Holder.Size.X.Offset
 		T.near(pass / starter, 1.75, 0.02, "1.75 : 1")
 		StoreView.setCard(refs, "StarterPack", "StarterPack", "Hidden")
 		T.near(refs.Cards.BigPass.Holder.Size.X.Offset, StoreView.ContentWidth, 1, "the pass alone takes the row")
-		T.eq(StoreConfig.ById.Train.Short, "Your ore train twice as fast", "the train line says what it does")
-		T.truthy(MonetizationConfig.Products.TrainExpress ~= nil)
+		T.eq(StoreConfig.ById.Train, nil, "no Express Train card")
+		T.eq(MonetizationConfig.Products.TrainExpress, nil, "no Express Train pass")
 	end)
 
 	T.test("Pixel kit: Pop.limit keeps one size constraint; Pop.round stays round", function()

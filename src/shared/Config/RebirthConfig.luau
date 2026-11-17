@@ -29,10 +29,9 @@
 	  Robux: startFor, in that level's Vault look), the mine floors with it
 	  (MineFloors opens them by blaster level) and the elevator floors bought
 	  (data.Upgrades.Floors), the machine
-	  speed (Bellows and every Tech shop Speed / Quality level), the train's
-	  capacity and speed, and every ore you own: the Ore Pen, the backpack's
-	  contents, the podiums (unless Podium Keeper), the train's cargo, the
-	  machines' queues (RebirthService also takes your loose items out of
+	  speed (Bellows and every Tech shop Speed / Quality level) and every ore
+	  you own: the Ore Pen, the backpack's contents, the podiums (unless
+	  Podium Keeper), the machines' queues (RebirthService also takes your loose items out of
 	  the world). Dusty relics are artifacts, never
 	  ore: the ones in those lists wait in the pen (RebirthService hands them
 	  to the relic keeper, which adds them to the collection). The enchants
@@ -76,7 +75,6 @@
 	  HeadStart     start each rebirth with blaster LV 2 / 3 / 4
 	  LuckyRocks    +5 % ore luck per level (Bonuses)
 	  DeepPockets   +10 % backpack space per level (Bonuses: CarryPct)
-	  ExpressRails  train trips 10 % shorter per level (Bonuses: TrainTimeCutPct)
 	  PodiumKeeper  the podium ores stay through rebirths
 	  PlotGlow      a glowing ribbon round your plot: each level unlocks a
 	                colour (GlowColors), data.PlotGlow is the one you show
@@ -134,13 +132,6 @@ RebirthConfig.Perks = {
 		Costs = { 2, 3, 4 },
 		-- (+1 item while ore was carried in the hands; the packs hold 5..1000 now: a share)
 		Stats = { CarryPct = 0.1 },
-	},
-	{
-		Id = "ExpressRails",
-		Name = "Express Rails",
-		Text = "train trips 10% shorter",
-		Costs = { 2, 2, 2 },
-		Stats = { TrainTimeCutPct = 0.1 },
 	},
 	{
 		Id = "PodiumKeeper",
@@ -459,8 +450,8 @@ end
 --[[
 	The rebirth on the save (after canRebirth said yes), in one step: the
 	resets and the stars of the header. Returns the stars it paid and the new
-	rebirth count. Runtime state (items in the world, spawned machines, the
-	train on its way) is RebirthService's job.
+	rebirth count. Runtime state (items in the world, spawned machines) is
+	RebirthService's job.
 ]]
 function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	local level = BlasterData.get(data.BlasterLevel).Level
@@ -474,7 +465,7 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	-- (RebirthService writes the income the factory kept, once the plot is back: runIncomeOf)
 	stats.RunIncome = 0
 	-- dusty relics are artifacts: they wait in the pen (RebirthService hands them to the keeper);
-	-- SECRET ores stay too (owner 2026-10-29: "Zůstanou"): from the pen, the train and the
+	-- SECRET ores stay too (owner 2026-10-29: "Zůstanou"): from the pen and the
 	-- machines into the pen, in the backpack and on the podiums where they are
 	local relics = {}
 	local function keepRelics(list: any)
@@ -500,10 +491,6 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 				backpackKept[key :: string] = math.floor(n)
 			end
 		end
-	end
-	if type(data.Train) == "table" then
-		keepRelics(data.Train.Cargo)
-		keepRelics(data.Train.TripCargo)
 	end
 	if type(data.PlacedMachines) == "table" then
 		for _, entry in data.PlacedMachines do
@@ -533,18 +520,11 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	end
 	data.BlasterLevel = start
 	data.BlasterOre = if start > 1 then BlasterData.vaultOre(start) else ""
-	-- machine speed, the elevator floors bought (as the one-time elevator did), the train, the backpack
+	-- machine speed, the elevator floors bought (as the one-time elevator did), the backpack
 	local upgrades = record(data, "Upgrades")
 	upgrades.Bellows = 0
 	upgrades.Floors = {}
 	data.MachineUpgrades = {}
-	local train = record(data, "Train")
-	train.CapacityLevel = 0
-	train.SpeedLevel = 0
-	train.Cargo = {}
-	train.TripCargo = {}
-	train.TripDepartAt = 0
-	train.TripArriveAt = 0
 	-- every ore you own (the factory itself stays where it stands; the packs stay too)
 	data.Storage = relics
 	data.BackpackItems = backpackKept

@@ -167,7 +167,7 @@ function RebirthView.lists(perks: any, lifted: number?): { [string]: { string } 
 			`Blaster back to LV {start}`,
 			"Floors and elevator",
 			"Machine + furnace upgrades",
-			"Train and backpack levels",
+			"Backpack levels",
 			enchantRow,
 			if keepsPodiums then "Ore (podiums stay)" else "Your ore (not secret ores)",
 		},

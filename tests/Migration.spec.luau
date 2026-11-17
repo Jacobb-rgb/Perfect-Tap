@@ -9,7 +9,6 @@ return function(T, Loader)
 	local ProfileStore = Loader.requirePath("ServerScriptService.Server.Data.ProfileStore")
 	local EconomyConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.EconomyConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 
 	local function deepEqual(a: any, b: any): boolean
@@ -44,9 +43,9 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration: template is version 17", function()
-		T.eq(DataTemplate.Version, 17)
-		T.eq(Migrations.Latest, 17)
+	T.test("Migration: template is version 18", function()
+		T.eq(DataTemplate.Version, 18)
+		T.eq(Migrations.Latest, 18)
 		T.eq(#DataTemplate.Podiums, EconomyConfig.Podiums.Max, "one template slot per podium")
 	end)
 
@@ -55,7 +54,7 @@ return function(T, Loader)
 		data.Version = 6
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "Clean|Tin|Clean|" }
 		Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(#data.Podiums, 5, "the 5th slot added")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|")
 		T.eq(data.Podiums[2], "")
@@ -74,7 +73,7 @@ return function(T, Loader)
 		data.Foundry = { Stock = { { K = "Ingot", O = "Gold", G = "Pristine" }, 42, { K = "Ingot", O = "Iron" } } }
 		data.Stats.RunIncome = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(data.Foundry, nil, "the Foundry record goes")
 		T.eq(#data.Storage, 3, "both ingots in the pen")
 		T.eq(data.Storage[2].O, "Gold")
@@ -104,7 +103,7 @@ return function(T, Loader)
 	T.test("Migration: the plan's v1 example", function()
 		local data = v1Save()
 		local report = Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -258,7 +257,7 @@ return function(T, Loader)
 		v12.Golems.NextId = 3
 		local before = ProfileStore.deepCopy(v12)
 		local report = Migrations.run(v12, now)
-		T.eq(v12.Version, 17)
+		T.eq(v12.Version, 18)
 		for _, kind in raised do
 			T.eq(v12.Golems.AutoDelete[kind], nil, `{kind}: the flag goes`)
 		end
@@ -301,7 +300,7 @@ return function(T, Loader)
 		T.eq(type(data.PlacedMachines), "table")
 		T.eq(type(data.MachineInventory), "table")
 		T.eq(type(data.Storage), "table")
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		local newer = { Version = Migrations.Latest + 1, PlacedMachines = {}, MachineInventory = {}, Storage = {} }
 		Migrations.run(newer)
 		T.eq(newer.Version, Migrations.Latest + 1, "a newer save's version is not lowered")
@@ -330,19 +329,17 @@ return function(T, Loader)
 		return data
 	end
 
-	T.test("Migration v4: a 12-cell layout moves to 2..13 / 4..15, its chute belts onto chutes 5 / 8 on row 15", function()
+	T.test("Migration v4: a 12-cell layout moves to 2..13 / 4..15, its PEN chute belt onto chute 5 on row 15", function()
 		local BaseLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.BaseLayout")
 		local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 		T.eq(GameConfig.PlotCells, 16)
-		for name, x in { Pen = 5, Train = 8 } do
-			local cx, cz = BaseLayout.chuteCell(name)
-			T.eq(cx, x, name .. " chute X")
-			T.eq(cz, 15, name .. " chute on the back row")
-		end
+		local cx, cz = BaseLayout.chuteCell("Pen")
+		T.eq(cx, 5, "Pen chute X")
+		T.eq(cz, 15, "Pen chute on the back row")
 		local data = v3Grid()
 		local before = ProfileStore.deepCopy(data.PlacedMachines)
 		local report = Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(report.Moved + report.Dropped, 0, "a move, not a repair (no starter kit given yet: no v6 Crusher)")
 		T.eq(#data.PlacedMachines, OLD_CELLS * OLD_CELLS, "every machine stays placed")
 		local cells = {}
@@ -359,10 +356,13 @@ return function(T, Loader)
 				onChute[chute] = entry
 			end
 			if old.Z == OLD_CELLS - 1 then
-				for name, x in OLD_CHUTES do
-					if old.X == x and name ~= "Foundry" then
-						T.eq(chute, name, `the belt on the old {name} chute is on the {name} chute`)
-					end
+				if old.X == OLD_CHUTES.Pen then
+					T.eq(chute, "Pen", "the belt on the old PEN chute is on the PEN chute")
+				end
+				if old.X == OLD_CHUTES.Train then
+					-- (the TRAIN chute went with the train, owner 2026-11-17: its belt is an ordinary belt)
+					T.eq(chute, nil, "the old TRAIN cell is no chute any more")
+					T.eq(entry.X, 8, "the old TRAIN belt still moved onto x 8")
 				end
 				if old.X == OLD_CHUTES.Foundry then
 					-- (the FOUNDRY chute went with the Foundry, owner 2026-10-24: its belt is an ordinary belt)
@@ -379,7 +379,8 @@ return function(T, Loader)
 			count += 1
 		end
 		T.eq(count, OLD_CELLS * OLD_CELLS, "no two machines on one cell")
-		T.truthy(onChute.Pen and onChute.Train, "the PEN and TRAIN chutes keep their belts")
+		T.truthy(onChute.Pen, "the PEN chute keeps its belt")
+		T.eq(onChute.Train, nil, "no TRAIN chute")
 		-- a second run (every later load) changes nothing
 		local copy = ProfileStore.deepCopy(data)
 		report = Migrations.run(data)
@@ -407,7 +408,13 @@ return function(T, Loader)
 		T.eq(#displaced, 0, "nothing displaced")
 		T.eq(#data.PlacedMachines, 8)
 		T.eq(BaseLayout.chuteAt(data.PlacedMachines[1].X, data.PlacedMachines[1].Z), "Pen")
-		T.eq(BaseLayout.chuteAt(data.PlacedMachines[3].X, data.PlacedMachines[3].Z), "Train")
+		T.eq(
+			BaseLayout.chuteAt(data.PlacedMachines[3].X, data.PlacedMachines[3].Z),
+			nil,
+			"the old TRAIN chute's belt: an ordinary belt now"
+		)
+		T.eq(data.PlacedMachines[3].X, 8)
+		T.eq(data.PlacedMachines[3].Z, 15)
 		T.eq(data.PlacedMachines[5].X, 11, "the old FOUNDRY belt moved like every other")
 		T.eq(data.PlacedMachines[5].Z, 15)
 		local deck = data.PlacedMachines[7]
@@ -444,7 +451,7 @@ return function(T, Loader)
 			Migrations.run(data)
 			T.eq(data.PlacedMachines[1].X, 2, `version {version}: moved across`)
 			T.eq(data.PlacedMachines[1].Z, 4, `version {version}: moved back`)
-			T.eq(data.Version, 17)
+			T.eq(data.Version, 18)
 		end
 	end)
 
@@ -493,7 +500,7 @@ return function(T, Loader)
 		}
 		data.MachineUpgrades = { BlastFurnace = { Speed = 2 }, PlasmaFurnace = { Speed = 9 }, ClayFurnace = { Speed = 1 } }
 		Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(#data.PlacedMachines, 1, "only the Furnace stays placed")
 		local furnace = data.PlacedMachines[1]
 		T.eq(furnace.Id, "ClayFurnace")
@@ -567,7 +574,7 @@ return function(T, Loader)
 		data.TotalEarned = -5
 		data.LastSeen = 0 / 0
 		local report = Migrations.run(data)
-		T.eq(data.Version, 17)
+		T.eq(data.Version, 18)
 		T.eq(#data.PlacedMachines, 1, "only the furnace stays")
 		T.eq(data.PlacedMachines[1].Id, "ClayFurnace")
 		T.eq(data.MachineInventory.SellChute, nil, "retired chute left the inventory")
@@ -623,7 +630,7 @@ return function(T, Loader)
 				Out = { { K = "Ingot", O = "Emerald" } },
 			},
 		}
-		data.Train.Cargo = { { K = "Raw", O = "Magmacore" } }
+		data.Train = { Cargo = { { K = "Raw", O = "Magmacore" } } } -- (an old save's train: Version 18 moves it to the pen)
 		data.Version = 7 -- (a save with a Foundry: its ingots go to the pen, renamed first)
 		data.Foundry = { Stock = { { K = "Ingot", O = "Solarite" } } }
 		data.Discovered = { Ruby = true, Coal = true, Bronze = true, Skyglass = true }
@@ -636,7 +643,12 @@ return function(T, Loader)
 		local machine = data.PlacedMachines[1]
 		T.eq(machine.In[1].O, "DragonEgg", "machine queue")
 		T.eq(machine.Out[1].O, "Jade", "machine output")
-		T.eq(data.Train.Cargo[1].O, "VolcanicCore", "train cargo")
+		T.eq(data.Train, nil, "no train")
+		local cargo = false
+		for _, item in data.Storage do
+			cargo = cargo or (item.K == "Raw" and item.O == "VolcanicCore")
+		end
+		T.truthy(cargo, "the old train's cargo, renamed, in the pen")
 		T.eq(data.Foundry, nil, "no Foundry")
 		T.eq(data.Storage[#data.Storage].O, "Sunstone", "the Foundry's ingot, renamed, in the pen")
 		T.eq(data.Discovered.Ruby, nil)
@@ -736,33 +748,73 @@ return function(T, Loader)
 		T.truthy(deepEqual(copy, data), "idempotent")
 	end)
 
-	T.test("Migration: train levels, cargo and trip times are cleaned", function()
+	T.test("Migration v18: no train: its cargo goes into the pen, its levels are paid back, once", function()
 		local data = ProfileStore.deepCopy(DataTemplate)
+		data.Version = 17
+		data.Coins = 100
+		data.Stars = 1
+		data.Storage = { { K = "Clean", O = "Gold", G = "Rough" } }
 		data.Train = {
-			CapacityLevel = 99.5,
-			SpeedLevel = -3,
-			Cargo = { { K = "Raw", O = "Coal" }, "junk", { K = "Raw", O = "Unobtainium" } },
-			TripCargo = {},
-			TripDepartAt = 0 / 0,
-			TripArriveAt = 12345,
+			CapacityLevel = 2,
+			SpeedLevel = 1,
+			Cargo = { { K = "Raw", O = "Coal" }, { K = "Raw", O = "Copper" } },
+			TripCargo = { { K = "Raw", O = "Tin" } },
+			TripDepartAt = 100,
+			TripArriveAt = 130,
 		}
-		local report = Migrations.run(data)
-		T.eq(data.Train.CapacityLevel, 99, "floored, kept above this server's top (TrainConfig clamps for the readers)")
-		T.eq(data.Train.SpeedLevel, 0)
-		T.eq(#data.Train.Cargo, 1, "the coal stays in the cargo")
-		T.eq(data.Storage[#data.Storage].O, "Unobtainium", "a newer build's ore waits in the pen")
-		T.eq(data.Train.TripDepartAt, 0)
-		T.eq(data.Train.TripArriveAt, 0, "no trip without cargo on the move")
-		T.truthy(report.Dropped > 0 and report.Moved > 0)
+		data.Upgrades.PenAutomation = 2
+		data.StarPerks = { ExpressRails = 2, LuckyRocks = 1 }
+		data.Stats.TrainTrips = 9
+		data.Tutorial = { Step = 4, Done = false } -- "Off it goes!" (the train step)
+		Migrations.run(data)
+		T.eq(data.Train, nil, "no train record")
+		T.eq(#data.Storage, 4, "the pen's ore and the three from the train")
+		local found = {}
+		for _, item in data.Storage do
+			found[item.O] = true
+		end
+		T.truthy(found.Coal and found.Copper and found.Tin, "the station cargo and the trip cargo")
+		T.eq(data.Coins, 100 + 2000 + 15000 + 3000 + 250000, "capacity 1-2, speed 1 and Direct Unload paid back")
+		T.eq(data.Upgrades.PenAutomation, 1, "the sorting billboard stays")
+		T.eq(data.Stars, 1 + 4, "Express Rails' Forge Stars back")
+		T.eq(data.StarPerks.ExpressRails, nil)
+		T.eq(data.StarPerks.LuckyRocks, 1, "the other perks stay")
+		T.eq(data.Stats.TrainTrips, nil)
+		T.eq(data.Tutorial.Step, 3, "the train's two tutorial steps are one: Take it home")
+		T.eq(data.Version, 18)
+		-- the tutorial's steps after the train's move one down; before it they stay
+		for from, to in { [1] = 1, [2] = 2, [3] = 3, [4] = 3, [5] = 4, [6] = 5, [11] = 10 } do
+			local save = ProfileStore.deepCopy(DataTemplate)
+			save.Version = 17
+			save.Tutorial = { Step = from, Done = false }
+			Migrations.run(save)
+			T.eq(save.Tutorial.Step, to, `tutorial step {from} -> {to}`)
+		end
+		-- once: a second load changes nothing
 		local copy = ProfileStore.deepCopy(data)
-		report = Migrations.run(data)
+		Migrations.run(data)
 		T.truthy(deepEqual(copy, data), "idempotent")
-		-- a broken record becomes a clean one
+		-- a broken record just goes
 		local broken = ProfileStore.deepCopy(DataTemplate)
+		broken.Version = 17
 		broken.Train = "x"
+		local before = broken.Coins
 		Migrations.run(broken)
-		T.eq(type(broken.Train), "table")
-		T.eq(#broken.Train.Cargo, 0)
+		T.eq(broken.Train, nil)
+		T.eq(broken.Coins, before)
+		-- a save from a train-less build (Version 18) keeps a pen level 2 (a newer build's)
+		local newer = ProfileStore.deepCopy(DataTemplate)
+		newer.Version = 18
+		newer.Upgrades.PenAutomation = 2
+		newer.StarPerks = { ExpressRails = 1 }
+		newer.Tutorial = { Step = 6, Done = false }
+		local coins, stars = newer.Coins, newer.Stars
+		Migrations.run(newer)
+		T.eq(newer.Tutorial.Step, 6, "a v18 save's tutorial step stays")
+		T.eq(newer.Upgrades.PenAutomation, 2, "the one-time step ran before")
+		T.eq(newer.Coins, coins)
+		T.eq(newer.Stars, stars)
+		T.eq(newer.StarPerks.ExpressRails, 1, "a perk id this build doesn't sell is kept")
 	end)
 
 	T.test("Migration: a machine at the inventory cap is refunded, never lost", function()
@@ -857,8 +909,10 @@ return function(T, Loader)
 		T.eq(data.Storage[4].G, "Shiny", "so is an unknown grade")
 		T.eq(data.Storage[#data.Storage].O, "Iron", "the iron ingots")
 
-		T.eq(data.Upgrades.PenAutomation, 7, "floored, kept for a newer server (readers clamp)")
-		T.eq(select(1, EconomyConfig.techLevel(EconomyConfig.techItem("PenAutomation"), data)), 2, "read as the top level")
+		-- (an old save: its level 2 and up was the train's Direct Unload, back to the billboard and
+		-- paid back once, Version 18; a newer build's own higher level stays: the v18 test)
+		T.eq(data.Upgrades.PenAutomation, 1, "back to the billboard (no train since Version 18)")
+		T.eq(select(1, EconomyConfig.techLevel(EconomyConfig.techItem("PenAutomation"), data)), 1, "read as the top level")
 		T.truthy(report.Dropped > 0 and report.Moved > 0)
 
 		local copy = ProfileStore.deepCopy(data)
@@ -932,9 +986,6 @@ return function(T, Loader)
 		data.Storage = { { K = "Gem", O = "Zzzium" }, { K = "Clean", O = "Gold", G = "Mythical" } }
 		-- a record this build doesn't know (an older build's Foundry, or a newer build's field): left alone
 		data.Foundry = { Stock = { { K = "Ingot", O = "Zzzium", G = "Shiny" }, { K = "Ingot", O = "Gold" } } }
-		data.Train.CapacityLevel = 12
-		data.Train.SpeedLevel = 9
-		data.Train.Cargo = { { K = "Raw", O = "Coal" } }
 		data.PlacedMachines = {
 			{ Id = "HyperForge", X = 1, Z = 1, R = 0, C = 12, In = { { K = "Raw", O = "Gold" } } },
 			{ Id = "Crusher", X = 4, Z = 4, R = 1 },
@@ -979,12 +1030,11 @@ return function(T, Loader)
 		T.truthy(deepEqual(before, data), "the whole save is unchanged")
 		T.eq(report.Moved, 0, "nothing moved")
 		T.eq(report.Dropped, 0, "nothing dropped")
-		-- a newer build's items inside machines and on the train wait in the pen (the runtime would drop them there)
+		-- a newer build's items inside machines wait in the pen (the runtime would drop them there)
 		data.PlacedMachines[1].In = { { K = "Gem", O = "Zzzium", G = "Shiny", R = "Halo" } }
-		data.Train.Cargo = { { K = "Gem", O = "Zzzium" } }
 		local pen = #data.Storage
 		Migrations.run(data, now)
-		T.eq(#data.Storage, pen + 2, "both kept, in the pen")
+		T.eq(#data.Storage, pen + 1, "kept, in the pen")
 		T.eq(data.Storage[#data.Storage].O, "Zzzium")
 	end)
 
@@ -994,7 +1044,6 @@ return function(T, Loader)
 		local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 		local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 		local StateService = Loader.requirePath("ServerScriptService.Server.Services.StateService")
-		local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
 		local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
 		local PenService = Loader.requirePath("ServerScriptService.Server.Services.PenService")
 		local BuildService = Loader.requirePath("ServerScriptService.Server.Services.BuildService")
@@ -1035,11 +1084,6 @@ return function(T, Loader)
 		PodiumService._test.setClock(function()
 			return NEWER_NOW
 		end)
-		TrainService._test.setClock(function()
-			return NEWER_NOW
-		end, function()
-			return 100
-		end, function() end)
 		local ok, err = pcall(function()
 			Migrations.run(data, NEWER_NOW)
 			-- every DataService.onLoaded hook that reads or repairs the save
@@ -1049,11 +1093,9 @@ return function(T, Loader)
 			GearService.refreshLamp(player)
 			ArtifactService.applyRewards(player)
 			PodiumService._test.loaded(player, data)
-			TrainService._test.loaded(player, data)
 			TutorialService._test.loaded(player, data)
 			-- the State snapshot and its providers
 			local snapshot = StateService.snapshot(player) :: any
-			TrainService._test.provide(player, data, snapshot)
 			PenService._test.provide(player, data, snapshot)
 			BuildService._test.provide(player, data, snapshot)
 			ElevatorService._test.provide(player, data, snapshot)
@@ -1061,14 +1103,12 @@ return function(T, Loader)
 			T.eq(snapshot.ElevatorFloors.AbyssGate, nil, "a newer build's floor stays in the save only")
 			snapshot.Rebirth = RebirthService.snapshot(data)
 			T.eq(snapshot.Rebirth.Count, 4, "the newer build's rebirths")
-			T.eq(snapshot.Train.Capacity, TrainConfig.Capacity[#TrainConfig.Capacity].Value, "read as this build's top")
 			T.eq(snapshot.BlasterLevel, BlasterData.MaxLevel, "read as this build's top")
 		end)
 		for i = #saved, 1, -1 do
 			rawset(saved[i][1], saved[i][2], saved[i][3])
 		end
 		PodiumService._test.reset()
-		TrainService._test.reset()
 		TutorialService._test.reset()
 		Bonuses.invalidate(player)
 		if not ok then

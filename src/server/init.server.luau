@@ -33,11 +33,10 @@ local ORDER = {
 	"PlotService",
 	"MachineService",
 	"IntakeService",
-	"ConveyorService", -- belts + chutes: before PenService / TrainService, which feed its chutes
+	"ConveyorService", -- belts + chutes: before PenService, which feeds its chute
 	"EconomyService",
 	"PenService",
 	"PodiumService",
-	"TrainService",
 	"CleaningService",
 	"ProcessingService",
 	"IronBoxService",
@@ -70,7 +69,7 @@ local ORDER = {
 	"ChampionService", -- the #1 avatars hopping on the HALL OF FAME (after LeaderboardService)
 	"SettingsService", -- the side menu's SETTINGS record
 	"CodexService", -- the ORE CODEX's NEW badges (seen ores)
-	"RebirthService", -- rebirth STAR FORGE: the reset, Forge Stars, the Star Shop (after Plot, Train, Podium)
+	"RebirthService", -- rebirth STAR FORGE: the reset, Forge Stars, the Star Shop (after Plot, Podium)
 	"ServerBoostService", -- Server Luck: x2 ore luck for the whole server (the "ServerBoost" receipts)
 	"StoreService", -- the Robux STORE window: StoreAction -> purchase prompts (grants: MonetizationService)
 	"QuestService", -- daily / weekly quests + the 7-day login streak (after Capsule, Wheel, Podium, State)

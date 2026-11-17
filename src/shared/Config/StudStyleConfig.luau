@@ -134,9 +134,8 @@ StudStyleConfig.SkipNames = {
 	-- ores and relics on show (podiums, the Iron Box glass, museums, the relic pop)
 	"^Display",
 	"^Artifact$",
-	-- the client's trains, the cleaning minigame, the crate opening, the worn and
-	-- shown backpacks and the BACKPACKS shop's small things (BackpackWearController)
-	"ClientTrains",
+	-- the cleaning minigame, the crate opening, the worn and shown backpacks and the
+	-- BACKPACKS shop's small things (BackpackWearController)
 	"ClientBackpacks",
 	"CleaningClient",
 	"CrateOpening",

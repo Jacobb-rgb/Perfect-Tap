@@ -11,13 +11,13 @@ return function(T, Loader)
 	local Vector3 = roblox.Vector3
 	local CFrame = Loader.CFrame
 	local TutorialConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TutorialConfig")
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local WorldLayout = Loader.requirePath("ReplicatedStorage.Shared.Config.WorldLayout")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local DataService = Loader.requirePath("ServerScriptService.Server.Services.DataService")
 	local TutorialService = Loader.requirePath("ServerScriptService.Server.Services.TutorialService")
+	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 	local TutorialView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TutorialView")
 	local TeleportView = Loader.requirePath("StarterPlayer.StarterPlayerScripts.Client.UI.TeleportView")
 
@@ -52,14 +52,9 @@ return function(T, Loader)
 			data.Stats.OresMined += 1
 			signals.Carrying = 1
 		end,
-		Load = function(data: any, signals: any)
-			signals.Carrying = 0
-			table.insert(data.Train.Cargo, { O = "Copper" })
-		end,
-		Train = function(data: any, _signals: any)
-			data.Train.Cargo = {}
-			data.Stats.TrainTrips += 1
-			table.insert(data.Storage, { O = "Copper" })
+		-- (no train since 2026-11-17: the dirty ore goes home in the backpack, to the Cleaning Station)
+		Home = function(_data: any, signals: any)
+			signals.NearPen = true
 		end,
 		Clean = function(data: any, _signals: any)
 			data.Stats.OresCleaned += 1
@@ -87,7 +82,7 @@ return function(T, Loader)
 	---------------------------------------------------------------- config
 
 	T.test("Tutorial: the steps are complete, short and point somewhere", function()
-		T.eq(TOTAL, 11, "eight task steps, the two steps 6-7 hints and the platform hint")
+		T.eq(TOTAL, 10, "seven task steps, the two steps 6-7 hints and the platform hint (one fewer since the train)")
 		T.truthy(TutorialConfig.ById.Golems.Optional and TutorialConfig.ById.Wheel.Optional, "the hints are info steps (GOT IT)")
 		T.eq(TutorialConfig.ById.Golems.UiTarget, "Golems", "the golem hint points at the side menu's GOLEMS")
 		local tutorialSource = require("@lune/fs").readFile(Loader.root .. "/src/client/Controllers/TutorialController.luau")
@@ -145,25 +140,30 @@ return function(T, Loader)
 		T.eq(TutorialConfig.advance(1, data, signals), 1, "selling first doesn't skip the mining steps")
 		DO.Station(data, signals)
 		DO.Mine(data, signals)
-		DO.Load(data, signals)
-		DO.Train(data, signals)
+		DO.Home(data, signals)
 		DO.Clean(data, signals)
-		T.eq(TutorialConfig.advance(1, data, signals), 6, "up to the podium")
+		T.eq(TutorialConfig.advance(1, data, signals), 5, "up to the podium")
 		DO.Podium(data, signals)
-		T.eq(TutorialConfig.advance(6, data, signals), 9, "Grow and Blaster were done before: on to the golem hint")
+		T.eq(TutorialConfig.advance(5, data, signals), 8, "Grow and Blaster were done before: on to the golem hint")
 		DO.Golems(data, signals)
-		T.eq(TutorialConfig.advance(9, data, signals), 10, "a golem woken: the hint passes by itself")
+		T.eq(TutorialConfig.advance(8, data, signals), 9, "a golem woken: the hint passes by itself")
 		DO.Wheel(data, signals)
-		T.eq(TutorialConfig.advance(10, data, signals), 11, "a spin: the wheel hint too")
+		T.eq(TutorialConfig.advance(9, data, signals), 10, "a spin: the wheel hint too")
 		DO.Platforms(data, signals)
-		T.eq(TutorialConfig.advance(11, data, signals), TOTAL + 1, "a platform built: the platform hint too")
-		-- carrying the ore home by hand (no train) passes Load and Train
+		T.eq(TutorialConfig.advance(10, data, signals), TOTAL + 1, "a platform built: the platform hint too")
+		-- ore put in the pen passes the home step (without the home signal: a teleport home)
 		local walk, s2 = fresh(), {}
 		DO.Station(walk, s2)
 		DO.Mine(walk, s2)
-		T.eq(TutorialConfig.advance(1, walk, s2), 3, "waiting at Load")
+		T.eq(TutorialConfig.advance(1, walk, s2), 3, "waiting at Home")
 		table.insert(walk.Storage, { O = "Copper" })
-		T.eq(TutorialConfig.advance(3, walk, s2), 5, "the pen took it: on to cleaning")
+		T.eq(TutorialConfig.advance(3, walk, s2), 4, "the pen took it: on to cleaning")
+		-- at home with the ore still in the backpack: on to cleaning it
+		local home, s4 = fresh(), {}
+		DO.Station(home, s4)
+		DO.Mine(home, s4)
+		DO.Home(home, s4)
+		T.eq(TutorialConfig.advance(3, home, s4), 4, "at the pen: on to cleaning")
 		-- an old save that has played a lot is done at once
 		local old, s3 = fresh(), {}
 		for _, step in TutorialConfig.Steps do
@@ -187,11 +187,9 @@ return function(T, Loader)
 		DO.Station(data, signals)
 		T.eq(TutorialConfig.advance(1, data, signals), 2, "the mine step")
 		DO.Mine(data, signals)
-		T.eq(TutorialConfig.advance(2, data, signals), 3, "mining with the wheel ore in the pen: on to the hopper, not to cleaning")
-		DO.Load(data, signals)
-		T.eq(TutorialConfig.advance(3, data, signals), 4, "the train step")
-		DO.Train(data, signals)
-		T.eq(TutorialConfig.advance(4, data, signals), 5, "the train brought it home: clean")
+		T.eq(TutorialConfig.advance(2, data, signals), 3, "mining with the wheel ore in the pen: on to going home, not to cleaning")
+		DO.Home(data, signals)
+		T.eq(TutorialConfig.advance(3, data, signals), 4, "at home: clean")
 		-- cleaning the wheel ore before mining teaches cleaning, not the mine
 		local early = fresh()
 		wheelOre(early)
@@ -199,15 +197,15 @@ return function(T, Loader)
 		early.Stats.OresCleaned = 1
 		T.eq(TutorialConfig.advance(1, early, {}), 1, "a cleaned wheel ore skips nothing")
 		early.Stats.OresCleaned = 2
-		T.eq(TutorialConfig.advance(1, early, {}), 6, "a second cleaned ore came out of a rock: an old hand")
+		T.eq(TutorialConfig.advance(1, early, {}), 5, "a second cleaned ore came out of a rock: an old hand")
 		-- ore carried home by hand still counts, next to a wheel ore
 		local walk, s2 = fresh(), {}
 		wheelOre(walk)
 		DO.Station(walk, s2)
 		DO.Mine(walk, s2)
-		T.eq(TutorialConfig.advance(1, walk, s2), 3, "waiting at Load")
+		T.eq(TutorialConfig.advance(1, walk, s2), 3, "waiting at Home")
 		table.insert(walk.Storage, { K = "Raw", O = "Copper" })
-		T.eq(TutorialConfig.advance(3, walk, s2), 5, "more in the pen than the wheel gave: on to cleaning")
+		T.eq(TutorialConfig.advance(3, walk, s2), 4, "more in the pen than the wheel gave: on to cleaning")
 	end)
 
 	T.test("Tutorial: the checks read broken saves safely", function()
@@ -217,7 +215,7 @@ return function(T, Loader)
 		T.eq(TutorialConfig.clamp(2.7), 2, "fraction")
 		T.eq(TutorialConfig.clamp(99), TOTAL + 1, "past the end")
 		T.eq(TutorialConfig.clamp("4"), 1, "a string")
-		local broken: any = { Stats = "x", Train = 5, Storage = "y", Podiums = { 1, true }, BlasterLevel = "9" }
+		local broken: any = { Stats = "x", Storage = "y", Podiums = { 1, true }, BlasterLevel = "9" }
 		T.eq(TutorialConfig.advance(1, broken, nil), 1, "junk data passes nothing")
 		broken.Stats = { OresMined = 0 / 0, OresCleaned = "3" }
 		T.eq(TutorialConfig.advance(1, broken, {}), 1, "NaN and string stats count as 0")
@@ -244,9 +242,12 @@ return function(T, Loader)
 
 	T.test("Tutorial: the guide's layout points are where the things are", function()
 		local station = TutorialConfig.layoutPoint("Station", nil)
-		T.truthy(station, "the station needs no plot")
-		T.le((station - TrainConfig.Station.Platform.Center).Magnitude, 4, "the station point")
-		T.le((TutorialConfig.layoutPoint("Hopper", nil) - TrainConfig.Station.Hopper).Magnitude, 4, "the hopper point")
+		T.truthy(station, "the mine needs no plot")
+		T.le((station - TutorialConfig.MinePoint).Magnitude, 4, "the mine point: the quarry floor by the still train")
+		local q0 = WorldLayout.Quarry
+		T.truthy(station.X >= q0.Min.X and station.X <= q0.Max.X and station.Z >= q0.Min.Z and station.Z <= q0.Max.Z, "in the quarry")
+		T.eq(TutorialConfig.layoutPoint("Hopper", nil), nil, "no hopper any more")
+		T.eq(TutorialConfig.Tags.Hopper, nil)
 		local rock = TutorialConfig.layoutPoint("Rock", nil)
 		local q = WorldLayout.Quarry
 		T.truthy(rock.X >= q.Min.X and rock.X <= q.Max.X and rock.Z >= q.Min.Z and rock.Z <= q.Max.Z, "the rock point is in the quarry")
@@ -316,6 +317,10 @@ return function(T, Loader)
 					table.insert(w.pushes, payload)
 				end
 			end)
+			-- the player's plot (plot 1: their Ore Pen for the Home step)
+			patch(PlotService, "plotOf", function(p)
+				return if p == w.player then 1 else nil
+			end)
 			tut.reset()
 			w.last = function(): any
 				return w.pushes[#w.pushes]
@@ -332,9 +337,14 @@ return function(T, Loader)
 				local signals = {}
 				DO[id](w.data, signals)
 				if signals.NearStation then
-					w.standAt(TrainConfig.Station.Platform.Center + Vector3.new(4, 3, 4))
-					T.truthy(TutorialService.nearStation(w.player), "standing at the station")
+					w.standAt(TutorialConfig.MinePoint + Vector3.new(4, 3, 4))
+					T.truthy(TutorialService.nearStation(w.player), "standing in the quarry")
 					tut.signals(w.player).NearStation = true
+				end
+				if signals.NearPen then
+					w.standAt(TutorialConfig.layoutPoint("Pen", 1) :: any + Vector3.new(2, 3, 2))
+					T.truthy(TutorialService.nearPen(w.player), "standing at the pen")
+					tut.signals(w.player).NearPen = true
 				end
 				if signals.Carrying ~= nil then
 					w.player.attrs.CarryCount = signals.Carrying
@@ -416,25 +426,23 @@ return function(T, Loader)
 	end)
 
 	withWorld("TutorialService: halfway saves resume where they were", function(w)
-		w.data.Tutorial = { Step = 4, Done = false }
+		w.data.Tutorial = { Step = 3, Done = false }
 		w.play("Station")
 		w.data.Stats.OresMined = 3
-		table.insert(w.data.Train.TripCargo, { O = "Copper" })
 		tut.loaded(w.player, w.data)
-		T.eq(w.step(), 4, "the train is on its way: still step 4")
-		w.data.Train.TripCargo = {}
+		T.eq(w.step(), 3, "not home yet: still step 3")
 		table.insert(w.data.Storage, { O = "Copper" })
 		TutorialService.evaluate(w.player)
-		T.eq(w.step(), 5, "it arrived")
+		T.eq(w.step(), 4, "ore in the pen: home")
 		-- a broken saved table is repaired
 		w.data.Tutorial = "broken"
 		TutorialService.evaluate(w.player)
 		T.eq(type(w.data.Tutorial), "table", "repaired")
-		T.eq(w.step(), 5, "and caught up again")
+		T.eq(w.step(), 4, "and caught up again")
 		w.data.Tutorial = { Step = 0 / 0, Done = "yes" }
 		TutorialService.evaluate(w.player)
 		T.eq(w.data.Tutorial.Done, false, "Done must be true, not truthy")
-		T.eq(w.step(), 5, "NaN step -> walked from 1 to 5")
+		T.eq(w.step(), 4, "NaN step -> walked from 1 to 4")
 		-- past the end but not marked done: a newer build's step (it has more), left as it is
 		w.data.Tutorial = { Step = TOTAL + 4, Done = false }
 		local coins = w.data.Coins
@@ -490,21 +498,20 @@ return function(T, Loader)
 			w.play("Station")
 			w.play("Mine")
 			T.eq(w.step(), 3, "stops at the hint")
-			DO.Load(w.data, {})
+			tut.signals(w.player).NearPen = true -- (at home: the Home step's progress)
 			TutorialService.evaluate(w.player)
 			T.eq(w.step(), 3, "later progress doesn't pass the hint")
 			tut.action(w.player, "Ack")
-			T.eq(w.step(), 5, "Got it: past the hint and the Load step already done")
+			T.eq(w.step(), 5, "Got it: past the hint and the Home step already done")
 			tut.action(w.player, "Ack")
 			T.eq(w.step(), 5, "Ack on a task step does nothing")
 			-- a hint whose feature was already used passes by itself
 			table.insert(TutorialConfig.Steps, 6, hint)
 			TutorialConfig.Total += 1
 			used = true
-			DO.Train(w.data, {})
 			DO.Clean(w.data, {})
 			TutorialService.evaluate(w.player)
-			T.eq(w.step(), 8, "past Train, the used hint and Clean: waiting at Podium")
+			T.eq(w.step(), 7, "past Clean and the used hint: waiting at Podium")
 		end)
 		-- take every test hint out again (also after a failure)
 		for i = #TutorialConfig.Steps, 1, -1 do
@@ -520,9 +527,9 @@ return function(T, Loader)
 
 	withWorld("TutorialService: the station signal needs the character there", function(w)
 		tut.loaded(w.player, w.data)
-		w.standAt(TrainConfig.Station.Platform.Center + Vector3.new(TutorialConfig.StationRadius + 5, 0, 0))
+		w.standAt(TutorialConfig.MinePoint + Vector3.new(TutorialConfig.StationRadius + 5, 0, 0))
 		T.falsy(TutorialService.nearStation(w.player), "just outside the radius")
-		w.standAt(TrainConfig.Station.Platform.Center + Vector3.new(TutorialConfig.StationRadius - 5, 0, 0))
+		w.standAt(TutorialConfig.MinePoint + Vector3.new(TutorialConfig.StationRadius - 5, 0, 0))
 		T.truthy(TutorialService.nearStation(w.player), "inside the radius")
 		w.player.humanoid.Health = 0
 		T.falsy(TutorialService.nearStation(w.player), "a dead character is nowhere")
@@ -531,6 +538,26 @@ return function(T, Loader)
 		TutorialService.evaluate(w.player)
 		T.eq(w.step(), 1, "carrying doesn't pass the Station step")
 		T.eq(TutorialService.stepOf(w.player), 1, "stepOf")
+	end)
+
+	withWorld("TutorialService: the home signal needs the character at its own pen", function(w)
+		local pen = TutorialConfig.layoutPoint("Pen", 1) :: any
+		w.standAt(pen + Vector3.new(TutorialConfig.PenRadius + 5, 3, 0))
+		T.falsy(TutorialService.nearPen(w.player), "just outside the radius")
+		w.standAt(pen + Vector3.new(TutorialConfig.PenRadius - 5, 3, 0))
+		T.truthy(TutorialService.nearPen(w.player), "inside the radius")
+		w.standAt(TutorialConfig.layoutPoint("Pen", 5) :: any + Vector3.new(0, 3, 0))
+		T.falsy(TutorialService.nearPen(w.player), "another plot's pen is not home")
+		w.player.humanoid.Health = 0
+		T.falsy(TutorialService.nearPen(w.player), "a dead character is nowhere")
+		w.player.humanoid.Health = 100
+		-- on the Home step the poll sets the signal: at home with the ore, on to cleaning it
+		tut.loaded(w.player, w.data)
+		w.play("Station")
+		w.play("Mine")
+		T.eq(w.step(), 3, "on Home")
+		w.play("Home")
+		T.eq(w.step(), 4, "at home: on to cleaning")
 	end)
 
 	---------------------------------------------------------------- the view
@@ -671,10 +698,10 @@ return function(T, Loader)
 		T.eq(refs.Gui.Name, "TerraForgeTutorial", "its own ScreenGui")
 		T.truthy(refs.Gui:GetAttribute("TerraForge"), "scaled with the HUD")
 		T.eq(refs.Gui.DisplayOrder, 4, "under the HUD (5), over the crosshair (3)")
-		local step = TutorialConfig.ById.Load
+		local step = TutorialConfig.ById.Home
 		TutorialView.setStep(refs, 3, step, step.Hint.Touch)
 		T.eq(refs.Counter.Text, "3 / " .. TOTAL, "the counter")
-		T.eq(refs.Title.Text, "LOAD THE TRAIN", "the title")
+		T.eq(refs.Title.Text, "TAKE IT HOME", "the title")
 		T.eq(refs.Body.Text, step.Text, "the text")
 		T.eq(refs.Hint.Text, step.Hint.Touch, "the hint")
 		T.truthy(refs.Hint.Visible, "the hint shows on a task step")

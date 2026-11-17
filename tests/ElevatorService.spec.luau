@@ -185,7 +185,7 @@ return function(T, Loader)
 		T.eq(type(DataTemplate.Upgrades.Floors), "table", "template: a set")
 		T.eq(next(DataTemplate.Upgrades.Floors), nil, "template: nothing bought")
 		T.eq(DataTemplate.Upgrades.Elevator, nil, "the one-time elevator flag is gone")
-		T.eq(DataTemplate.Version, 17, "floors bought one by one: save Version 17")
+		T.truthy(DataTemplate.Version >= 17, "floors bought one by one: save Version 17 (and later)")
 		T.eq(Migrations.Latest, DataTemplate.Version, "bumped together")
 		-- a save from before the elevator: Upgrades without the field
 		local old = ProfileStore.deepCopy(DataTemplate)

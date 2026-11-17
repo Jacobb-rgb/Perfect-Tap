@@ -10,7 +10,6 @@ return function(T, Loader)
 	local GameConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.GameConfig")
 	local MachineData = Loader.requirePath("ReplicatedStorage.Shared.Config.MachineData")
 	local OreData = Loader.requirePath("ReplicatedStorage.Shared.Config.OreData")
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 
 	-- ~2x headroom over today's maxed save; Roblox's hard limit is 4 MB. (11-09: 22 full Ore
 	-- Feeders, 1000 ores each, add ~1.3 MB: docs/SAVE_AUDIT.md)
@@ -64,9 +63,6 @@ return function(T, Loader)
 		for id in MachineData.ById do
 			d.MachineInventory[id] = MachineData.MaxInventory
 			d.MachineUpgrades[id] = { Speed = 99, Quality = 99 }
-		end
-		for _ = 1, TrainConfig.MaxCargoSaved do
-			table.insert(d.Train.Cargo, item())
 		end
 		-- the backpack: a stack of every ore in every kind and grade, every pack owned
 		local ItemData = Loader.requirePath("ReplicatedStorage.Shared.Config.ItemData")

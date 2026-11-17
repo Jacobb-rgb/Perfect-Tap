@@ -16,7 +16,6 @@ return function(T, Loader)
 	local BlasterData = Loader.requirePath("ReplicatedStorage.Shared.Config.BlasterData")
 	local RebirthConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.RebirthConfig")
 	local StatConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.StatConfig")
-	local TrainConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.TrainConfig")
 	local Net = Loader.requirePath("ReplicatedStorage.Shared.Net")
 	local DataTemplate = Loader.requirePath("ServerScriptService.Server.Data.DataTemplate")
 	local Migrations = Loader.requirePath("ServerScriptService.Server.Data.Migrations")
@@ -26,7 +25,6 @@ return function(T, Loader)
 	local ItemService = Loader.requirePath("ServerScriptService.Server.Services.ItemService")
 	local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
 	local PodiumService = Loader.requirePath("ServerScriptService.Server.Services.PodiumService")
-	local TrainService = Loader.requirePath("ServerScriptService.Server.Services.TrainService")
 	local RebirthService = Loader.requirePath("ServerScriptService.Server.Services.RebirthService")
 	local CapsuleConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.CapsuleConfig")
 	local BoostConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.BoostConfig")
@@ -81,14 +79,6 @@ return function(T, Loader)
 		data.StarterKitGiven = true
 		data.Storage = { { K = "Clean", O = "Gold", G = "Pristine" }, { K = "Raw", O = "Coal" }, { K = "Relic", O = "AncientGear" } }
 		data.Podiums = { "Clean|Gold|Pristine|", "", "Clean|Copper|Rough|", "", "" }
-		data.Train = {
-			CapacityLevel = 3,
-			SpeedLevel = 4,
-			Cargo = { { K = "Raw", O = "Coal" }, { K = "Relic", O = "MinersLamp" } },
-			TripCargo = {},
-			TripDepartAt = 0,
-			TripArriveAt = 0,
-		}
 		data.Gear = { Boots = 3, HelmetLamp = 2, Gloves = 1, Magnet = 2 }
 		-- packs bought (kept, owner 2026-10-25) and a full backpack: ore (cleared) and a relic (to the pen)
 		data.Backpacks = { Equipped = "MinersPack", Owned = { RookiePack = true, TrailPack = true, MinersPack = true } }
@@ -193,18 +183,14 @@ return function(T, Loader)
 		T.near(RebirthConfig.stats(data.StarPerks).CarryPct, 0.3, 1e-9, "+30% backpack space")
 		T.eq(select(2, RebirthConfig.quote({ Stars = 99, StarPerks = data.StarPerks }, "DeepPockets")), "Max")
 		T.eq(RebirthConfig.stats(data.StarPerks).StarMagnet, nil, "an unknown perk gives nothing here")
-		-- Express Rails reaches the train through TrainConfig, half at most
-		local base = TrainConfig.tripSeconds(0, false)
-		T.near(TrainConfig.tripSeconds(0, false, 0.3), math.max(TrainConfig.MinTripSeconds, base * 0.7), 1e-9)
-		T.near(TrainConfig.tripSeconds(0, false, 9), math.max(TrainConfig.MinTripSeconds, base * 0.5), 1e-9, "capped at half")
-		T.eq(TrainConfig.tripSeconds(0, false, 0 / 0), base, "junk cut")
+		-- no Express Rails any more (the train went 2026-11-17: Migrations pays its stars back)
+		T.eq(RebirthConfig.levelOf({ ExpressRails = 2 }, "ExpressRails"), 0, "not sold")
 		-- the perks reach Bonuses (the built-in "Rebirth" provider)
 		local save = ProfileStore.deepCopy(DataTemplate)
-		save.StarPerks = { GoldenTouch = 3, LuckyRocks = 2, DeepPockets = 1, ExpressRails = 2 }
+		save.StarPerks = { GoldenTouch = 3, LuckyRocks = 2, DeepPockets = 1 }
 		local totals = Bonuses.compute(save, 0, nil)
 		T.near(totals.IncomePct, 0.3, 1e-9, "Golden Touch III")
 		T.near(totals.OreLuckPct, 0.1, 1e-9, "Lucky Rocks II")
-		T.near(totals.TrainTimeCutPct, 0.2, 1e-9, "Express Rails II")
 		T.near(totals.CarryPct, 0.1, 1e-9, "Deep Pockets I: +10% backpack space")
 	end)
 
@@ -230,13 +216,11 @@ return function(T, Loader)
 		T.eq(next(data.Upgrades.Floors), nil, "...go, as the one-time elevator did")
 		T.eq(data.Upgrades.Elevator, nil, "no one-time elevator flag")
 		T.truthy(deepEqual(data.MachineUpgrades, {}), "Tech shop levels")
-		T.eq(data.Train.CapacityLevel, 0)
-		T.eq(data.Train.SpeedLevel, 0)
-		T.eq(#data.Train.Cargo, 0)
+		T.eq(data.Train, nil, "no train record")
 		T.eq(next(data.BackpackItems), nil, "the backpack's ore is gone")
 		T.truthy(deepEqual(data.Backpacks, before.Backpacks), "the packs bought stay (owner 2026-10-25)")
-		-- the pen keeps only dusty relics (artifacts, never ore): from the pen, the train and the queues
-		T.eq(#data.Storage, 4, "the pen holds just the relics (the backpack's too)")
+		-- the pen keeps only dusty relics (artifacts, never ore): from the pen and the queues
+		T.eq(#data.Storage, 3, "the pen holds just the relics (the backpack's too)")
 		for _, item in data.Storage do
 			T.eq(item.K, "Relic", "only relics")
 		end
@@ -492,13 +476,13 @@ return function(T, Loader)
 		T.eq(data.BlasterOre, BlasterData.vaultOre(data.BlasterLevel), "in that level's Vault look")
 		T.eq(data.Podiums[1], "Clean|Gold|Pristine|", "the podium ores stay")
 		T.eq(data.Podiums[3], "Clean|Copper|Rough|")
-		T.eq(#data.Storage, 4, "the pen still empties (only the relics wait there)")
+		T.eq(#data.Storage, 3, "the pen still empties (only the relics wait there)")
 	end)
 
 	---------------------------------------------------------------- the service
 
 	local function world(): any
-		local w: any = { results = {}, changed = 0, saves = 0, destroyed = {}, trainResets = 0, refreshed = 0, reloads = 0 }
+		local w: any = { results = {}, changed = 0, saves = 0, destroyed = {}, refreshed = 0, reloads = 0 }
 		w.data = midRun()
 		w.player = { UserId = 4401, Name = "Reborn", Parent = true, attrs = {} }
 		w.player.GetAttribute = function(self, key)
@@ -561,9 +545,6 @@ return function(T, Loader)
 		patch(PodiumService, "refreshPlot", function()
 			w.refreshed += 1
 		end)
-		patch(TrainService, "resetRun", function()
-			w.trainResets += 1
-		end)
 		w.settledAt = {}
 		patch(PodiumService, "settleOffline", function()
 			-- the waiting welcome-back payout is settled before the coins reset
@@ -595,7 +576,7 @@ return function(T, Loader)
 		end)
 	end
 
-	withWorld("RebirthService: a rebirth in one step: items out, the plot and the train start over", function(w)
+	withWorld("RebirthService: a rebirth in one step: items out, the plot starts over", function(w)
 		local action = RebirthService._test.action
 		action(w.player, { Action = "Rebirth" })
 		local result = w.results[#w.results]
@@ -609,11 +590,10 @@ return function(T, Loader)
 		table.sort(w.kept)
 		T.eq(
 			table.concat(w.kept, ","),
-			"AncientGear,CrownCoin,CrownCoin,MinersLamp",
-			"the relics from the pen, the backpack, the train and the Restoration Table went to the keeper"
+			"AncientGear,CrownCoin,CrownCoin",
+			"the relics from the pen, the backpack and the Restoration Table went to the keeper"
 		)
 		T.eq(#w.data.Storage, 0, "nothing left in the pen")
-		T.eq(w.trainResets, 1, "the train starts over")
 		T.eq(w.refreshed, 1, "the podiums redraw")
 		T.eq(#w.settledAt, 1, "the welcome-back payout was settled")
 		T.eq(w.settledAt[1], 4.2e9, "...before the coins reset (it can't land in the new run)")
@@ -725,13 +705,14 @@ return function(T, Loader)
 		T.eq(w.data.Rebirths, 0, "nothing changed")
 		T.eq(w.reloads, 0)
 		w.riding = false
-		rawset(TrainService, "resetRun", function()
-			error("train broke")
+		rawset(PodiumService, "refreshPlot", function()
+			w.refreshed += 1
+			error("podiums broke")
 		end)
 		local done, stars = RebirthService.rebirth(w.player)
 		T.truthy(done, "the rebirth happened and says so")
 		T.eq(stars, RebirthConfig.starsFor(8))
-		T.eq(w.refreshed, 1, "the later steps still ran")
+		T.eq(w.refreshed, 1, "the failing step ran")
 		task.wait()
 		T.eq(w.saves, 1, "and it was saved")
 	end)

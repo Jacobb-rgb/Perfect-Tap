@@ -280,9 +280,10 @@ return function(T, Loader)
 		end
 		local wall = localOf(museum.Wall)
 		local pen = BaseLayout.Pen.Area
-		local stop = BaseLayout.TrainStop
 		local penBack = pen.Center.Z + pen.Size.Z / 2
-		T.truthy(math.abs(wall.Z - (stop.Center.Z - stop.Size.Z / 2)) < 2, "the wall backs onto the train stop")
+		-- (the line where the train stop's front was until the train went, 2026-11-17: 3 behind the
+		-- museum's middle)
+		T.truthy(math.abs(wall.Z - (BaseLayout.Museum.Center.Z + 3)) < 2, "the wall stands where it stood")
 		local caseFront = math.huge
 		for _, case in MuseumBuilder.cases() do
 			caseFront = math.min(caseFront, case.Front)

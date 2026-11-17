@@ -10,10 +10,12 @@
 	client claim:
 	  - every DataService.onChanged (and right after the data loads) runs
 	    TutorialConfig.advance, which walks past every step whose check holds
-	  - Signals the save data doesn't hold: NearStation (a TutorialConfig.
-	    PollSeconds loop checks where the character stands, only while the
-	    player is on the "Station" step) and Carrying (the CarryCount attribute
-	    CarryService sets; its change signal re-runs the check)
+	  - Signals the save data doesn't hold: NearStation and NearPen (a
+	    TutorialConfig.PollSeconds loop checks where the character stands,
+	    only while the player is on the "Station" step: the quarry floor,
+	    TutorialConfig.MinePoint, or on the "Home" step: their own Ore Pen)
+	    and Carrying (the CarryCount attribute CarryService sets; its change
+	    signal re-runs the check)
 	When Step passes Total, Done = true and the player gets TutorialConfig.
 	Reward coins (EconomyService.award, source "Tutorial"), but not when the
 	steps were all done already the moment the data loaded (an old save that
@@ -40,11 +42,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local TutorialConfig = require(Shared.Config.TutorialConfig)
-local TrainConfig = require(Shared.Config.TrainConfig)
 local Net = require(Shared.Net)
 local Guard = require(script.Parent.Parent.Guard)
 local DataService = require(script.Parent.DataService)
 local EconomyService = require(script.Parent.EconomyService)
+local PlotService = require(script.Parent.PlotService)
 
 local TutorialService = {}
 
@@ -143,14 +145,25 @@ function TutorialService.evaluate(player: Player, catchUp: boolean?)
 	end
 end
 
--- Is the player's character near the Mine Station?
+-- Is the player's character down in the quarry (by the still train, where the Mine Station stood)?
 function TutorialService.nearStation(player: Player): boolean
 	local root = Guard.rootPart(player)
 	if not root then
 		return false
 	end
-	local offset = root.CFrame.Position - TrainConfig.Station.Platform.Center
+	local offset = root.CFrame.Position - TutorialConfig.MinePoint
 	return offset.Magnitude <= TutorialConfig.StationRadius
+end
+
+-- Is the player's character at their own Ore Pen (home)?
+function TutorialService.nearPen(player: Player): boolean
+	local root = Guard.rootPart(player)
+	local pen = TutorialConfig.layoutPoint("Pen", PlotService.plotOf(player))
+	if not root or not pen then
+		return false
+	end
+	local offset = root.CFrame.Position - pen
+	return Vector2.new(offset.X, offset.Z).Magnitude <= TutorialConfig.PenRadius
 end
 
 -- The step the player is on (nil while the data isn't loaded or once done).
@@ -169,6 +182,9 @@ local function poll()
 		local def = if step then TutorialConfig.get(step) else nil
 		if def and def.Id == "Station" and TutorialService.nearStation(player) then
 			signalsOf(player).NearStation = true
+			TutorialService.evaluate(player)
+		elseif def and def.Id == "Home" and TutorialService.nearPen(player) then
+			signalsOf(player).NearPen = true
 			TutorialService.evaluate(player)
 		end
 	end

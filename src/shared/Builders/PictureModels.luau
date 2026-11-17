@@ -7,7 +7,8 @@
 	  cash_*            CashBuilder (bundle, pile, stack, sack, safe)
 	  capsule_<Id>      GolemBuilder.capsule
 	  golem_<Kind>      GolemBuilder.build
-	  train             TrainBuilder.locomotive (the shop's Express Train pass)
+	  train             TrainBuilder.locomotive (no shop item since the train went, 2026-11-17;
+	                    the shop's item stickers keep its cell: IconAssets.ShopItems)
 	  board_<BoardId>   HoverboardBuilder.build
 	  backpack_<Id>     BackpackBuilder.build for display (no shoulder straps), seen from behind
 	  item_<Ore>        ItemBuilder.build: a pristine clean ore (luck, night, enchant cards), a close-up

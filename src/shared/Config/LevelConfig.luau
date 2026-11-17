@@ -9,8 +9,8 @@
 	nothing counts twice, also over sessions). Weights below: one rock
 	broken = 3 XP, one forged blaster = 60 XP, a minute of active play = 2
 	XP...
-	- Counters that a rebirth sets back (blaster level, gear, train,
-	  machine upgrades) re-baseline when they drop: climbing again pays
+	- Counters that a rebirth sets back (blaster level, gear, machine
+	  upgrades) re-baseline when they drop: climbing again pays
 	  again (a new run is real progress).
 	- Machines (placed only, never droppers or the Money Laser: the build
 	  slots cap them, bulk-bought machines in the build menu pay nothing)
@@ -65,7 +65,6 @@ LevelConfig.Sources = {
 	{ Id = "BlastersForged", Xp = 60 },
 	{ Id = "BlastersBought", Xp = 40 },
 	{ Id = "ItemsSold", Xp = 1 },
-	{ Id = "TrainTrips", Xp = 8 },
 	{ Id = "PlaySeconds", Xp = 1 / 30 }, -- active time only (LeaderboardService)
 	{ Id = "ArtifactsFound", Xp = 20 },
 	{ Id = "CapsulesOpened", Xp = 15 },
@@ -76,7 +75,6 @@ LevelConfig.Sources = {
 	{ Id = "Golems", Xp = 10, High = true }, -- golems owned
 	{ Id = "Upgrades", Xp = 15 }, -- Tech shop levels: Bellows, slots, pen, automation, elevator floors bought, machine upgrades
 	{ Id = "Gear", Xp = 20 }, -- gear levels
-	{ Id = "Train", Xp = 20 }, -- train capacity + speed levels
 	{ Id = "Enchants", Xp = 15, High = true }, -- enchant tiers owned (the most ever)
 	{ Id = "Blaster", Xp = 50 }, -- blaster levels this run
 	{ Id = "Rebirths", Xp = 250 },
@@ -132,7 +130,6 @@ function LevelConfig.counters(data: { [string]: any }): { [string]: number }
 			"BlastersForged",
 			"BlastersBought",
 			"ItemsSold",
-			"TrainTrips",
 			"PlaySeconds",
 			"ArtifactsFound",
 			"CapsulesOpened",
@@ -178,8 +175,6 @@ function LevelConfig.counters(data: { [string]: any }): { [string]: number }
 	end
 	out.Upgrades = upgrades
 	out.Gear = sumValues(data.Gear)
-	local train = if type(data.Train) == "table" then data.Train else {}
-	out.Train = num(train.CapacityLevel) + num(train.SpeedLevel)
 	local enchants = if type(data.Enchants) == "table" then data.Enchants.Owned else nil
 	out.Enchants = sumValues(enchants)
 	out.Blaster = math.max(num(data.BlasterLevel) - 1, 0)
