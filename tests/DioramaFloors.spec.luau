@@ -483,8 +483,18 @@ return function(T, Loader)
 									T.eq(d.CanCollide, false, label .. " the veil is walked through")
 									T.eq(d.CanQuery, false, label .. " the veil takes no clicks or shots")
 									T.eq(d.Transparency, 0, label .. " the veil is never seen through")
-									local q0 = origin:PointToObjectSpace(d.CFrame.Position - d.Size / 2)
-									local q1 = origin:PointToObjectSpace(d.CFrame.Position + d.Size / 2)
+									-- (its box from its 8 corners: a veil is turned to face into the room)
+									local q0 = V3.new(math.huge, math.huge, math.huge)
+									local q1 = V3.new(-math.huge, -math.huge, -math.huge)
+									for _, sx in { -1, 1 } do
+										for _, sy in { -1, 1 } do
+											for _, sz in { -1, 1 } do
+												local c =
+													origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(V3.new(sx, sy, sz) * d.Size / 2))
+												q0, q1 = q0:Min(c), q1:Max(c)
+											end
+										end
+									end
 									local a0 = if alongX then q0.X else q0.Z
 									local a1 = if alongX then q1.X else q1.Z
 									T.truthy(a0 <= o.From and a1 >= o.To, label .. " the veil spans the opening")

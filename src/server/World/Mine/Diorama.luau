@@ -568,7 +568,9 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 	-- line, tucked a little behind its edges and lintel; walked through, never seen through. Each is
 	-- a lighting portal (LightingController: tag Diorama.PortalTag, its LookVector into the room,
 	-- attributes Inside / Outside = the presets of the zones either side): the light follows the
-	-- camera's side and changes the frame the camera passes through
+	-- camera's side and changes the frame the camera passes through; its sides part at the middle of
+	-- a thin wall round it (attribute PlaneZ, along its own Z: a camera stopped on either face of
+	-- that wall then lies on its own side)
 	for _, o in openings do
 		local color = o.Veil
 		if not color or not kind[o.Side] or (cutaway and o.Side == "S") then
@@ -598,6 +600,7 @@ local function room(model: Model, index: number, origin: CFrame, look: Look, cut
 		end
 		veil:SetAttribute("Inside", presetAt(pos + inward * Diorama.PortalProbe))
 		veil:SetAttribute("Outside", presetAt(pos - inward * Diorama.PortalProbe))
+		veil:SetAttribute("PlaneZ", if kind[o.Side] == "thin" then -(Diorama.ThinWall / 2 + 0.01 + Diorama.VeilThickness / 2) else 0)
 		veil:AddTag(Diorama.PortalTag)
 	end
 
