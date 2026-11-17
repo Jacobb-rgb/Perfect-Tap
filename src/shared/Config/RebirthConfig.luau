@@ -528,6 +528,14 @@ function RebirthConfig.reset(data: { [string]: any }): (number, number)
 	-- every ore you own (the factory itself stays where it stands; the packs stay too)
 	data.Storage = relics
 	data.BackpackItems = backpackKept
+	-- the pen's Take credit (PenService) never exceeds what the backpack holds
+	local held = 0
+	for _, n in backpackKept do
+		held += n
+	end
+	if type(data.PenTaken) == "number" and data.PenTaken > held then
+		data.PenTaken = held
+	end
 	if RebirthConfig.levelOf(perks, "PodiumKeeper") < 1 and type(data.Podiums) == "table" then
 		for i, key in data.Podiums do
 			local item = if type(key) == "string" then ItemData.parseStoredKey(key) else nil

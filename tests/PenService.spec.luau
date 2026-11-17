@@ -426,6 +426,55 @@ return function(T, Loader)
 		T.eq(w.data.PenTaken, 0)
 	end)
 
+	-- (integrator review 2026-11-17, round 2) the credit never outlives the taken ore: cleaned and
+	-- sold (or fed to a machine, put on a podium) it leaves the backpack, and the fresh ore brought
+	-- home later still counts (CarryService.clampPenTaken)
+	withWorld("PenService: taken ore cleaned and sold doesn't swallow the fresh ore brought home later", function(w)
+		w.hands = 5
+		w.carry({ K = "Raw", O = "Copper" }, 5)
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 5, "five fresh ores")
+		pen.action(w.player, "Take", { Key = DIRTY, Count = 5 })
+		T.eq(w.data.PenTaken, 5, "five taken out")
+		-- cleaned one by one at the station: the dirty one out of the backpack, the clean one back in
+		local function isRaw(d: any): boolean
+			return d.K == "Raw"
+		end
+		for _ = 1, 5 do
+			local raw = CarryService.take(w.player, isRaw, 1)[1]
+			T.truthy(raw, "a dirty one")
+			CarryService.add(w.player, { K = "Clean", O = raw.O, G = "Clean" }, 1, true)
+		end
+		T.le(w.data.PenTaken, 5, "never above the backpack")
+		-- sold (or into a machine, onto a podium): out of the backpack
+		local sold = CarryService.take(w.player, function(d: any): boolean
+			return d.K == "Clean"
+		end)
+		T.eq(#sold, 5, "sold")
+		T.eq(w.data.PenTaken, 0, "nothing taken left in the backpack: no credit")
+		-- five fresh ores brought home count
+		w.carry({ K = "Raw", O = "Coal" }, 5)
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 10, "the fresh ores count")
+		T.eq(w.data.PenTaken, 0)
+		-- Take then Put In still counts nothing
+		pen.action(w.player, "Take", { Key = ItemData.storageKey({ K = "Raw", O = "Coal" }), Count = 5 })
+		T.eq(w.data.PenTaken, 5, "taken again")
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 10, "put back: nothing new")
+		T.eq(w.data.PenTaken, 0, "paid off")
+		-- the credit sits under the backpack's count after a partial Put In too
+		pen.action(w.player, "Take", { Key = ItemData.storageKey({ K = "Raw", O = "Coal" }), Count = 2 })
+		w.carry({ K = "Raw", O = "Tin" }, 3)
+		T.eq(w.data.PenTaken, 2)
+		local spent = CarryService.take(w.player, nil, 4)
+		T.eq(#spent, 4, "four used elsewhere")
+		T.le(w.data.PenTaken, CarryService.countOf(w.data), "at most the one left")
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 10, "(accepted leftover) the credit left swallows one fresh ore")
+		T.eq(w.data.PenTaken, 0)
+	end)
+
 	withWorld("PenService: Open Pen only opens your own pen", function(w)
 		pen.open(w.player, PLOT)
 		local open = lastNote(w, "OpenUI")

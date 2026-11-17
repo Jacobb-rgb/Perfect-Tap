@@ -166,7 +166,9 @@ local boardDirty: { [number]: boolean } = {}
 -- "Put N ores in your Ore Pen", owner 2026-11-17 in place of the train's), not what machines,
 -- the Cleaning Station's overflow or the wheel put there, and never ore that came out of the pen:
 -- data.PenTaken counts what "Take" moved into the backpack (saved, at most PenTakenMax), and
--- ore put back is paid off against it first (no Take / Put In loop fills a quest).
+-- ore put back is paid off against it first (no Take / Put In loop fills a quest). It never
+-- exceeds the backpack's count (CarryService.clampPenTaken): taken ore cleaned, sold, placed
+-- or fed to a machine clears its credit, so the fresh ore brought home later still counts.
 PenService.PenTakenMax = 1000
 local function countStored(data: { [string]: any }, n: number)
 	local credit = data.PenTaken
@@ -427,9 +429,13 @@ local function putIn(player: Player, plotId: number): string?
 	local function storable(desc: Desc): boolean
 		return desc.K ~= "Relic"
 	end
-	-- no yield between taking them out of the backpack and storing them
+	-- no yield between taking them out of the backpack and storing them; they go
+	-- back into the pen, so they pay the Take credit off (countStored) before
+	-- take()'s clamp to the backpack's count can drop it
 	local room = math.max(0, PenService.capacity(player) - #data.Storage)
+	local credit = data.PenTaken
 	local stored: { Desc } = if room > 0 then CarryService.take(player, storable, room) else {}
+	data.PenTaken = credit
 	for _, desc in stored do
 		table.insert(data.Storage, desc)
 	end

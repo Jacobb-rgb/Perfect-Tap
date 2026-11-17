@@ -175,9 +175,28 @@ function CarryService.has(player: Player, predicate: ((Desc) -> boolean)?): bool
 end
 
 --[[
+	data.PenTaken (PenService: the ores "Take" moved out of the Ore Pen into
+	the backpack, paid off before Stats.OresStored counts what is put in)
+	never exceeds what the backpack holds: taken ore that leaves it any other
+	way (cleaned, sold, on a podium, into a machine) clears its own credit,
+	so it never swallows the fresh ore brought home later. take() calls it;
+	so do the load (Migrations) and a rebirth (RebirthConfig).
+]]
+function CarryService.clampPenTaken(data: { [string]: any })
+	local credit = data.PenTaken
+	if type(credit) == "number" and credit > 0 then
+		local held = CarryService.countOf(data)
+		if credit > held then
+			data.PenTaken = held
+		end
+	end
+end
+
+--[[
 	Takes up to `max` items matching `predicate` out of the backpack (all of
 	them without `max`), stack by stack in key order, and returns them (one
-	desc per item). The caller uses them in the same step (no yield).
+	desc per item). The caller uses them in the same step (no yield). The
+	pen's Take credit drops to what is left (clampPenTaken).
 ]]
 function CarryService.take(player: Player, predicate: ((Desc) -> boolean)?, max: number?): { Desc }
 	local taken: { Desc } = {}
@@ -205,6 +224,7 @@ function CarryService.take(player: Player, predicate: ((Desc) -> boolean)?, max:
 		end
 	end
 	if #taken > 0 then
+		CarryService.clampPenTaken(data)
 		player:SetAttribute("CarryCount", CarryService.countOf(data))
 		DataService.changed(player)
 	end
