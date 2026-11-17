@@ -93,7 +93,9 @@ local function addNodes(parent, map)
 				local rng = Rng.new(index * 131 + 7)
 				local floor = MineFloors.get(floorIndex)
 				local kind = marker:GetAttribute("Kind")
-				if kind ~= "Giant" then
+				-- (a marker naming its kind keeps it, as MiningService does: the VIP caves' floor rocks)
+				local named = type(kind) == "string" and kind ~= "Giant" and MineFloors.OreCount[kind] ~= nil
+				if kind ~= "Giant" and not named then
 					local roll = rng:next()
 					local deep = marker:GetAttribute("Deep") == true
 					kind = if roll < (if deep then 0.25 else 0.1) then "Crystal" elseif roll < 0.42 then "Big" else "Small"

@@ -15,7 +15,9 @@
 	  Falls   a waterfall either side of the door down the mound's front into a pool
 	  Sign    GLIMMER GROTTO over the door
 	  Rocks   5 spots of the Glimmer Grotto's ore, each with the owner's Meshy rock model for it
-	          (BaseLayout.VipCave.RockFloor / RockKinds: MiningService builds it with RockBuilder)
+	          (BaseLayout.VipCave.RockFloor / RockKinds: MiningService builds it with RockBuilder),
+	          and 2 of the Sunken Palace's own rocks in the middle (FloorRocks); every cave rock's ore
+	          may rarely be one of floors 5 and 6 (Rare)
 	It stands outside the plot's model (the plot's part and see-through rules), in Map.VipCaves.
 	(owner 2026-11-17 evening: "widen it a bit, it's terribly narrow in there") The room runs back
 	past the island's edge: PlotCave.openEdge cuts a window into Land's boundary wall behind it and
@@ -35,7 +37,17 @@ local Kit = require(script.Parent.Lobby.Backdrop.Kit)
 
 local PlotCave = {}
 
-export type Spawn = { Position: Vector3, Zone: string, PlotId: number, RockFloor: string?, RockKind: string? }
+export type Spawn = {
+	Position: Vector3,
+	Zone: string,
+	PlotId: number,
+	RockFloor: string?, -- a zone rock in this floor's Meshy model of RockKind
+	RockKind: string?,
+	Floor: number?, -- a mine floor's own rock (its ores, health, blaster level) of Kind
+	Kind: string?,
+	RareFloors: string?, -- "StormglassRift,HeartstoneCore": a rare ore's floors, RareChance per ore
+	RareChance: number?,
+}
 
 -- the room's violet rock (inside the rainbow, the cave's own colour) and its floor, light enough
 -- to read under the grotto's teal cave light
@@ -176,6 +188,7 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 
 	m.Parent = parent
 	local spawns: { Spawn } = {}
+	local rareFloors = table.concat(cave.Rare.Floors, ",")
 	for i, p in cave.Rocks do
 		table.insert(spawns, {
 			Position = cf:PointToWorldSpace(p),
@@ -183,6 +196,19 @@ function PlotCave.build(parent: Instance, plot: WorldLayout.Plot, rng: Rng.Rng):
 			PlotId = plot.Id,
 			RockFloor = cave.RockFloor,
 			RockKind = cave.RockKinds[i],
+			RareFloors = rareFloors,
+			RareChance = cave.Rare.Chance,
+		})
+	end
+	for _, rock in cave.FloorRocks do
+		table.insert(spawns, {
+			Position = cf:PointToWorldSpace(rock.At),
+			Zone = PlotCave.Zone,
+			PlotId = plot.Id,
+			Floor = rock.Floor,
+			Kind = rock.Kind,
+			RareFloors = rareFloors,
+			RareChance = cave.Rare.Chance,
 		})
 	end
 	return m, spawns

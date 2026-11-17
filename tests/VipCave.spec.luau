@@ -67,7 +67,10 @@ return function(T, Loader)
 		T.truthy(folder, "Map.VipCaves")
 		T.eq(#folder:GetChildren(), #WorldLayout.Plots, "a cave per plot")
 		T.eq(#cave.Rocks, 5, "5 rocks (owner: 5, phones)")
-		T.eq(#spawns, #WorldLayout.Plots * #cave.Rocks, "every cave's rock spots")
+		local perCave = #cave.Rocks + #cave.FloorRocks
+		T.eq(#cave.Rocks, 5, "5 grotto rocks")
+		T.eq(#cave.FloorRocks, 2, "and 2 of floor 4 (owner: two more in the middle, from location 4)")
+		T.eq(#spawns, #WorldLayout.Plots * perCave, "every cave's rock spots")
 		for _, plot in WorldLayout.Plots do
 			local model = folder:FindFirstChild("VipCave_" .. plot.Id)
 			T.truthy(model, `plot {plot.Id}'s cave`)
@@ -100,40 +103,63 @@ return function(T, Loader)
 			T.falsy(zone.CanCollide or zone.CanQuery, "the zone box neither collides nor is raycast")
 			T.eq(zone.Transparency, 1, "the zone box is invisible")
 		end
+		-- (owner: "a chance there, but really small, that an ore of locations 5 and 6 drops")
+		T.eq(table.concat(cave.Rare.Floors, ","), "StormglassRift,HeartstoneCore", "floors 5 and 6")
+		T.truthy(cave.Rare.Chance > 0 and cave.Rare.Chance <= 0.01, "a really small chance per ore")
 		local cf: any = nil
-		local mine: { any } = {}
+		local mine: { { At: any, Reach: number } } = {}
 		for _, plot in WorldLayout.Plots do
 			cf = WorldLayout.plotCFrame(plot)
 			table.clear(mine)
 			for _, s in spawns do
 				if s.PlotId == plot.Id then
-					T.eq(s.Zone, "Grotto", "the Glimmer Grotto's ore, blaster and VIP rule")
-					-- (owner: "put the new ore in there") each spot names a floor's Meshy rock model
-					T.truthy(MineFloors.ById[s.RockFloor] ~= nil, "a floor's rock look: " .. tostring(s.RockFloor))
-					T.truthy(RockBuilder.MeshSize[s.RockKind] ~= nil, "a rock kind: " .. tostring(s.RockKind))
-					table.insert(mine, cf:PointToObjectSpace(s.Position))
+					T.eq(s.Zone, "Grotto", "the Glimmer Grotto's VIP rule and cave")
+					T.eq(s.RareFloors, "StormglassRift,HeartstoneCore", "a rare ore of floors 5 and 6")
+					T.eq(s.RareChance, cave.Rare.Chance, "at its small chance")
+					-- (a Meshy rock is up to MeshSize x 1.08 across, its floor's scale on top)
+					local floorId, kind
+					if s.Floor then
+						-- a mine floor's own rock: that floor's ores, health and blaster level
+						local floor = MineFloors.ByIndex[s.Floor]
+						T.truthy(
+							floor ~= nil and MineFloors.OreCount[s.Kind] ~= nil and s.Kind ~= "Giant",
+							"a floor's rock: " .. tostring(s.Kind)
+						)
+						floorId, kind = floor.Id, s.Kind
+					else
+						-- (owner: "put the new ore in there") a grotto rock in a floor's Meshy rock model
+						T.truthy(MineFloors.ById[s.RockFloor] ~= nil, "a floor's rock look: " .. tostring(s.RockFloor))
+						T.truthy(RockBuilder.MeshSize[s.RockKind] ~= nil, "a rock kind: " .. tostring(s.RockKind))
+						floorId, kind = s.RockFloor, s.RockKind
+					end
+					local reach = RockBuilder.MeshSize[kind] * 1.08 / 2 * (RockBuilder.MeshFloorScale[floorId] or 1)
+					table.insert(mine, { At = cf:PointToObjectSpace(s.Position), Reach = reach })
 					T.eq(AccessService.caveAt(s.Position + Vector3.new(0, 2, 0)), plot.Id, "the spot is in its own cave")
 					-- the magnet pulls the chunks off the rocks (the yard's margin ends before them)
 					T.falsy(ItemService.onBase(s.Position + Vector3.new(0, 1, 0)), "a rock spot past the yard's pickup margin")
 				end
 			end
-			T.eq(#mine, #cave.Rocks, `plot {plot.Id}'s 5 rock spots`)
-			for i, p in mine do
+			T.eq(#mine, perCave, `plot {plot.Id}'s rock spots`)
+			for i, spot in mine do
+				local p, reach = spot.At, spot.Reach
 				T.near(p.Y, 0, 0.01, "on the room's floor")
-				-- (a Meshy rock is up to MeshSize x 1.08 across: half of it, and a little air, to every wall)
-				local kind = cave.RockKinds[i]
-				local reach = RockBuilder.MeshSize[kind] * 1.08 / 2 * (RockBuilder.MeshFloorScale[cave.RockFloor] or 1)
 				T.le(room.Min.X + reach, p.X, "clear of the left wall")
 				T.le(p.X, room.Max.X - reach, "clear of the right wall")
 				T.le(ROOM_FRONT + reach, p.Z, "clear of the front wall")
 				T.le(p.Z, room.Max.Z - reach, "clear of the back wall")
 				T.le(reach * 2, room.Max.Y - 0.5, "under the ceiling")
-				-- (round an open middle: the way in from the door and the middle stay clear)
-				T.truthy(math.abs(p.X) >= 9 or p.Z >= ROOM_FRONT + 12, "the middle stays open")
+				-- a way in from the door (a player 2.8 across) between the front and middle rocks (the
+				-- back row's middle rock is where it leads)
+				if p.Z < 76 then
+					T.le(1.4, math.abs(p.X) - reach, "the way in from the door stays clear")
+				end
 				for j = i + 1, #mine do
 					local q = mine[j]
-					local other = RockBuilder.MeshSize[cave.RockKinds[j]] * 1.08 / 2
-					T.le(reach + other, Vector3.new(p.X - q.X, 0, p.Z - q.Z).Magnitude, "rock spots far enough apart for their rocks")
+					T.le(
+						reach + q.Reach,
+						Vector3.new(p.X - q.At.X, 0, p.Z - q.At.Z).Magnitude,
+						"rock spots far enough apart for their rocks"
+					)
 				end
 			end
 		end
@@ -247,7 +273,7 @@ return function(T, Loader)
 				T.eq(AccessService.caveAt(m.CFrame.Position), id, "a cave marker in its own cave")
 			end
 		end
-		T.eq(own, #WorldLayout.Plots * #cave.Rocks, "the caves' markers")
+		T.eq(own, #WorldLayout.Plots * (#cave.Rocks + #cave.FloorRocks), "the caves' markers")
 		-- (the rooms run back past the island's edge) Land's boundary wall keeps its window only
 		-- where a room and its walls stand: beside the windows and over them it still blocks
 		local walls = {}
@@ -454,6 +480,78 @@ return function(T, Loader)
 		if not ok then
 			error(err, 0)
 		end
+	end)
+
+	T.test("VIP cave: its floor-4 rocks are that floor's, and any cave ore may rarely be one of floors 5 and 6", function()
+		local mining = MiningService._test
+		local rocksFolder = Instance.new("Folder")
+		mining.reset(rocksFolder)
+		local ok, err = pcall(function()
+			local function marker(at: any): any
+				local m = Instance.new("Part")
+				m.Size = Vector3.new(2, 2, 2)
+				m.CFrame = CFrame.new(at)
+				m:SetAttribute("Zone", "Grotto")
+				return m
+			end
+			-- the middle rocks: floor 4's own (its ores, health, blaster level), still the grotto's VIP rule
+			for i, spec in cave.FloorRocks do
+				local m = marker(Vector3.new(i * 20, 1, 0))
+				m:SetAttribute("Floor", spec.Floor)
+				m:SetAttribute("Kind", spec.Kind)
+				local rock = mining.spawnRock(m)
+				T.truthy(rock, "a floor rock grows: " .. spec.Kind)
+				local floor = MineFloors.ByIndex[spec.Floor]
+				T.eq(rock.Floor, spec.Floor, "floor 4's rock")
+				T.eq(rock.MinBlaster, floor.MinBlaster, "its blaster level")
+				T.eq(rock.MaxHealth, MineFloors.rockHealth(spec.Floor, spec.Kind), "its health")
+				T.eq(rock.Model:GetAttribute("VipOnly"), true, "the grotto's VIP rule")
+				local rich = spec.Kind == "Crystal" or spec.Kind == "Golden" or spec.Kind == "Geode"
+				for _, oreId in rock.Ores do
+					T.truthy((if rich then floor.CrystalOres else floor.Ores)[oreId] ~= nil, "a floor 4 ore: " .. oreId)
+				end
+			end
+			-- the rare ores: at chance 1 every ore of a grotto rock and of a floor rock is one of floors 5 / 6
+			local deep: { [string]: boolean } = {}
+			for _, id in cave.Rare.Floors do
+				for oreId in MineFloors.ById[id].Ores do
+					deep[oreId] = true
+				end
+			end
+			for n = 1, 6 do
+				local m = marker(Vector3.new(n * 20, 1, 40))
+				m:SetAttribute("RareFloors", table.concat(cave.Rare.Floors, ","))
+				m:SetAttribute("RareChance", 1)
+				if n % 2 == 0 then
+					m:SetAttribute("Floor", 4)
+					m:SetAttribute("Kind", "Crystal")
+				end
+				local rock = mining.spawnRock(m)
+				T.truthy(rock and #rock.Ores > 0, "a rare rock grows")
+				for _, oreId in rock.Ores do
+					T.truthy(deep[oreId], "an ore of floors 5 / 6: " .. oreId)
+				end
+			end
+			-- at chance 0 (no attribute) never
+			local plain = mining.spawnRock(marker(Vector3.new(0, 1, 80)))
+			for _, oreId in plain.Ores do
+				T.truthy(WorldLayout.ZoneById.Grotto.Ores[oreId] ~= nil, "a grotto ore: " .. oreId)
+			end
+		end)
+		mining.reset(nil)
+		if not ok then
+			error(err, 0)
+		end
+	end)
+
+	T.test("VIP cave: the Forgemaster's Pass names the floor-4 rocks and the rare chance before the buy", function()
+		local MonetizationConfig = Loader.requirePath("ReplicatedStorage.Shared.Config.MonetizationConfig")
+		local text = MonetizationConfig.grottoOddsText()
+		T.truthy(text:find("Plus 2 Sunken Palace rocks", 1, true), "the two floor 4 rocks: " .. text)
+		T.truthy(text:find("Blaster 7+", 1, true), "their blaster level")
+		T.truthy(text:find("0.5% chance to be a Stormglass Rift or Heartstone Core ore", 1, true), "the rare chance")
+		local big = MonetizationConfig.get("BigPass")
+		T.truthy(big and big.Description:find(text, 1, true), "in the pass's description")
 	end)
 
 	-- A rock model like OreNodeBuilder.buildRock makes (one 4x3x4 block).

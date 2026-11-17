@@ -141,6 +141,17 @@ BaseLayout.VipCave = {
 	-- grotto's ores, health and rules stay (MiningService)
 	RockFloor = "DeepHollow",
 	RockKinds = { "Geode", "Crystal", "Golden", "Crystal", "Geode" },
+	-- (owner 2026-11-17 night: "add two more ores in the middle, from location 4") two of the Sunken
+	-- Palace's rocks (mine floor 4) in the middle, as on that floor: its ores, its health and its
+	-- blaster level (7), its Meshy models (Royal Shard, Geode); a way in from the door between them
+	FloorRocks = {
+		{ At = Vector3.new(-6, 0, 72), Floor = 4, Kind = "Crystal" },
+		{ At = Vector3.new(6, 0, 72), Floor = 4, Kind = "Geode" },
+	},
+	-- (owner: "a chance there, but really small, that an ore of locations 5 and 6 drops") every ore a
+	-- cave rock rolls, each time it grows back, may be one of these floors' ores instead (half each);
+	-- the Forgemaster's Pass says so before the buy (MonetizationConfig.grottoOddsText)
+	Rare = { Floors = { "StormglassRift", "HeartstoneCore" }, Chance = 0.005 },
 }
 
 -- Every fixed piece, for overlap tests.

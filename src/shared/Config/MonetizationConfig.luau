@@ -120,6 +120,8 @@
 local OreData = require(script.Parent.OreData)
 local StarBlasterData = require(script.Parent.StarBlasterData)
 local WorldLayout = require(script.Parent.WorldLayout)
+local BaseLayout = require(script.Parent.BaseLayout)
+local MineFloors = require(script.Parent.MineFloors)
 
 export type Kind = "GamePass" | "Product"
 
@@ -190,7 +192,37 @@ function MonetizationConfig.grottoOddsText(): string
 		local text = if math.abs(pct - math.floor(pct + 0.5)) < 1e-9 then tostring(math.floor(pct + 0.5)) else string.format("%.1f", pct)
 		table.insert(parts, `{text}% {line.Name}`)
 	end
-	return `Glimmer Grotto ore: {table.concat(parts, ", ")}.`
+	local text = `Glimmer Grotto ore: {table.concat(parts, ", ")}.`
+	-- (2026-11-17 night) the cave's mine floor rocks and its rare ores of deeper floors
+	local cave = BaseLayout.VipCave
+	local counts: { [number]: number } = {}
+	local order: { number } = {}
+	for _, rock in cave.FloorRocks do
+		if not counts[rock.Floor] then
+			table.insert(order, rock.Floor)
+		end
+		counts[rock.Floor] = (counts[rock.Floor] or 0) + 1
+	end
+	for _, index in order do
+		local floor = MineFloors.ByIndex[index]
+		if floor then
+			text ..= ` Plus {counts[index]} {floor.Name} rocks with its ores (Blaster {floor.MinBlaster}+).`
+		end
+	end
+	local rare = cave.Rare
+	if rare and rare.Chance > 0 then
+		local names: { string } = {}
+		for _, id in rare.Floors do
+			local floor = MineFloors.ById[id]
+			if floor then
+				table.insert(names, floor.Name)
+			end
+		end
+		local pct = rare.Chance * 100
+		local shown = if math.abs(pct - math.floor(pct + 0.5)) < 1e-9 then tostring(math.floor(pct + 0.5)) else string.format("%.1f", pct)
+		text ..= ` Every ore in the cave has a {shown}% chance to be a {table.concat(names, " or ")} ore.`
+	end
+	return text
 end
 
 local LIST: { Product } = {

@@ -289,6 +289,30 @@ local function finishRock(model: Model, rock: Rock): Rock
 end
 
 -- A mine floor rock on `marker` (forcedKind: "Giant" for the Giant Crystal).
+--[[
+	(owner 2026-11-17, the VIP caves: "a chance there, but really small, that an ore of locations 5 and
+	6 drops") A marker's RareFloors ("StormglassRift,HeartstoneCore") and RareChance: each ore its rock
+	rolls, every time it grows, is with that chance one of those floors' ores instead (one of the
+	floors at random, by its ore weights). The rock keeps its own weights for the ore luck upgrade
+	(an ore outside them stays what it is: BoostConfig.upgradeOre).
+]]
+local function rareOres(marker: BasePart, ores: { string })
+	local chance, floors = marker:GetAttribute("RareChance"), marker:GetAttribute("RareFloors")
+	if type(chance) ~= "number" or chance <= 0 or type(floors) ~= "string" then
+		return
+	end
+	local list = string.split(floors, ",")
+	for i in ores do
+		if random() < chance then
+			local floor = MineFloors.ById[list[math.min(#list, math.floor(random() * #list) + 1)]]
+			local oreId = if floor then pickWeighted(floor.Ores) else nil
+			if oreId then
+				ores[i] = oreId
+			end
+		end
+	end
+end
+
 local function spawnFloorRock(marker: BasePart, zone: WorldLayout.Zone, floor: MineFloors.Floor, forcedKind: string?): Rock?
 	local markerKind = marker:GetAttribute("Kind")
 	local kind = forcedKind
@@ -307,6 +331,7 @@ local function spawnFloorRock(marker: BasePart, zone: WorldLayout.Zone, floor: M
 		if #ores == 0 then
 			return nil
 		end
+		rareOres(marker, ores)
 	end
 	local seed = math.floor(random() * 1e9) + 1
 	local ground = marker.CFrame.Position - Vector3.new(0, marker.Size.Y / 2, 0)
@@ -365,6 +390,7 @@ local function spawnRock(marker: BasePart): Rock?
 	if #ores == 0 then
 		return nil
 	end
+	rareOres(marker, ores)
 	local seed = math.floor(random() * 1e9) + 1
 	local ground = marker.CFrame.Position - Vector3.new(0, marker.Size.Y / 2, 0)
 	local base = CFrame.new(ground) * CFrame.Angles(0, random() * math.pi * 2, 0)
