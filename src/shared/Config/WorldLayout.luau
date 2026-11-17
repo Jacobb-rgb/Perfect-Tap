@@ -152,7 +152,10 @@ WorldLayout.Caves = {
 		Min = Vector3.new(88, -12, -214),
 		Max = Vector3.new(146, 10, -150),
 		Entrance = { Position = Vector3.new(80, -12, -182), Width = 12, Height = 13 },
-		CrystalClusters = 5,
+		-- (owner 2026-11-17: the VIP mine went; a closed, empty hollow now) no crystals; Land still
+		-- lays out the old 5 and throws them away (the mountains' random stream)
+		CrystalClusters = 0,
+		LaidOutClusters = 5,
 	},
 	-- the elevator-only floors (MineFloors.Placement 4-6): the palace hall under its ceiling,
 	-- the Stormglass Rift's cavern up to the crane beam its lift hangs from, and the
@@ -318,7 +321,9 @@ WorldLayout.Zones = {
 			Amethyst = 3,
 			CrystalRose = 1.5,
 		},
-		NodeCount = 12,
+		-- (owner 2026-11-17: "remove the VIP mine" at the quarry; his new VIP cave comes to every plot
+		-- and takes this zone's ores, blaster and VIP rule: no rocks here meanwhile)
+		NodeCount = 0,
 		MinBlaster = 3,
 		RockHealth = 150,
 		VipOnly = true,

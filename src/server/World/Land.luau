@@ -612,7 +612,7 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 		end
 	end
 	local grotto = caves.Grotto
-	local grottoRoom = caveRoom(land, "Grotto", grotto.Min, grotto.Max, Palette.GrottoRock, Palette.HollowRockDark, rng, {
+	caveRoom(land, "Grotto", grotto.Min, grotto.Max, Palette.GrottoRock, Palette.HollowRockDark, rng, {
 		west = { { -182 - grotto.Min.Z, 6 } },
 	})
 	tunnel(land, Vector3.new(quarry.Max.X, grotto.Min.Y, -188), Vector3.new(grotto.Min.X, -1, -176), false, Palette.GrottoRock)
@@ -624,7 +624,13 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 	)
 	-- solid rock above the tunnel up to the grotto ceiling (nothing to sneak through)
 	boxPart(land, Vector3.new(quarry.Max.X - 2, 3, -200), Vector3.new(grotto.Min.X + 2, grotto.Max.Y + 3, -164), Palette.GrottoRock)
-	for _ = 1, grotto.CrystalClusters do
+	-- (owner 2026-11-17: "remove the VIP mine"; his new VIP cave comes to every plot instead) the
+	-- grotto's crystals are still laid out, into a scratch model that is thrown away: their draws
+	-- keep the build's random stream, so the mountains after them stay exactly as they were. Its
+	-- door and its sign went; the room and its tunnel stay a closed, empty hollow (the quarry's east
+	-- wall is shut over the tunnel).
+	local scratch = Instance.new("Model")
+	for _ = 1, WorldLayout.Caves.Grotto.LaidOutClusters do
 		for _ = 1, 25 do
 			-- along the walls, where no ore grows
 			local alongX = rng:chance(0.5)
@@ -636,30 +642,12 @@ function Land.build(map: Model, rng: Rng.Rng, avoid: { Vector3 })
 				)
 				else Vector3.new(grotto.Max.X - 5, grotto.Min.Y, rng:range(grotto.Min.Z + 6, grotto.Max.Z - 6))
 			if math.abs(p.Z + 182) > 10 and clearOfNodes(p, 7) then
-				crystalCluster(grottoRoom, p, Palette.Vip, rng:range(6, 9))
+				crystalCluster(scratch, p, Palette.Vip, rng:range(6, 9))
 				break
 			end
 		end
 	end
-	local door = Geo.block(
-		land,
-		CFrame.new(80, grotto.Min.Y + 5.5, -182),
-		Vector3.new(1, 11, 12),
-		Palette.Vip,
-		Enum.Material.Neon,
-		{ Transparency = 0.55, CanTouch = true, CanQuery = false, CastShadow = false }
-	)
-	door.Name = "VipDoor"
-	door:AddTag("VipDoor")
-	Props.sign(
-		land,
-		CFrame.new(73, grotto.Min.Y + 9, -182) * CFrame.Angles(0, math.pi / 2, 0),
-		"GLIMMER GROTTO - VIP",
-		12,
-		2.4,
-		Palette.HollowRockDark,
-		Palette.Vip
-	)
+	scratch:Destroy()
 
 	---------------------------------------------------------------- mountains
 	-- Columns on a 40-stud grid. Cells touching a cave or tunnel are split into

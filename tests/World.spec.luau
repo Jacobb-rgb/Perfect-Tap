@@ -109,7 +109,8 @@ return function(T, Loader)
 				tags[tag] = (tags[tag] or 0) + 1
 			end
 		end
-		for _, tag in { "SellBin", "SellCounter", "ShopCounter", "EmberChest", "GuildBoard", "Plot", "VipDoor", "NodeSpawn" } do
+		-- (no "VipDoor" since the VIP mine went, owner 2026-11-17: the plots' VIP caves bring it back)
+		for _, tag in { "SellBin", "SellCounter", "ShopCounter", "EmberChest", "GuildBoard", "Plot", "NodeSpawn" } do
 			T.truthy(tags[tag], "tag " .. tag)
 		end
 		T.eq(tags.Plot, #WorldLayout.Plots, "plot models")

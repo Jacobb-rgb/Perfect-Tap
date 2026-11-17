@@ -287,9 +287,7 @@ return function(T, Loader)
 					end
 				end
 				T.eq(ramps, #data.Ramps / 7 - skipped, label .. " every path ramp")
-				-- the quarry's VIP door (owner 2026-11-14: "frame it with mega shards, walls round it so you
-				-- can't see behind the 3D models"): shards round it, its slot lined with his mossy cliff,
-				-- looks only and clear of the way in; no rim part left in front of the side walls' slab
+				-- the quarry's extras round the diorama; no rim part left in front of the side walls' slab
 				if index == 1 then
 					local function box(d)
 						local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
@@ -303,69 +301,10 @@ return function(T, Loader)
 						end
 						return mn, mx
 					end
-					local frame = model:FindFirstChild("VipFrame")
-					T.truthy(frame ~= nil, label .. " the VIP door's frame")
-					if frame then
-						local slot = Floor.VipSlot
-						local shards, slotWalls, inWay = 0, 0, 0
-						for _, d in frame:GetDescendants() do
-							if d:IsA("BasePart") then
-								-- (the slot's mossy walls stop the camera only, Diorama.CameraTag: a chunk's box
-								-- that players met was an invisible wall, owner 2026-11-16)
-								if d.Name == "SlotWall" then
-									T.truthy(
-										d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
-										label .. " the slot's mossy walls stop the camera"
-									)
-								else
-									T.eq(d.CanCollide, false, label .. " the VIP frame is looks only")
-								end
-								if d.Name == "Shard" then
-									shards += 1
-								elseif d.Name == "SlotWall" then
-									slotWalls += 1
-								end
-								-- (the way in: the door's width, the ground to over head height, the wall to the tunnel)
-								local mn, mx = box(d)
-								if mx.Z > slot.Z0 + 0.6 and mn.Z < slot.Z1 - 0.6 and mn.Y < 6.5 and mx.X > 50 then
-									inWay += 1
-								end
-							end
-						end
-						T.le(20, shards, label .. " mega shards round the VIP door")
-						T.eq(slotWalls, 2, label .. " the door's slot lined on both sides")
-						T.eq(inWay, 0, label .. " nothing of the frame in the VIP way in")
-					end
-					-- (owner 2026-11-16: "no wall there, you can see behind the 3D object") the grotto
-					-- tunnel lined with his mossy cliff, clear of the way in to the VIP door (the train
-					-- band's linings went with its openings, owner 2026-11-17: no train)
-					local linings = model:FindFirstChild("OpeningLinings")
-					T.truthy(linings ~= nil, label .. " the openings' linings")
-					if linings then
-						local chunks, inBand, inDoor = 0, 0, 0
-						for _, d in linings:GetChildren() do
-							if d:IsA("BasePart") then
-								chunks += 1
-								-- (the camera stops at it, players at the rim right behind it)
-								T.truthy(
-									d.CanCollide and d.CanQuery and d:HasTag(Diorama.CameraTag),
-									label .. " a lining stops the camera only"
-								)
-								local mn, mx = box(d)
-								-- (the old train band, z 14 .. 39 in either side wall)
-								if math.abs(mx.X) > 58 and mn.Z < 39 and mx.Z > 14 then
-									inBand += 1
-								end
-								-- (the tunnel to the VIP door, z -8 .. 4, a body's height)
-								if mx.X > 72 and mn.Z < 3.4 and mx.Z > -7.4 and mn.Y < 6.5 then
-									inDoor += 1
-								end
-							end
-						end
-						T.le(2, chunks, label .. " the grotto tunnel lined")
-						T.eq(inBand, 0, label .. " no lining left in the closed train band")
-						T.eq(inDoor, 0, label .. " nothing of the linings in the way to the VIP door")
-					end
+					-- (owner 2026-11-17: "remove the VIP mine"; and no train) no VIP door frame and no
+					-- mossy linings any more: the side walls run on over the old door and the band
+					T.eq(model:FindFirstChild("VipFrame"), nil, label .. " no VIP door frame")
+					T.eq(model:FindFirstChild("OpeningLinings"), nil, label .. " no opening linings")
 					-- (owner 2026-11-16: "board it up, an earth hill round it") an earth hill in each back
 					-- corner in front of the massif's waterfalls, clear of the rock spawns
 					local hills = model:FindFirstChild("CornerHills")
@@ -653,11 +592,11 @@ return function(T, Loader)
 					end
 					T.eq(holes, 0, label .. " the room's walls have no holes")
 					-- (owner 2026-11-17: "remove all departures, rails and holes in the wall") the
-					-- quarry's side walls are closed: no opening on E or W but the grotto door
+					-- quarry's side walls are closed: no opening on E or W (the VIP door went too)
 					if index == 1 then
 						local sideOpenings = 0
 						for _, o in look.Openings or {} do
-							if (o.Side == "E" or o.Side == "W") and not (o.Side == "E" and o.To < 8) then
+							if o.Side == "E" or o.Side == "W" then
 								sideOpenings += 1
 							end
 						end
