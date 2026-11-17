@@ -75,6 +75,10 @@ local DataTemplate = {
 	AutoSort = true,
 	-- what stands on each podium: an ItemData.storageKey ("Clean|Gold|Pristine|") or ""
 	Podiums = { "", "", "", "", "" }, -- EconomyConfig.Podiums.Max slots
+	-- ores "Take" moved out of the Ore Pen and not put back yet: what comes back into the pen is
+	-- paid off against it before Stats.OresStored counts (PenService; at most PenService.PenTakenMax)
+	PenTaken = 0,
+
 	-- os.time() of the last moment the podiums were paying (offline earnings)
 	LastSeen = 0,
 

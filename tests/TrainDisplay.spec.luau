@@ -107,7 +107,7 @@ return function(T, Loader)
 	T.test("TrainDisplay: the world has no railway, no train stop and no train prompt", function()
 		local game = roblox.Instance.new("DataModel")
 		local map = WorldBuilder.build(game:GetService("Workspace"))
-		T.eq(WorldBuilder.Version, 74, "map v74: no railway")
+		T.truthy(WorldBuilder.Version >= 74, "map v74 or later: no railway")
 		T.eq(map:FindFirstChild("Railway"), nil, "no railway")
 		T.truthy(map:FindFirstChild("TrainDisplay"), "the still train")
 		for _, d in map:GetDescendants() do
@@ -122,6 +122,26 @@ return function(T, Loader)
 			T.falsy(d:GetAttribute("RailwayPlaceholder"), `no track placeholder ({d:GetFullName()})`)
 		end
 		inert(map:FindFirstChild("TrainDisplay"), "the world's display")
+		-- off the quarry ramp (its wedge: x -8..8, its toe at z -148): no part of the display in its box
+		local land = map:FindFirstChild("Land")
+		local quarry = if land then land:FindFirstChild("Quarry") else nil
+		local ramp = if quarry then quarry:FindFirstChild("Ramp") else nil
+		T.truthy(ramp and ramp:IsA("BasePart"), "the quarry ramp")
+		local rp, rh = ramp.CFrame.Position, ramp.Size / 2
+		for _, d in map:FindFirstChild("TrainDisplay"):GetDescendants() do
+			if d:IsA("BasePart") then
+				-- the part's world box (its rotation applied to its half size)
+				local p = d.CFrame.Position
+				local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = d.CFrame:GetComponents()
+				local s = d.Size / 2
+				local hx = math.abs(r00) * s.X + math.abs(r01) * s.Y + math.abs(r02) * s.Z
+				local hz = math.abs(r20) * s.X + math.abs(r21) * s.Y + math.abs(r22) * s.Z
+				T.falsy(
+					math.abs(p.X - rp.X) < rh.X + hx - 1e-3 and math.abs(p.Z - rp.Z) < rh.Z + hz - 1e-3,
+					`{d.Name} clear of the quarry ramp`
+				)
+			end
+		end
 		-- the yards: no train stop, the back fence closed (its middle post where the opening was)
 		local plots = map:FindFirstChild("Plots")
 		T.truthy(plots, "plots")

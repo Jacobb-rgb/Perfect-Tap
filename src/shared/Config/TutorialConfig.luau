@@ -37,7 +37,8 @@ export type Data = { [string]: any }
 -- What the server knows beyond the save data (TutorialService fills it in).
 export type Signals = {
 	NearStation: boolean?, -- the character has stood within StationRadius of MinePoint (the quarry floor)
-	NearPen: boolean?, -- the character has stood within PenRadius of their own Ore Pen
+	NearHome: boolean?, -- the character has stood at home: within HomeRadius of their yard's Cleaning
+	-- Station (the Home step's guide target) or within PenRadius of their Ore Pen
 	Carrying: number?, -- the CarryCount attribute: items in the backpack (CarryService)
 }
 
@@ -63,6 +64,7 @@ export type Step = {
 TutorialConfig.MinePoint = Vector3.new(26, WorldLayout.Quarry.Min.Y, -150)
 TutorialConfig.StationRadius = 30
 TutorialConfig.PenRadius = 16 -- studs from your Ore Pen that count as "home"
+TutorialConfig.HomeRadius = 18 -- studs from your yard's Cleaning Station (the guide's target) that count as "home"
 TutorialConfig.PollSeconds = 1 -- how often the server checks where the player stands (step 1 only)
 TutorialConfig.Reward = 250 -- coins for finishing every step (GAME_DESIGN.md: 250); skipping gives none
 TutorialConfig.ArriveRadius = 9 -- the guide beam fades out this close to its target (the arrow stays)
@@ -220,16 +222,16 @@ TutorialConfig.Steps = {
 		Hint = { Mouse = "BASE at the top takes you home", Touch = "Tap BASE at the top", Gamepad = "D-pad down, then BASE" },
 		Target = "Cleaning",
 		done = function(data: Data, signals: Signals): boolean
-			return signals.NearPen == true or M.home(data) or M.cleanedMined(data)
+			return signals.NearHome == true or M.home(data) or M.cleanedMined(data)
 		end,
 	},
 	{
 		Id = "Clean",
 		Title = "Clean your ore",
-		Text = "Clean the dirty ore from your backpack at your Cleaning Station.",
-		-- (the station's "Clean Ore" is the main prompt, E / Y; an empty backpack: the guide points
-		-- at the pen, where ore may wait)
-		Hint = { Mouse = "E at the Cleaning Station", Touch = "Tap Clean Ore at the station", Gamepad = "Y at the Cleaning Station" },
+		Text = "Clean the dirty ore from your backpack at your Cleaning Station. None with you? Take one out of your Ore Pen.",
+		-- (the station's main prompt, E / Y, reads "Place Raw Ore" first, then "Clean Ore"; an empty
+		-- backpack: the guide points at the pen, where "Open Pen" is G / B)
+		Hint = { Mouse = "E at the Cleaning Station", Touch = "Tap the station's button", Gamepad = "Y at the Cleaning Station" },
 		Target = "Cleaning",
 		EmptyTarget = "Pen",
 		done = function(data: Data, _signals: Signals): boolean

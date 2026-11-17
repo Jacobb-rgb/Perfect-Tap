@@ -36,7 +36,7 @@ function Preview.build(Loader: any): { [string]: any }
 			FlawlessCleans = 10,
 			IngotsSmelted = 300,
 			ItemsSold = 900,
-			TrainTrips = 80,
+			OresStored = 120,
 			PodiumEarned = 1e7,
 			ArtifactsFound = 5,
 			CapsulesOpened = 30,

@@ -164,13 +164,27 @@ local boardDirty: { [number]: boolean } = {}
 
 -- Stats.OresStored: the ores a player brought into their pen (thrown in, Put In; the quests
 -- "Put N ores in your Ore Pen", owner 2026-11-17 in place of the train's), not what machines,
--- the Cleaning Station's overflow or the wheel put there.
+-- the Cleaning Station's overflow or the wheel put there, and never ore that came out of the pen:
+-- data.PenTaken counts what "Take" moved into the backpack (saved, at most PenTakenMax), and
+-- ore put back is paid off against it first (no Take / Put In loop fills a quest).
+PenService.PenTakenMax = 1000
 local function countStored(data: { [string]: any }, n: number)
+	local credit = data.PenTaken
+	credit = if type(credit) == "number" and credit == credit and credit > 0 then math.floor(credit) else 0
+	local back = math.min(credit, n)
+	data.PenTaken = credit - back
 	local stats = data.Stats
-	if type(stats) == "table" then
+	if type(stats) == "table" and n > back then
 		local before = stats.OresStored
-		stats.OresStored = (if type(before) == "number" and before == before then before else 0) + n
+		stats.OresStored = (if type(before) == "number" and before == before then before else 0) + (n - back)
 	end
+end
+
+-- Ore that "Take" moved out of the pen into the backpack (paid off by countStored).
+local function countTaken(data: { [string]: any }, n: number)
+	local credit = data.PenTaken
+	credit = if type(credit) == "number" and credit == credit and credit > 0 then math.floor(credit) else 0
+	data.PenTaken = math.min(credit + n, PenService.PenTakenMax)
 end
 
 ---------------------------------------------------------------- capacity
@@ -518,6 +532,7 @@ local function takeItems(player: Player, _plotId: number, data: { [string]: any 
 		taken += CarryService.add(player, entry, 1, true)
 	end
 	if taken > 0 then
+		countTaken(data, taken)
 		DataService.changed(player)
 	end
 	return taken

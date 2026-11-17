@@ -1014,6 +1014,10 @@ function Migrations.run(data: { [string]: any }, now: number?): Report
 		refill(storage, kept)
 	end
 
+	-- the ores taken out of the pen and not put back yet (PenService): a whole number 0..1000
+	local penTaken = data.PenTaken
+	data.PenTaken = if isFinite(penTaken) and penTaken > 0 then math.min(math.floor(penTaken), 1000) else 0
+
 	-- PlacedMachines
 	local placed = data.PlacedMachines
 	if type(placed) ~= "table" then

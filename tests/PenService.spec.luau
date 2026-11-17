@@ -399,6 +399,33 @@ return function(T, Loader)
 		T.eq(w.data.Stats.OresStored, 1, "a broken counter starts over")
 	end)
 
+	-- (integrator review 2026-11-17) ore taken out of the pen never counts again when it goes back:
+	-- Take then Put In (or a throw-in) pays off data.PenTaken first, fresh ore counts after it
+	withWorld("PenService: ore taken out of the pen doesn't count again for the pen quests", function(w)
+		w.carry({ K = "Raw", O = "Copper" }, 3)
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 3, "three fresh ores")
+		-- (as many as the backpack takes)
+		pen.action(w.player, "Take", { Key = DIRTY, Count = 3 })
+		local taken = w.data.PenTaken
+		T.truthy(taken >= 1, "taken out: " .. taken)
+		pen.putIn(w.player, PLOT)
+		T.eq(w.data.Stats.OresStored, 3, "put back: nothing new")
+		T.eq(w.data.PenTaken, 0, "paid off")
+		pen.action(w.player, "Take", { Key = DIRTY, Count = 1 })
+		T.eq(w.data.PenTaken, 1)
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 3, "the first one back in pays it off")
+		T.eq(w.data.PenTaken, 0)
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 4, "fresh ore counts once it is paid off")
+		-- a broken credit reads as none
+		w.data.PenTaken = 0 / 0
+		w.zone.Handler(itemInPen(w, USER, { K = "Raw", O = "Coal" }))
+		T.eq(w.data.Stats.OresStored, 5)
+		T.eq(w.data.PenTaken, 0)
+	end)
+
 	withWorld("PenService: Open Pen only opens your own pen", function(w)
 		pen.open(w.player, PLOT)
 		local open = lastNote(w, "OpenUI")

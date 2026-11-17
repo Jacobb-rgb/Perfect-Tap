@@ -54,7 +54,7 @@ return function(T, Loader)
 		end,
 		-- (no train since 2026-11-17: the dirty ore goes home in the backpack, to the Cleaning Station)
 		Home = function(_data: any, signals: any)
-			signals.NearPen = true
+			signals.NearHome = true
 		end,
 		Clean = function(data: any, _signals: any)
 			data.Stats.OresCleaned += 1
@@ -341,10 +341,10 @@ return function(T, Loader)
 					T.truthy(TutorialService.nearStation(w.player), "standing in the quarry")
 					tut.signals(w.player).NearStation = true
 				end
-				if signals.NearPen then
+				if signals.NearHome then
 					w.standAt(TutorialConfig.layoutPoint("Pen", 1) :: any + Vector3.new(2, 3, 2))
 					T.truthy(TutorialService.nearPen(w.player), "standing at the pen")
-					tut.signals(w.player).NearPen = true
+					tut.signals(w.player).NearHome = true
 				end
 				if signals.Carrying ~= nil then
 					w.player.attrs.CarryCount = signals.Carrying
@@ -498,7 +498,7 @@ return function(T, Loader)
 			w.play("Station")
 			w.play("Mine")
 			T.eq(w.step(), 3, "stops at the hint")
-			tut.signals(w.player).NearPen = true -- (at home: the Home step's progress)
+			tut.signals(w.player).NearHome = true -- (at home: the Home step's progress)
 			TutorialService.evaluate(w.player)
 			T.eq(w.step(), 3, "later progress doesn't pass the hint")
 			tut.action(w.player, "Ack")
@@ -551,6 +551,25 @@ return function(T, Loader)
 		w.player.humanoid.Health = 0
 		T.falsy(TutorialService.nearPen(w.player), "a dead character is nowhere")
 		w.player.humanoid.Health = 100
+		-- the Home step's guide points at the yard's Cleaning Station: walking there from where BASE puts
+		-- you (PlotService.homeCFrame) counts as home on the way, and at the arrow itself
+		local PlotService = Loader.requirePath("ServerScriptService.Server.Services.PlotService")
+		local from = PlotService.homeCFrame(1).Position
+		local arrow = TutorialConfig.layoutPoint("Cleaning", 1) :: any
+		local reached = false
+		for i = 0, 40 do
+			local at = from:Lerp(arrow, i / 40)
+			w.standAt(Vector3.new(at.X, from.Y + 3, at.Z))
+			if TutorialService.nearHome(w.player) then
+				reached = true
+				break
+			end
+		end
+		T.truthy(reached, "walking from BASE to the arrow reaches home")
+		w.standAt(arrow)
+		T.truthy(TutorialService.nearHome(w.player), "home at the arrow")
+		w.standAt(TutorialConfig.layoutPoint("Cleaning", 5) :: any)
+		T.falsy(TutorialService.nearHome(w.player), "another plot's station is not home")
 		-- on the Home step the poll sets the signal: at home with the ore, on to cleaning it
 		tut.loaded(w.player, w.data)
 		w.play("Station")

@@ -189,6 +189,42 @@ function QuestLogic.roll(kind: Kind, ctx: Context): { Entry }
 	return picked
 end
 
+--[[
+	A saved list's retired quest ids (QuestConfig.Renamed: the train's went 2026-11-17) take
+	their successor in place before the list is checked, so a list that named one is kept, not
+	rerolled (a reroll would hand claimed quests out again): the successor starts at the
+	player's stats now with its own goal, Claimed kept, the other entries untouched. A
+	successor already in the list leaves the entry for the reroll (never two the same).
+	True when it changed anything.
+]]
+local function renameRetired(list: any, ctx: Context): boolean
+	if type(list) ~= "table" then
+		return false
+	end
+	local present: { [string]: boolean } = {}
+	for _, entry in list do
+		if type(entry) == "table" and type(entry.Id) == "string" then
+			present[entry.Id] = true
+		end
+	end
+	local changed = false
+	for _, entry in list do
+		local newId = if type(entry) == "table" then QuestConfig.Renamed[entry.Id] else nil
+		local def = if newId then QuestConfig.ById[newId] else nil
+		if newId and def and not present[newId] then
+			local goal = QuestLogic.goal(def, ctx.Level, ctx.Income)
+			if goal then
+				entry.Id = newId
+				entry.Base = statOf(ctx.Stats, def.Stat)
+				entry.Goal = goal
+				present[newId] = true
+				changed = true
+			end
+		end
+	end
+	return changed
+end
+
 -- Is a saved list sane for its kind (the right count of known, different quests)?
 local function saneList(list: any, kind: Kind): boolean
 	if type(list) ~= "table" or #list ~= countOf(kind) then
@@ -221,7 +257,8 @@ end
 	when it changed anything (the caller saves: DataService.changed).
 ]]
 function QuestLogic.refresh(record: { [string]: any }, ctx: Context): boolean
-	local changed = false
+	local changed = renameRetired(record.Daily, ctx)
+	changed = renameRetired(record.Weekly, ctx) or changed
 	local today = QuestLogic.day(ctx.Now)
 	local week = QuestLogic.week(ctx.Now)
 	if record.Day ~= today or not saneList(record.Daily, "Daily") then

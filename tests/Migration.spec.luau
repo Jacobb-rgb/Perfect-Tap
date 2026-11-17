@@ -815,6 +815,12 @@ return function(T, Loader)
 		T.eq(newer.Coins, coins)
 		T.eq(newer.Stars, stars)
 		T.eq(newer.StarPerks.ExpressRails, 1, "a perk id this build doesn't sell is kept")
+		-- the pen quests' taken-out credit (PenService): a whole number 0..1000
+		for _, case in { { 0 / 0, 0 }, { -3, 0 }, { 7.6, 7 }, { 1e9, 1000 }, { "x", 0 } } do
+			newer.PenTaken = case[1]
+			Migrations.run(newer)
+			T.eq(newer.PenTaken, case[2], "PenTaken " .. tostring(case[1]))
+		end
 	end)
 
 	T.test("Migration: a machine at the inventory cap is refunded, never lost", function()

@@ -14,7 +14,8 @@
 	  elevator stop             front-left (-32, 42), facing the main road
 	  Giant Crystal plaza       (0, 18): a round flagstone plaza, 14 studs clear
 	  lagoon                    middle-back; the falls on the back cliff at x -4 / -15
-	  ore lift                  east side (50, 2), a timber shaft frame up to its cable anchor
+	  old lift spot             east side (50, 2): kept clear (the lift and its timber shaft
+	                            went with the train, 2026-11-14 / 2026-11-17)
 	  rock patches              front-left, front-right, west and east shores, the
 	                            back corners (deep) and both islands
 	Contract and budgets: MineKit's header.
@@ -60,10 +61,9 @@ local OPEN_HALF = 12 -- half width of the opening in the front wall
 local OPEN_TOP = 28 -- underside of the lintel (22+ over the ramp at the front face)
 local GATE_Z = 49
 local GATE_WIDTH = 22
--- the Mine Lift's spot (Railway builds the lift there from TrainConfig in the game)
+-- where the Mine Lift stood (kept clear: MineFloors.LiftSpots)
 local LIFT_SPOT = MineFloors.LiftSpots[3] or Vector3.new(50, 0, 2)
 local LIFT = Vector2.new(LIFT_SPOT.X, LIFT_SPOT.Z)
-local LIFT_ANCHOR = 30 -- the top of the timber shaft over the old lift spot (the lifts went 2026-11-14)
 
 local LAKE: { Ellipse } = {
 	{ x = 0, z = -24, rx = 40, rz = 24 }, -- the main basin
@@ -833,58 +833,6 @@ function Floor.build(parent: Instance, origin: CFrame, opts: BuildOpts?): Model
 	lightAt(falls, at(-9, 4, -46), rgb(170, 240, 255), 30, 1.4)
 	MineKit.crystals(cliff, upFrame(pt(3, 31.2, -51.4), dir(0.3, 1, 0.3)), 3, 3.6, "Shell", CRYSTALS, 31071)
 	MineKit.crystals(cliff, upFrame(pt(-18.5, 23.6, -51), dir(-0.3, 1, 0.2)), 2, 3, "Shell", CRYSTALS, 31072)
-
-	-- a timber shaft frame on top of the ore lift up to its cable anchor (LIFT_ANCHOR),
-	-- braced back to the east wall
-	local shaft = folder("LiftShaft")
-	local shaftRng = Rng.new(3108)
-	local half = 4.2
-	for _, sx in { -1, 1 } do
-		for _, sz in { -1, 1 } do
-			Geo.block(
-				shaft,
-				at(LIFT.X + sx * half, (15.2 + LIFT_ANCHOR + 1.2) / 2, LIFT.Y + sz * half),
-				Vector3.new(0.8, LIFT_ANCHOR + 1.2 - 15.2, 0.8),
-				Geo.vary(C.WoodDark, shaftRng, 0.04),
-				nil,
-				DECOR
-			)
-		end
-	end
-	for _, sz in { -1, 1 } do
-		Geo.block(shaft, at(LIFT.X, LIFT_ANCHOR + 0.8, LIFT.Y + sz * half), Vector3.new(half * 2 + 1.2, 0.8, 0.9), C.WoodDark, nil, DECOR)
-		Geo.block(shaft, at(LIFT.X, 22.5, LIFT.Y + sz * half), Vector3.new(half * 2 + 0.8, 0.6, 0.6), C.WoodLight, nil, TINY)
-	end
-	for _, sx in { -1, 1 } do
-		Geo.block(shaft, at(LIFT.X + sx * half, LIFT_ANCHOR + 0.8, LIFT.Y), Vector3.new(0.9, 0.8, half * 2 + 1.2), C.WoodDark, nil, DECOR)
-	end
-	-- the head plate the cable anchor hangs from, a pulley and the beams into the wall
-	Geo.block(shaft, at(LIFT.X, LIFT_ANCHOR + 0.5, LIFT.Y), Vector3.new(3.4, 1, 3.4), C.WoodDark, nil, DECOR)
-	Geo.block(shaft, at(LIFT.X, LIFT_ANCHOR + 2.6, LIFT.Y), Vector3.new(0.6, 3.4, 3.4), Style.C.Hazard, Enum.Material.Metal, {
-		CanTouch = false,
-		CanQuery = false,
-		CanCollide = false,
-		Shape = Enum.PartType.Cylinder,
-	})
-	for _, sz in { -1, 1 } do
-		local x0 = LIFT.X + half
-		Geo.block(
-			shaft,
-			at((x0 + HX + 2) / 2, LIFT_ANCHOR + 0.8, LIFT.Y + sz * half),
-			Vector3.new(HX + 2 - x0, 0.9, 0.9),
-			C.WoodDark,
-			nil,
-			DECOR
-		)
-	end
-	Geo.block(
-		shaft,
-		at(HX - 0.5, LIFT_ANCHOR + 0.8, LIFT.Y),
-		Vector3.new(3, 3, half * 2 + 3),
-		Geo.vary(C.WallDark, shaftRng, 0.04),
-		nil,
-		DECOR
-	)
 
 	---------------------------------------------------------------- ceiling
 	local ceiling = folder("Ceiling")

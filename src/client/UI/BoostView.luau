@@ -2933,14 +2933,16 @@ end
 
 --[[
 	The top of the chips' row (design units): the chip slot under the light
-	HUD's tiles (ChipSlot), else under the coins' "+$X" popups; on touch
-	layouts under the slot's row, where the side menu's MENU button sits.
+	HUD's tiles (ChipSlot; its corner row stays in its corner, placeCorner),
+	else under the slot's row, where the TRAIN chip was, so neither they nor
+	the side menu under them move (owner 2026-11-17: "do not change any other
+	UI"); never above the coins' "+$X" popups.
 ]]
 function BoostView.chipsTop(compact: boolean): number
 	if ChipSlot.HudTop then
 		return ChipSlot.HudTop
 	end
-	local bottom = if compact then ChipSlot.Top + ChipSlot.RowHeight.Compact else ChipSlot.Top
+	local bottom = ChipSlot.Top + (if compact then ChipSlot.RowHeight.Compact else ChipSlot.RowHeight.Normal)
 	return math.max(bottom, BoostView.FloatersBottom) + BoostView.ChipGap
 end
 

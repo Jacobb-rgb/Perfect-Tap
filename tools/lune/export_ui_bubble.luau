@@ -210,7 +210,7 @@ local shopData = {
 	Offers = {
 		{ Id = "Podiums", Name = "Two More Podiums", Description = "Unlocks podiums 4 and 5 on your base.", Icon = "podium", Price = "100" },
 		{ Id = "OfflineExtension", Name = "Night Shift", Description = "Your podiums keep earning at 50% for up to 12 hours while you are away, instead of 25% for 8.", Icon = "moon", Price = "99", Owned = true },
-		{ Id = "TrainExpress", Name = "Express Train", Description = "Your ore train runs twice as fast and carries half as much again.", Icon = "train", Price = "199" },
+		{ Id = "DoubleMoney", Name = "2x Money", Description = "Double coins forever: your podiums earn twice as much and selling pays double.", Icon = "coins", Price = "199" },
 	},
 }
 for _, spec in { { "pc", 1.25, 1 }, { "phone", 0.62, 2 } } do
