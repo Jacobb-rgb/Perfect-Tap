@@ -1438,7 +1438,7 @@ end
 	           behind the portal's buttresses (the cut's open sides showed the lawn and the sky)
 	  Fill     invisible bodies in the corners these walls close and the trenches behind his back
 	           cliffs, so nobody is trapped in one
-	  Threshold sand under the Ember Caves' doorway's floor seam
+	  Threshold sand under the floor seam along the Ember Caves' wall
 	The Ember Caves' red curtain went too (Mine/Diorama: only its lighting portal stays).
 ]]
 Floor.Passage = {
@@ -1466,13 +1466,16 @@ Floor.Passage = {
 	Parapet = { X = 16.2, Y = 22, Z0 = -51.6, Z1 = -58 }, -- its underside, front and back
 	LintelBack = { Z = -50, Top = 24 },
 	Buttress = { X = 16.2, Top = 30 },
-	EmberWall = -59.95, -- a hair in front of the Ember Caves' south wall (its face at -59.98)
+	EmberWall = -60.03, -- into the Ember Caves' 0.12 thin south wall (local -60.09 .. -59.97): no gaps
 	-- the corners beside the portal, closed by these walls (Meshy chat's review: a player who walked
 	-- off the model's back cliffs onto the wall's low end dropped in and could not jump out):
 	-- invisible bodies from the door's sides out to the model's walk boxes, as high as the wall there
-	-- and the trenches behind the back cliffs: their first walk boxes start by -53.32
-	Fill = { X0 = 16.6, X1 = 24.42, TopW = 13.3, TopE = 12.3, TrenchZ = -53.32 },
-	Threshold = { X = 10.5, Y0 = -1.5, Y1 = -0.5, Z0 = -60.2, Z1 = -59.85 },
+	-- and behind the buttresses and the back cliffs (their first walk boxes start by -53.32) as
+	-- high as the cliffs (24, 28: a jump onto them)
+	Fill = { X0 = 16.6, X1 = 24.42, TopW = 13.3, TopE = 12.3, TrenchZ = -53.32, BackTop = 24 },
+	-- under the floor seam along the Ember Caves' wall: the doorway and on beside it under the
+	-- buttresses' sides (the quarry's sand ends at -59.9, the wall's face at -59.97)
+	Threshold = { X = 17.2, Y0 = -1.5, Y1 = -0.5, Z0 = -60.2, Z1 = -59.85 },
 }
 
 local function depthsPassage(model: Model, origin: CFrame)
@@ -1506,10 +1509,14 @@ local function depthsPassage(model: Model, origin: CFrame)
 			end
 		end
 		table.sort(cuts)
+		-- (under the lintel and the ceiling the wall closes nothing above their underside: there it
+		-- stops at it, and the keystone, its arrow and the lintel's lamps stay in view from the quarry)
+		local l = k.Lintel
+		local top = if s[1] >= -l.X and s[2] <= l.X then math.min(s[3], l.Y) else s[3]
 		for i = 1, #cuts - 1 do
 			local a, b = cuts[i], cuts[i + 1]
 			local bottom = doorTop(a, b) or k.Ground
-			box("Wall", Vector3.new(a, bottom, k.Wall.Z0), Vector3.new(b, s[3], k.Wall.Z1), C.StoneDark)
+			box("Wall", Vector3.new(a, bottom, k.Wall.Z0), Vector3.new(b, top, k.Wall.Z1), C.StoneDark)
 		end
 	end
 	-- the door's frame: its head over the slivers (7.75 high, as the town's shop doors), a post
@@ -1537,11 +1544,14 @@ local function depthsPassage(model: Model, origin: CFrame)
 	for _, side in { -1, 1 } do
 		local b = k.Buttress
 		box("Side", Vector3.new(side * b.X, k.Ground, k.EmberWall), Vector3.new(side * (b.X + 1), b.Top, pp.Z1), C.StoneDark)
+		-- a skirt under the buttress's inner face (it stands on y 0, the tunnel's sand at -0.45)
+		box("Side", Vector3.new(side * b.X, k.Ground, pp.Z1), Vector3.new(side * (b.X + 1), 0, p.Z), C.StoneDark)
 	end
 	-- the walled corners either side (the buttresses, the pillars, the model's back cliffs, these
-	-- walls) and the trenches behind his back cliffs out to his model's edges (they drained into the
-	-- tunnel behind the buttresses before) filled up to the wall's top there: nobody drops into one
-	-- and stays, from the fill a player walks over the wall's low end back into the quarry
+	-- walls) filled up to the wall's top there, so from the fill a player walks over the wall's low
+	-- end back into the quarry; the strips behind the buttresses and the trenches behind his back
+	-- cliffs out to his model's edges (they drained into the tunnel behind the buttresses before)
+	-- filled up to the cliffs' tops: nobody drops into one and stays
 	local fill = k.Fill
 	local lo, hi = Diorama.footprint(Floor.Index)
 	local body = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
@@ -1549,10 +1559,11 @@ local function depthsPassage(model: Model, origin: CFrame)
 		local top = if side < 0 then fill.TopW else fill.TopE
 		local edge = if side < 0 then lo.X else hi.X
 		box("Fill", Vector3.new(side * fill.X0, k.Ground, k.EmberWall), Vector3.new(side * fill.X1, top, k.Wall.Z0), C.StoneDark, body)
-		box("Fill", Vector3.new(side * fill.X1, k.Ground, k.EmberWall), Vector3.new(edge, top, fill.TrenchZ), C.StoneDark, body)
+		local back = Vector3.new(side * (k.Buttress.X + 1), k.Ground, k.EmberWall)
+		box("Fill", back, Vector3.new(edge, fill.BackTop, fill.TrenchZ), C.StoneDark, body)
 	end
-	-- (with the curtain gone) a strip of sand under the Ember Caves' doorway: the caves' floor and
-	-- the quarry's sand leave a 0.1 seam there that showed the void
+	-- (with the curtain gone) a strip of sand under the Ember Caves' wall's foot: the caves' floor
+	-- and the quarry's sand leave a 0.1 seam along it that showed the void
 	local t = k.Threshold
 	local sand = box("Threshold", Vector3.new(-t.X, t.Y0, t.Z0), Vector3.new(t.X, t.Y1, t.Z1), Floor.FillSand, TINY)
 	sand.Material = Enum.Material.Sand

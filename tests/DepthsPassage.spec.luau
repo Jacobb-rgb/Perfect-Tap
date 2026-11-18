@@ -47,7 +47,8 @@ return function(T, Loader)
 				local mn, mx = bounds(origin, d)
 				-- between the Ember Caves' south wall and the model's cut behind its door (the sand
 				-- strip under the doorway's floor seam reaches under the caves' floor)
-				T.le(if d.Name == "Threshold" then -60.25 else -59.98, mn.Z, "nothing in the Ember Caves: " .. d.Name)
+				-- (or into its 0.12 thin south wall, local -60.09 .. -59.97, no further)
+				T.le(if d.Name == "Threshold" then -60.25 else -60.08, mn.Z, "nothing in the Ember Caves: " .. d.Name)
 				T.le(mx.Z, -44.0, "nothing in the model's facade: " .. d.Name)
 				if d.Name == "Fill" then
 					fills += 1
@@ -58,7 +59,7 @@ return function(T, Loader)
 				elseif d.Name == "Threshold" then
 					T.truthy(not d.CanCollide and not d.CanQuery, "the sand under the seam is a look")
 					T.le(mx.Y, -0.5 + 1e-3, "under the floor")
-					T.truthy(mn.X <= -10.2 and mx.X >= 10.2 and mn.Z <= -60 and mx.Z >= -59.9, "under the whole doorway's seam")
+					T.truthy(mn.X <= -17.1 and mx.X >= 17.1 and mn.Z <= -60 and mx.Z >= -59.9, "under the whole seam by the wall")
 				else
 					T.eq(d.Transparency, 0, "a wall is seen: " .. d.Name)
 					T.truthy(d.CanCollide and d.CanQuery, "solid, and the camera stops on it: " .. d.Name)
@@ -93,10 +94,12 @@ return function(T, Loader)
 			local zMid = (k.Wall.Z0 + k.Wall.Z1) / 2
 			-- the wall closes the cut (x -24 .. 24) from the ground up to its top, all but the door
 			for _, s in k.Tops do
+				-- (capped at the lintel's underside where the lintel and the ceiling are over it)
+				local top = if s[1] >= -k.Lintel.X and s[2] <= k.Lintel.X then math.min(s[3], k.Lintel.Y) else s[3]
 				local x = s[1] + 0.05
 				while x < s[2] do
 					local y = 0.5
-					while y < s[3] - 0.05 do
+					while y < top - 0.05 do
 						local inDoor = false
 						for _, d in k.Door do
 							if x > d[1] and x < d[2] and y < d[3] then
@@ -186,10 +189,40 @@ return function(T, Loader)
 					ax += 0.5
 				end
 			end
-			-- the passage's sides close the slits beside the pillars and under the lintel's corners
+			-- a player on the fill behind the buttresses and the back cliffs jumps back onto the cliffs
+			local tallest = 0
+			for i = 1, #data.Boxes, 5 do
+				if data.Boxes[i + 1] <= k.Fill.TrenchZ + 2 and math.abs(data.Boxes[i]) < 60 then
+					tallest = math.max(tallest, data.Boxes[i + 4])
+				end
+			end
+			T.le(tallest - 7.5, k.Fill.BackTop, "a jump from the back fill onto the tallest cliff beside it")
 			for _, side in { -1, 1 } do
-				for _, p in { V3.new(side * 16.2, 17.75, -47), V3.new(side * 16.0, 10, -51.1), V3.new(side * 16.3, 20, -50.5) } do
+				T.truthy(inside(fillBoxes, V3.new(side * 20, k.Fill.BackTop - 0.5, -59)), "behind the buttress up to the cliffs")
+			end
+			-- the passage's sides close the slits beside the pillars, under the lintel's corners and
+			-- under the buttresses (they stand on y 0, the sand at -0.45)
+			for _, side in { -1, 1 } do
+				for _, p in
+					{
+						V3.new(side * 16.2, 17.75, -47),
+						V3.new(side * 16.0, 10, -51.1),
+						V3.new(side * 16.3, 20, -50.5),
+						V3.new(side * 16.7, -0.2, -55),
+						V3.new(side * 16.7, 10, -60.0),
+					}
+				do
 					T.truthy(solid(p), "a side closes " .. tostring(p))
+				end
+			end
+			-- under the lintel the wall stops at its underside: the keystone, its arrow and the
+			-- lintel's lamps stay in view from the quarry
+			for _, d in passage:GetChildren() do
+				if d.Name == "Wall" then
+					local mn, mx = bounds(origin, d)
+					if mn.X >= -k.Lintel.X - 1e-3 and mx.X <= k.Lintel.X + 1e-3 then
+						T.le(mx.Y, k.Lintel.Y + 1e-3, "the wall under the lintel's underside")
+					end
 				end
 			end
 			T.eq(k.Fill.TopW, k.Tops[1][3], "the west fill level with the wall's west end")
