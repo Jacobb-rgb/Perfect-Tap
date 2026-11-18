@@ -11,6 +11,7 @@ local process = require("@lune/process")
 local roblox = require("@lune/roblox") :: any
 
 local MeshLooks = require("./lib/mesh_looks")
+local MeshStrip = require("./lib/mesh_strip")
 
 local root = process.cwd
 local OUT = root .. "/src/shared/Assets/MeshAssets.rbxm"
@@ -49,4 +50,6 @@ if #noAlbedo > 0 then
 	print("NO ALBEDO (run tools/meshy/glb_albedo.py on their .glb): " .. table.concat(noAlbedo, ", "))
 end
 fs.writeFile(OUT, roblox.serializeModel(tops))
+-- Lune drops the templates' CollisionFidelity Box and keeps every hull: strip again (lib/mesh_strip)
+MeshStrip.run(root, OUT, folder)
 print("wrote " .. OUT)

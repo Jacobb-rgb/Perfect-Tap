@@ -20,7 +20,7 @@
 	                                                         after a merge of two versions of it, say)
 
 	What ships (integrator review 2026-11-17: the file sent every client ~4.7 MB at join): only what
-	collides keeps its collision hull (Rock_* and Prop_MossyCliff, see `collides`), every other
+	collides keeps its collision hull (Rock_* and Prop_MossyCliff, lib/mesh_strip.luau), every other
 	template is CollisionFidelity Box and tools/meshy/strip_hulls.mjs drops its hull data; and a
 	floor's older tile sets go once a newer one is in whole (MineFloors.floorTiles never builds them).
 
@@ -38,6 +38,7 @@ local roblox = require("@lune/roblox") :: any
 
 local Loader = require("./lib/loader")
 local MeshLooks = require("./lib/mesh_looks")
+local MeshStrip = require("./lib/mesh_strip")
 
 local path = process.args[1]
 assert(path, "usage: lune run tools/lune/import_meshes.luau <hotovo.rbxl|.rbxm> [set name] | repack")
@@ -209,13 +210,6 @@ end
 	marzipan", the owner 2026-11-14). The floors and the elevator tower always draw at full detail
 	(about 160-300k triangles a floor, only one floor around a player at a time).
 ]]
--- The templates whose clones collide or answer raycasts by their shape (RockBuilder's Rock1,
--- Diorama.meshFill's walls); every other clone is a look only (or a click target, where its box will
--- do: the ore items) and needs no collision hull.
-local function collides(name: string): boolean
-	return string.match(name, "^Rock_") ~= nil or name == "Prop_MossyCliff"
-end
-
 local function fidelity(t: any)
 	if string.match(t.Name, "^Floor_") or t.Name == "Prop_MineElevator" then
 		t.RenderFidelity = roblox.Enum.RenderFidelity.Precise
@@ -389,21 +383,10 @@ if not fs.isDir(root .. "/src/shared/Assets") then
 	fs.writeDir(root .. "/src/shared/Assets")
 end
 fs.writeFile(OUT, roblox.serializeModel({ folder }))
--- every template but the colliding ones Box and without its hull (Lune writes no CollisionFidelity
--- and can't clear SharedStrings: tools/meshy/strip_hulls.mjs; a Lune write after it would drop the
--- Box again, so it comes last)
-do
-	local args = { root .. "/tools/meshy/strip_hulls.mjs", "strip", OUT }
-	for _, t in folder:GetChildren() do
-		if collides(t.Name) then
-			table.insert(args, t.Name)
-		end
-	end
-	local result = process.spawn("node", args)
-	assert(result.ok, "strip_hulls.mjs failed: " .. result.stderr)
-	print((string.gsub(result.stdout, "%s+$", "")))
-	print(string.format("MeshAssets.rbxm: %.2f MB", #fs.readFile(OUT) / 1e6))
-end
+-- every template but the colliding ones Box and without its hull (lib/mesh_strip.luau; a Lune write
+-- after it would drop the Box again, so it comes last)
+MeshStrip.run(root, OUT, folder)
+print(string.format("MeshAssets.rbxm: %.2f MB", #fs.readFile(OUT) / 1e6))
 if repack then
 	print("wrote " .. OUT)
 	return

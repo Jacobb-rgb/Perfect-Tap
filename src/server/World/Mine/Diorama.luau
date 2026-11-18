@@ -944,8 +944,9 @@ function Diorama.build(index: number, parent: Instance, origin: CFrame, opts: { 
 
 	-- (integrator review 2026-11-17: the walk data gives a void cell no box, and the Deep Hollow's
 	-- front-left corner was a hole to the void) one solid invisible underlay just under the floor's
-	-- lowest ground across the whole room: a cell without a box drops you onto it, never out
-	do
+	-- lowest ground across the whole room: a cell without a box drops you onto it, never out. Not
+	-- over an open void (MineFloors.VoidFloors: its VoidCatcher takes a fall)
+	if not MineFloors.VoidFloors[index] then
 		local lineLo, lineHi = Diorama.lines(index)
 		local top = data.Bottom - Diorama.UnderlayGap
 		local bottom = data.Bottom - Diorama.BoxDepth - 1

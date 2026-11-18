@@ -109,40 +109,58 @@ return function(T, Loader)
 		end
 	end)
 
-	-- The CollisionFidelity of every MeshPart in a binary model file, from its property chunk
-	-- (tools/meshy/strip_hulls.mjs writes it uncompressed; Lune can't read it): Box and Default counts.
-	local function fidelities(bytes: string): (number?, number)
+	-- Every MeshPart of a binary model file, in the file's order: its CollisionFidelity value and the
+	-- size of its collision hull (PhysicalConfigData), from the chunks tools/meshy/strip_hulls.mjs
+	-- writes uncompressed (Lune can read neither property). nil without them.
+	local function meshHulls(bytes: string): ({ number }?, { number }?)
+		local function u32s(at: number, n: number): { number }
+			local out = {}
+			for i = 0, n - 1 do
+				out[i + 1] = string.byte(bytes, at + i) * 16777216
+					+ string.byte(bytes, at + n + i) * 65536
+					+ string.byte(bytes, at + 2 * n + i) * 256
+					+ string.byte(bytes, at + 3 * n + i)
+			end
+			return out
+		end
+		local modes: { number }? = nil
+		local hullIndex: { number }? = nil
+		local shared: { number }? = nil
 		local off = 33
 		while off < #bytes do
 			local name = string.sub(bytes, off, off + 3)
 			local packed, size = string.unpack("<I4I4", bytes, off + 4)
 			local start = off + 16
 			off = start + (if packed > 0 then packed else size)
-			if name == "PROP" and packed == 0 then
+			if packed == 0 and name == "PROP" then
 				local len = string.unpack("<I4", bytes, start + 4)
-				if string.sub(bytes, start + 8, start + 7 + len) == "CollisionFidelity" then
-					local at = start + 9 + len
-					local n = (off - at) // 4
-					local boxes, defaults = 0, 0
-					for i = 0, n - 1 do
-						local b = {
-							string.byte(bytes, at + i),
-							string.byte(bytes, at + n + i),
-							string.byte(bytes, at + 2 * n + i),
-							string.byte(bytes, at + 3 * n + i),
-						}
-						local v = b[1] * 16777216 + b[2] * 65536 + b[3] * 256 + b[4]
-						if v == 2 then
-							boxes += 1
-						elseif v == 0 then
-							defaults += 1
-						end
-					end
-					return boxes, defaults
+				local prop = string.sub(bytes, start + 8, start + 7 + len)
+				local at = start + 9 + len
+				if prop == "CollisionFidelity" then
+					modes = u32s(at, (off - at) // 4)
+				elseif prop == "PhysicalConfigData" then
+					hullIndex = u32s(at, (off - at) // 4)
 				end
+			elseif packed == 0 and name == "SSTR" then
+				local count = string.unpack("<I4", bytes, start + 4)
+				local list = {}
+				local p = start + 8
+				for i = 1, count do
+					local n = string.unpack("<I4", bytes, p + 16)
+					list[i] = n
+					p += 20 + n
+				end
+				shared = list
 			end
 		end
-		return nil, 0
+		if not modes or not hullIndex or not shared then
+			return nil, nil
+		end
+		local hulls = {}
+		for i, index in hullIndex do
+			hulls[i] = shared[index + 1]
+		end
+		return modes, hulls
 	end
 
 	T.test("MeshAssets: only the templates that collide carry a collision hull", function()
@@ -162,8 +180,22 @@ return function(T, Loader)
 				colliding += 1
 			end
 		end
-		local boxes, defaults = fidelities(bytes)
+		local modes, hulls = meshHulls(bytes)
+		T.truthy(modes and hulls and #modes == total and #hulls == total, "every template's collision fidelity and hull")
+		local boxes, kept = 0, 0
+		for i = 1, total do
+			local mode, hull = (modes :: { number })[i], (hulls :: { number })[i]
+			if mode == 2 then -- Box
+				boxes += 1
+				T.eq(hull, 0, `template {i}: a Box carries no hull`)
+			else
+				-- (integrator review 2026-11-18) the ones kept for colliding still carry theirs
+				T.eq(mode, 0, `template {i}: Default fidelity or Box`)
+				T.truthy(hull ~= nil and hull > 0, `template {i}: a colliding template keeps its hull`)
+				kept += 1
+			end
+		end
 		T.eq(boxes, total - colliding, "every template that never collides is CollisionFidelity Box")
-		T.eq(defaults, colliding, "the rocks and the mossy cliff keep their hulls")
+		T.eq(kept, colliding, "the rocks and the mossy cliff keep their hulls")
 	end)
 end

@@ -310,6 +310,67 @@ return function(T, Loader)
 			end
 		end
 		T.lt(1000, samples, "edge samples")
+		-- (integrator review 2026-11-18) every cave as built: at every 1-stud spot of its room and of
+		-- its way in from the door, a down-ray from body height lands on the floor (or on something
+		-- solid over it), never through it
+		local solids: { { any } } = {}
+		for _, d in map:GetDescendants() do
+			if d:IsA("BasePart") and d.CanCollide then
+				local lo, hi = partBox(d)
+				table.insert(solids, { d, lo, hi })
+			end
+		end
+		local holes: { string } = {}
+		local spots = 0
+		for _, plot in WorldLayout.Plots do
+			local cf = WorldLayout.plotCFrame(plot)
+			local zoneLo, zoneHi =
+				worldBox(plot, Vector3.new(room.Min.X - 1, -6, PlotBuilder.BackWallZ), Vector3.new(room.Max.X + 1, 4, room.Max.Z + 1))
+			local near: { { any } } = {}
+			for _, s in solids do
+				if overlaps(s[2], s[3], zoneLo, zoneHi) then
+					table.insert(near, s)
+				end
+			end
+			local function lands(x: number, z: number): boolean
+				local foot = cf:PointToWorldSpace(Vector3.new(x, 0, z))
+				local under: { any } = {}
+				for _, s in near do
+					if foot.X >= s[2].X and foot.X <= s[3].X and foot.Z >= s[2].Z and foot.Z <= s[3].Z then
+						table.insert(under, s[1])
+					end
+				end
+				for y = 3, -4, -0.25 do
+					local p = cf:PointToWorldSpace(Vector3.new(x, y, z))
+					for _, part in under do
+						local q = part.CFrame:PointToObjectSpace(p)
+						local h = part.Size / 2
+						if math.abs(q.X) <= h.X + 0.01 and math.abs(q.Y) <= h.Y + 0.01 and math.abs(q.Z) <= h.Z + 0.01 then
+							return y >= -0.6
+						end
+					end
+				end
+				return false
+			end
+			for x = room.Min.X + 0.5, room.Max.X - 0.5, 1 do
+				for z = ROOM_FRONT + 0.5, room.Max.Z - 0.5, 1 do
+					spots += 1
+					if not lands(x, z) then
+						table.insert(holes, `plot {plot.Id} room {x} {z}`)
+					end
+				end
+			end
+			for x = -half + 0.5, half - 0.5, 1 do
+				for z = PlotBuilder.BackWallZ + 0.5, ROOM_FRONT, 1 do
+					spots += 1
+					if not lands(x, z) then
+						table.insert(holes, `plot {plot.Id} way in {x} {z}`)
+					end
+				end
+			end
+		end
+		T.lt(5000, spots, `cave floor spots ({spots})`)
+		T.eq(#holes, 0, "no hole in a cave's floor: " .. table.concat(holes, ", "):sub(1, 300))
 	end)
 
 	T.test("VIP cave: the walls round the room close it but for the door", function()

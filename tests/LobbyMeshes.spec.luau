@@ -293,6 +293,10 @@ return function(T, Loader)
 				local label = string.format("the belt tree at (%.1f, %.1f)", p.X, p.Z)
 				local tall = leaves.Size.Y * (1 - MeshNature.TreeSink)
 				T.truthy(tall >= 0.7 * was, `{label}: at least 0.7x its old height ({tall} of {was})`)
+				-- (integrator review 2026-11-18) the town-side row's crowns a head higher: it has room to stretch
+				if rowOf(p) ~= leanX then
+					T.truthy(tall >= 0.85 * was, `{label}: the town-side row at least 0.85x ({tall} of {was})`)
+				end
 				if rowOf(p) == leanX then
 					plotSide += 1
 					local back = math.abs(p.X) + math.max(leaves.Size.X, leaves.Size.Z) / 2

@@ -1207,7 +1207,8 @@ end
 	z 20 .. 28, 0.8 high) covers them; west of it a low mound of the diorama's sand lies over them,
 	its long sides and its west end sloped so it is walked over like the floor.
 ]]
-Floor.TrackCover = { X0 = -48.6, X1 = 4, Z0 = 21, Z1 = 27, Top = 0.95, Slope = 1.4 }
+-- (Top: the newest set's rail strip reaches 1.25 at x -18.8 .. -17; integrator review 2026-11-18)
+Floor.TrackCover = { X0 = -48.6, X1 = 4, Z0 = 21, Z1 = 27, Top = 1.3, Slope = 1.4 }
 
 local function trackCover(model: Model, origin: CFrame)
 	local m = Instance.new("Model")
@@ -1314,8 +1315,10 @@ Floor.Smooth = {
 	-- foot), in the massif's foot colours (east pink, west orange: Lobby/Backdrop ForgeMountain)
 	BackFill = { X0 = 66.6, Z0 = -80, Bottom = -8, Top = 34.05, East = Color3.fromRGB(199, 70, 124), West = Color3.fromRGB(213, 78, 38) },
 	-- the town side's face: in front of Land's ground at local z 58, from the pit floor to just
-	-- under the town's level, |x| from the ramp's edge (Land: 16 wide) out to the model's corner walls
-	TownFace = { X0 = 8.5, X1 = 36, Z0 = 57.4, Z1 = 58.05 },
+	-- under the town's level, |x| from the ramp's edge (Land: 16 wide) out into the corner hills
+	-- (the model's edge stays under the town's level out to |x| 43, its corner hill tops 12 from
+	-- there to 46; integrator review 2026-11-18)
+	TownFace = { X0 = 8, X1 = 43.5, Z0 = 57.4, Z1 = 58.05 },
 }
 
 local function smoothSurround(model: Model, origin: CFrame)

@@ -403,6 +403,9 @@ Kit.BeltReach = 3.6
 -- leaned over the road), and how tall a lifted (roadside) tree stays at least, of its old height
 Kit.LeanReach = 3.3
 Kit.LiftMinHeight = 0.72
+-- (integrator review 2026-11-18: crowns from ~4.4 studs, heads brushed them over the road's edge) the
+-- town-side row has room to stretch: its crowns start a head higher
+Kit.RoadMinHeight = 0.88
 
 --[[
 	Low-part voxel tree for the town-edge belts: a slim trunk and a crown of
@@ -413,7 +416,8 @@ Kit.LiftMinHeight = 0.72
 	With the owner's tree uploaded (MeshNature.tree) one mesh and an
 	invisible trunk collider: its crown Kit.BeltReach * scale round (the
 	room Trees.belt plans), a leaning one's Kit.LeanReach (off the bases); a
-	lifted one at least Kit.LiftMinHeight of its old height.
+	lifted one at least Kit.LiftMinHeight of its old height, the town-side row's
+	Kit.RoadMinHeight.
 ]]
 function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng, scale: number, lean: Vector3?, lift: number?): Model
 	local s = scale
@@ -464,7 +468,8 @@ function Kit.beltTree(parent: Instance, base: CFrame, kind: string, rng: Rng.Rng
 		nil,
 		p
 	)
-	MeshNature.tree(m, kind, trunk, if lean then Kit.LeanReach else Kit.BeltReach * s, if lift then Kit.LiftMinHeight else nil)
+	local minHeight = if not lift then nil elseif lean then Kit.LiftMinHeight else Kit.RoadMinHeight
+	MeshNature.tree(m, kind, trunk, if lean then Kit.LeanReach else Kit.BeltReach * s, minHeight)
 	return m
 end
 

@@ -202,10 +202,14 @@ function strip(src, keep) {
   const before = f.sstr ? f.sstr.entries.reduce((sum, e) => sum + e.value.length, 0) : 0;
   let boxes = 0;
   let dropped = 0;
+  const hullless = []; // named to keep a hull, but they have none (they would collide as their box)
   let empty = f.sstr ? f.sstr.entries.findIndex((e) => e.value.length === 0) : -1;
   for (const m of meshParts(f)) {
     for (let i = 0; i < m.count; i++) {
-      if (keep.has(m.names[i])) continue;
+      if (keep.has(m.names[i])) {
+        if (hullBytes(f, m, i) === 0) hullless.push(m.names[i]);
+        continue;
+      }
       m.modes[i] = BOX;
       boxes++;
       if (hullBytes(f, m, i) > 0) {
@@ -246,6 +250,10 @@ function strip(src, keep) {
   writeFile(f, src);
   const mb = (n) => (n / 1e6).toFixed(2);
   console.log(`strip_hulls: ${boxes} MeshParts Box, ${dropped} hulls dropped (${keep.size} named keep theirs), shared strings ${mb(before)} -> ${mb(after)} MB`);
+  if (hullless.length) {
+    console.log(`strip_hulls: ${hullless.length} named to keep a hull have none: ${hullless.slice(0, 8).join(", ")}`);
+    process.exitCode = 1;
+  }
 }
 
 function boxes(src) {

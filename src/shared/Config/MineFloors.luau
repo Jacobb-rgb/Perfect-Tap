@@ -282,6 +282,10 @@ MineFloors.Dioramas = {
 -- 32.7); the Heartstone Core keeps its void.
 MineFloors.CeilingHeight = 33.5
 MineFloors.CeilingFloors = { [2] = true, [3] = true, [4] = true, [5] = true } :: { [number]: boolean }
+-- The floors over an open void (the Heartstone Core's islands): a VoidCatcher far below takes a
+-- falling player back to the elevator, so Mine/Diorama lays no solid underlay under them (it held
+-- them 20 studs down in the void, out of the catcher's reach; integrator review 2026-11-18).
+MineFloors.VoidFloors = { [6] = true } :: { [number]: boolean }
 
 -- The tiles floor `index`'s diorama is built from: its newest set (MeshCatalog.FloorsNext: the
 -- quarry whole, only its DEPTHS walk-through cut, 2026-11-17) once every one of its tiles is

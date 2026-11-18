@@ -180,6 +180,18 @@ return function(T, Loader)
 
 	-- Every floor from its sharper set (the quarry with our mossy walls round it), or, newest, only
 	-- the quarry from its newest set (the owner's whole model, 2026-11-17: its smooth surroundings).
+	-- The spots of a cave floor's room that only its underlay holds (the walk data's void cells, swept
+	-- by the contract), per tile set: as many as when the sweep came in (integrator review 2026-11-18).
+	-- A tile set that opens more fails the contract; a new set needs its count here.
+	local OPEN_SPOTS: { [string]: number } = {
+		QuarryBHD = 0,
+		QuarryCHD = 120,
+		EmberCavesHD = 101,
+		DeepHollowHD = 87,
+		SunkenPalaceHD = 98,
+		StormglassRiftHD = 275,
+	}
+
 	local function contract(newest: boolean)
 		local except: { [string]: boolean } = {}
 		if not newest then
@@ -423,7 +435,8 @@ return function(T, Loader)
 							local mn, mx = box(mound)
 							T.truthy(mn.X <= -48 and mx.X >= 4, label .. " the mound from the rails' west end to the platform")
 							T.truthy(mn.Z <= 21 and mx.Z >= 27, label .. " the mound over both rails")
-							T.le(0.85, mx.Y, label .. " the mound over the rails' tops")
+							-- (the newest set's rail strip reaches 1.25 at x -18.8 .. -17; integrator review 2026-11-18)
+							T.le(1.27, mx.Y, label .. " the mound over the rails' tops")
 						end
 						for _, spawn in DioramaData.Quarry.Spawns do
 							local on = spawn[1] > t.X0 - t.Slope
@@ -569,10 +582,18 @@ return function(T, Loader)
 							local mn, mx = bounds(d)
 							-- the ramp (Land: WorldLayout.Quarry.RampWidth wide) stays clear
 							T.le(
-								WorldLayout.Quarry.RampWidth / 2,
+								WorldLayout.Quarry.RampWidth / 2 - 0.01,
 								math.min(math.abs(mn.X), math.abs(mx.X)),
 								label .. " the ramp stays clear"
 							)
+							-- (integrator review 2026-11-18) from the ramp's edge (no slit beside it) into the
+							-- corner hills (the model's edge is under the town's level out to |x| 43)
+							T.le(
+								math.min(math.abs(mn.X), math.abs(mx.X)),
+								WorldLayout.Quarry.RampWidth / 2 + 0.01,
+								label .. " from the ramp's edge"
+							)
+							T.le(43.4, math.max(math.abs(mn.X), math.abs(mx.X)), label .. " into the corner hill")
 							T.le(mx.Y, WorldLayout.Quarry.Max.Y - origin.Position.Y, label .. " the face stops at the town's level")
 						end
 					end
@@ -619,48 +640,105 @@ return function(T, Loader)
 						)
 					end
 				end
-				-- (integrator review 2026-11-17: a void cell of the walk data was a hole to the void) one
-				-- solid underlay under the lowest ground across the room, and a sweep: every spot of the
-				-- room has something solid under it
+				-- (integrator review 2026-11-17/18) the room's holes, swept with the underlay left out: at every
+				-- 1-stud spot of the room a down-ray from body height (3 over the highest walk top within 1.5
+				-- studs) finds something solid. The walk data's void cells, where nothing does, are a cave
+				-- floor's known few (OPEN_SPOTS: a tile set that opens more fails here) and the underlay
+				-- lies under each; the Heartstone Core keeps its void open, its VoidCatcher under each.
 				do
+					local void = MineFloors.VoidFloors[index] == true
 					local underlay = model:FindFirstChild("Underlay")
-					T.truthy(underlay and underlay:IsA("BasePart") and underlay.CanCollide, label .. " a solid underlay")
-					local lineLo, lineHi = Diorama.lines(index)
-					local solids = {}
+					if void then
+						T.eq(underlay, nil, label .. " no underlay over the void (its catcher takes a fall)")
+					else
+						T.truthy(underlay and underlay:IsA("BasePart") and underlay.CanCollide, label .. " a solid underlay")
+					end
+					local function localBox(d: any): (any, any)
+						local mn, mx = V3.new(math.huge, math.huge, math.huge), V3.new(-math.huge, -math.huge, -math.huge)
+						for _, sx in { -1, 1 } do
+							for _, sy in { -1, 1 } do
+								for _, sz in { -1, 1 } do
+									local c = origin:PointToObjectSpace(d.CFrame:PointToWorldSpace(V3.new(sx, sy, sz) * d.Size / 2))
+									mn, mx = mn:Min(c), mx:Max(c)
+								end
+							end
+						end
+						return mn, mx
+					end
+					local boxes = {}
 					for _, d in model:GetDescendants() do
-						if d:IsA("BasePart") and d.CanCollide then
-							table.insert(solids, d)
+						if d:IsA("BasePart") and d.CanCollide and d ~= underlay then
+							local mn, mx = localBox(d)
+							table.insert(boxes, { mn, mx, d.Name == "Ground" and d.Parent and d.Parent.Name == "Ground" })
 						end
 					end
-					local holes = 0
-					local x = lineLo.X + 0.3
-					while x < lineHi.X - 0.3 do
-						local z = lineLo.Y + 0.3
-						while z < lineHi.Y - 0.3 do
-							local p = origin * V3.new(x, data.Bottom - 0.5, z)
-							local covered = false
-							for _, part in solids do
-								local q = part.CFrame:PointToObjectSpace(p)
-								local h = part.Size / 2
-								-- (under it or round it, reaching down past it: a floor or a wall, not a ceiling)
+					local deepest = data.Bottom - Diorama.BoxDepth - 1
+					local catcher = model:FindFirstChild("VoidCatcher")
+					local cLo, cHi = V3.new(0, 0, 0), V3.new(0, 0, 0)
+					if catcher then
+						cLo, cHi = localBox(catcher)
+					end
+					local uLo, uHi = V3.new(0, 0, 0), V3.new(0, 0, 0)
+					if underlay then
+						uLo, uHi = localBox(underlay)
+					end
+					local open, uncaught, unheld = 0, 0, 0
+					local lineLo, lineHi = Diorama.lines(index)
+					for x = lineLo.X + 0.5, lineHi.X - 0.5, 1 do
+						for z = lineLo.Y + 0.5, lineHi.Y - 0.5, 1 do
+							local top = data.Bottom
+							for _, b in boxes do
 								if
-									math.abs(q.X) <= h.X + 0.01
-									and math.abs(q.Z) <= h.Z + 0.01
-									and q.Y <= h.Y + 0.01
-									and q.Y >= -h.Y - 3
+									b[3]
+									and b[2].Y > top
+									and x >= b[1].X - 1.5
+									and x <= b[2].X + 1.5
+									and z >= b[1].Z - 1.5
+									and z <= b[2].Z + 1.5
 								then
-									covered = true
+									top = b[2].Y
+								end
+							end
+							local from = top + 3
+							local held = false
+							for _, b in boxes do
+								if x >= b[1].X and x <= b[2].X and z >= b[1].Z and z <= b[2].Z and b[1].Y <= from and b[2].Y >= deepest then
+									held = true
 									break
 								end
 							end
-							if not covered then
-								holes += 1
+							if not held then
+								open += 1
+								if void then
+									if not (catcher and x >= cLo.X and x <= cHi.X and z >= cLo.Z and z <= cHi.Z and cHi.Y < deepest) then
+										uncaught += 1
+									end
+								elseif
+									not (
+										underlay
+										and x >= uLo.X
+										and x <= uHi.X
+										and z >= uLo.Z
+										and z <= uHi.Z
+										and uHi.Y <= data.Bottom
+										and uHi.Y >= data.Bottom - 0.1
+									)
+								then
+									unheld += 1
+								end
 							end
-							z += 1.5
 						end
-						x += 1.5
 					end
-					T.eq(holes, 0, label .. " no spot of the room without something solid under it")
+					local set = string.match((MineFloors.floorTiles(index) :: { string })[1], "^Floor_(%w+)_%d+$") or "?"
+					if void then
+						T.truthy(open > 0, label .. " its void stays open")
+						T.eq(uncaught, 0, label .. " its VoidCatcher lies under every open spot")
+					else
+						T.eq(unheld, 0, label .. " the underlay lies under every spot nothing else holds")
+						local known = OPEN_SPOTS[set]
+						T.truthy(known ~= nil, `{label} a known tile set ({set}: {open} open spots)`)
+						T.le(open, known or 0, `{label} no new holes ({open} open spots, {known} known)`)
+					end
 				end
 				-- budgets
 				local budget = if index <= 3 then MineKit.NearPartBudget else MineKit.PartBudget
