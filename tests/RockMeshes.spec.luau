@@ -99,6 +99,26 @@ return function(T, Loader)
 			local want = RockBuilder.MeshSize.Crystal * RockBuilder.MeshFloorScale.StormglassRift
 			T.le(want * 0.9, longest, "its height as before")
 			T.le(longest, want * 1.1, "its height as before")
+			-- its glints stand on the spots' true normals (stretched: the normal by the inverse stretch;
+			-- integrator 2026-11-18: 5.5-6.4 degrees off on its sloped spots without)
+			local V3 = (require("@lune/roblox") :: any).Vector3
+			local surface = MeshCatalog.Surface[name]
+			local frame = rock1.CFrame * rock1.PivotOffset
+			local i, worst = 0, 0
+			for _, g in model:GetChildren() do
+				if g.Name == "Glint" then
+					i += 1
+					local spot = surface.Spots[(i - 1) % #surface.Spots + 1]
+					local p = frame:PointToWorldSpace(V3.new(spot.P.X * s.X, spot.P.Y * s.Y, spot.P.Z * s.Z))
+					local true_ = V3.new(spot.N.X * own.X / s.X, spot.N.Y * own.Y / s.Y, spot.N.Z * own.Z / s.Z).Unit
+					local n = frame:VectorToWorldSpace(true_).Unit
+					local want = p + n * (g.Size.X * 0.2)
+					T.near((g.CFrame.Position - want).Magnitude, 0, 1e-3, "a glint on its spot's true normal")
+					worst = math.max(worst, math.deg(math.acos(math.clamp(true_:Dot(spot.N.Unit), -1, 1))))
+				end
+			end
+			T.eq(i, 3, "a glint per ore")
+			T.le(3, worst, "(a spot whose normal the stretch turns: the check above means something)")
 			-- a crack stage keeps its shape
 			RockBuilder.applyStage(model, 1, 5)
 			T.near((rock1.Size.X / rock1.Size.Y), s.X / s.Y, 1e-3, "a stage keeps its shape")

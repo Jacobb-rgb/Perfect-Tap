@@ -56,8 +56,10 @@ RockBuilder.MeshSize = {
 RockBuilder.MeshFloorScale = { SunkenPalace = 1.05, StormglassRift = 1.05, HeartstoneCore = 1.15 } :: { [string]: number }
 -- (owner 2026-11-17, floor 5: "the thin golden pillars", his Thunder Shard crystals: thicker) a
 -- model's own proportions changed: its width and depth times this, its height as it was (so its
--- longest side is that much over MeshSize). 1.25 keeps two neighbours apart on floor 5's closest
--- rock spots (10.1 studs: a crystal 10.5 across beside a Big rock 9.5 across)
+-- longest side is that much over MeshSize). On floor 5's closest rock spots (10.1 studs apart) a
+-- crystal (9.7 .. 11.3 across) and a big neighbour can just touch at their tips, their boxes being
+-- squarer than their shapes (integrator 2026-11-18: two crystals there in about 0.3 % of the times
+-- both spawn)
 RockBuilder.MeshStretch = { Rock_StormglassRift_Crystal = Vector3.new(1.25, 1, 1.25) } :: { [string]: Vector3 }
 -- (integrator review 2026-11-17) A crack stage never moves or resizes what a mesh rock already has:
 -- the clients' tremble (Effects/RockFx.shake) holds every part's frame and wrote the old ones back,
@@ -821,11 +823,18 @@ end
 -- A spot of MeshCatalog.Surface on a placed mesh: world point and outward normal (the mesh is
 -- scaled evenly, so the normal only turns with the part).
 local function spotOn(part: BasePart, spot: MeshCatalog.Spot): (Vector3, Vector3)
-	-- (the spots are the processed model's: its frame, with the upload's turn)
+	-- (the spots are the processed model's: its frame, with the upload's turn; a normal follows a
+	-- model stretched out of its own proportions, MeshStretch, by the inverse of the stretch)
 	local size = part.Size
 	local frame = MeshKit.frame(part)
 	local p = frame:PointToWorldSpace(Vector3.new(spot.P.X * size.X, spot.P.Y * size.Y, spot.P.Z * size.Z))
-	return p, frame:VectorToWorldSpace(spot.N).Unit
+	local asset = part:GetAttribute("Asset")
+	local own = if type(asset) == "string" then MeshKit.box(asset) else nil
+	local n = spot.N
+	if own then
+		n = Vector3.new(n.X * own.X / size.X, n.Y * own.Y / size.Y, n.Z * own.Z / size.Z)
+	end
+	return p, frame:VectorToWorldSpace(n).Unit
 end
 
 local function spotsOf(part: BasePart): { MeshCatalog.Spot }
