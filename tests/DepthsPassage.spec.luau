@@ -40,34 +40,46 @@ return function(T, Loader)
 			local k = Floor.Passage
 			local boxes: { { any } } = {} -- the walls seen
 			local bodies: { { any } } = {} -- what a player bumps into
-			local fills = 0
+			local fills, ramps = 0, 0
 			local fillBoxes: { { any } } = {}
 			for _, d in passage:GetChildren() do
 				T.truthy(d:IsA("BasePart"), "parts only: " .. d.Name)
 				local mn, mx = bounds(origin, d)
-				-- between the Ember Caves' south wall and the model's cut behind its door (the sand
-				-- strip under the doorway's floor seam reaches under the caves' floor)
-				-- (or into its 0.12 thin south wall, local -60.09 .. -59.97, no further)
-				T.le(if d.Name == "Threshold" then -60.25 else -60.08, mn.Z, "nothing in the Ember Caves: " .. d.Name)
-				T.le(mx.Z, -44.0, "nothing in the model's facade: " .. d.Name)
+				-- between the Ember Caves' south wall (or in its 0.12 thickness, local -60.09 .. -59.97)
+				-- and the model's cut behind its door; the sill's ramp runs on into the caves' doorway,
+				-- the door's frame into the model's door
+				if d.Name == "SillRamp" and mn.Z < -60.08 then
+					T.le(-60.03 - k.Sill.InRun - 0.01, mn.Z, "the ramp into the caves no longer than its run")
+					T.le(mx.X, 10, "the ramp into the caves within their doorway")
+				else
+					T.le(-60.08, mn.Z, "nothing in the Ember Caves: " .. d.Name)
+				end
+				T.le(mx.Z, if d.Name == "Frame" then k.Frame.Z1 + 1e-3 else -44.0, "nothing in the model's facade: " .. d.Name)
 				if d.Name == "Fill" then
 					fills += 1
 					T.eq(d.Transparency, 1, "a corner's fill is never seen")
 					T.truthy(d.CanCollide and not d.CanQuery, "it holds players, the camera and the blaster pass")
 					table.insert(bodies, { mn, mx })
 					table.insert(fillBoxes, { mn, mx })
-				elseif d.Name == "Threshold" then
-					T.truthy(not d.CanCollide and not d.CanQuery, "the sand under the seam is a look")
-					T.le(mx.Y, -0.5 + 1e-3, "under the floor")
-					T.truthy(mn.X <= -17.1 and mx.X >= 17.1 and mn.Z <= -60 and mx.Z >= -59.9, "under the whole seam by the wall")
 				else
 					T.eq(d.Transparency, 0, "a wall is seen: " .. d.Name)
 					T.truthy(d.CanCollide and d.CanQuery, "solid, and the camera stops on it: " .. d.Name)
-					table.insert(boxes, { mn, mx })
-					table.insert(bodies, { mn, mx })
+					-- (a ramp is a wedge: its box over the slope is air, its slope is checked below)
+					if d.Name == "SillRamp" then
+						T.truthy(d:IsA("WedgePart"), "a sand ramp")
+						ramps += 1
+						-- (a wedge slopes down toward its front, LookVector: away from the sill)
+						local look = origin:VectorToObjectSpace(d.CFrame.LookVector)
+						local outward = if (mn.Z + mx.Z) / 2 > k.Sill.Z1 - 1 then 1 else -1
+						T.near(look.Z, outward, 1e-3, "a ramp's high side at the sill")
+					else
+						table.insert(boxes, { mn, mx })
+						table.insert(bodies, { mn, mx })
+					end
 				end
 			end
 			T.eq(fills, 4, "a fill in either corner and either trench")
+			T.eq(ramps, 2, "the sill's two ramps")
 			local function inside(list: { { any } }, p: any): boolean
 				for _, b in list do
 					local mn, mx = b[1], b[2]
@@ -91,6 +103,16 @@ return function(T, Loader)
 				return inside(bodies, p)
 			end
 			local door = k.Door[1]
+			-- the door's top at x (its steps)
+			local function doorTop(x: number): number
+				local top = 0
+				for _, d in k.Door do
+					if x > d[1] and x < d[2] then
+						top = math.max(top, d[3])
+					end
+				end
+				return top
+			end
 			local zMid = (k.Wall.Z0 + k.Wall.Z1) / 2
 			-- the wall closes the cut (x -24 .. 24) from the ground up to its top, all but the door
 			for _, s in k.Tops do
@@ -119,33 +141,63 @@ return function(T, Loader)
 			for i = 2, #k.Tops do
 				T.eq(k.Tops[i][1], k.Tops[i - 1][2], "the wall's stretches meet")
 			end
-			-- the door stays open, as tall as a player and more
+			-- the door stays open, as tall as a player and more (8.25 over the most of it: a tall rider
+			-- on a hoverboard)
 			local x = door[1] + 0.05
 			while x < door[2] do
-				for _, y in { 0.5, 3, 6, 7.5 } do
-					for _, z in { k.Wall.Z0 - 1, zMid, k.Wall.Z1 } do
+				for _, y in { 0.5, 3, 6, 7.5, doorTop(x) - 0.1 } do
+					for _, z in { k.Wall.Z0 - 1, zMid, k.Wall.Z1, k.Frame.Z1 - 0.1 } do
 						T.falsy(solid(V3.new(x, y, z)), string.format("the door open at x %.2f, y %.1f, z %.1f", x, y, z))
 					end
 				end
 				x += 0.25
 			end
+			T.le(8.25, doorTop(-1), "the door 8.25 high over the walk floor")
 			-- the frame round the door holds the cut's slivers of the model's arch (out to local z -47.3,
-			-- up to y 9.8)
-			for _, x in { door[1] + 0.1, (door[1] + door[2]) / 2, door[2] - 0.1 } do
-				for _, y in { door[3] + 0.1, 8.75, 9.25, 9.85 } do
-					T.truthy(solid(V3.new(x, y, -47.35)), string.format("the frame's head over the slivers (y %.2f)", y))
+			-- up to y 9.8), its posts close the model's door sides on to Frame.Z1, its head over the model's
+			-- door ceiling
+			for _, x in { door[1] + 0.1, -2.65, (door[1] + door[2]) / 2, door[2] - 0.1 } do
+				for _, y in { doorTop(x) + 0.05, 8.75, 9.25, 9.85 } do
+					T.truthy(solid(V3.new(x, y, -47.35)), string.format("the frame's head over the slivers (x %.2f, y %.2f)", x, y))
 				end
+				T.truthy(solid(V3.new(x, 10.5, -42)), "a head over the model's door ceiling")
+			end
+			for _, z in { -46, -43, -41.6 } do
+				T.truthy(solid(V3.new(door[1] - 0.5, 4, z)) and solid(V3.new(door[2] + 0.5, 4, z)), "the posts at z " .. z)
 			end
 			T.le(k.Frame.Z, -47.35, "the frame out past the slivers")
-			-- the way through: from the Ember Caves' wall to the model's door nothing to bump into
-			-- under the door's head (7.75 high, as the town's shop doors)
+			-- the sand sill over the model's back edge (its teeth up to 1.75, z -58.9 .. -57.7, |x| <= 18.8,
+			-- the part beyond 17.2 behind the buttresses' sides) and the floor seam along the wall
+			local sill = k.Sill
+			T.le(1.75 + 0.1, sill.Top, "the sill over the teeth")
+			T.le(sill.Z1, -57.6, "on past them")
+			for _, sx in { -17.1, -10, 0, 10, 17.1 } do
+				for _, sz in { -59.95, -58.9, -58.3, -57.7 } do
+					T.truthy(solid(V3.new(sx, sill.Top - 0.05, sz)), string.format("the sill at x %.1f, z %.2f", sx, sz))
+				end
+			end
+			-- its ramps walkable (under 40 degrees), down to the sand and to the caves' floor
+			T.le(math.deg(math.atan((sill.Top - sill.Low) / sill.Run)), 40, "the ramp to the sand")
+			T.le(math.deg(math.atan((sill.Top - sill.InLow) / sill.InRun)), 40, "the ramp into the caves")
+			T.le(sill.Low, -0.45, "the ramp's foot under the sand")
+			T.le(sill.InLow, 0, "the ramp's foot under the caves' floor")
+			-- the way through: from the caves' floor over the sill to the model's door nothing to bump
+			-- into from a hair over the floor to under the door's head
+			local function floorAt(z: number): number
+				if z <= sill.Z1 then
+					return sill.Top
+				elseif z <= sill.Z1 + sill.Run then
+					return sill.Top - (z - sill.Z1) / sill.Run * (sill.Top - sill.Low)
+				end
+				return 0
+			end
 			local z = k.EmberWall + 0.1
 			while z < -43.9 do
-				for _, x in { door[1] + 0.3, (door[1] + door[2]) / 2, door[2] - 0.3 } do
-					local y = 0.5
-					while y < door[3] - 0.2 do
-						if bumps(V3.new(x, y, z)) then
-							error(string.format("something to bump into on the way at x %.2f, y %.2f, z %.2f", x, y, z), 0)
+				for _, wx in { door[1] + 0.3, -1, door[2] - 0.3 } do
+					local y = math.max(floorAt(z), 0) + 0.6
+					while y < doorTop(wx) - 0.2 do
+						if bumps(V3.new(wx, y, z)) then
+							error(string.format("something to bump into on the way at x %.2f, y %.2f, z %.2f", wx, y, z), 0)
 						end
 						y += 0.5
 					end
@@ -196,7 +248,9 @@ return function(T, Loader)
 					tallest = math.max(tallest, data.Boxes[i + 4])
 				end
 			end
-			T.le(tallest - 7.5, k.Fill.BackTop, "a jump from the back fill onto the tallest cliff beside it")
+			-- (as high as smoothSurround's walls: nobody stands on air over a trench)
+			T.le(tallest + 7.5, k.Fill.BackTop, "over the tallest cliff beside it and a jump")
+			T.eq(k.Fill.BackTop, Floor.Smooth.Top, "as high as smoothSurround's walls")
 			for _, side in { -1, 1 } do
 				T.truthy(inside(fillBoxes, V3.new(side * 20, k.Fill.BackTop - 0.5, -59)), "behind the buttress up to the cliffs")
 			end

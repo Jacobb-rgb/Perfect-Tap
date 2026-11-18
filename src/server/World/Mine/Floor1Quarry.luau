@@ -1438,15 +1438,21 @@ end
 	           behind the portal's buttresses (the cut's open sides showed the lawn and the sky)
 	  Fill     invisible bodies in the corners these walls close and the trenches behind his back
 	           cliffs, so nobody is trapped in one
-	  Threshold sand under the floor seam along the Ember Caves' wall
+	  Sill     sand over the model's jagged back edge at the Ember Caves' wall, ramps up and down
 	The Ember Caves' red curtain went too (Mine/Diorama: only its lighting portal stays).
 ]]
 Floor.Passage = {
 	Wall = { Z0 = -45.1, Z1 = -44.1 },
+	-- (8.25 under the model's arch, x -2.7 .. 1.7: a tall rider on a hoverboard passes, integrator
+	-- 2026-11-18; the step at x -3.2 .. -2.7 keeps the arch's corner hidden)
 	Door = {
 		{ -3.2, 1.7, 7.75 },
+		{ -2.7, 1.7, 8.25 },
 	},
-	Frame = { X0 = -4.2, X1 = 2.7, Top = 11, Z = -47.5 },
+	-- the frame's posts run on into the model's door to Z1 (its sides start 0.2 .. 1.8 past the cut:
+	-- slits showed the sky beside the door), and a head over the model's door ceiling (a hole in it at
+	-- x -2.2 .. -1.4) from the wall to Z1
+	Frame = { X0 = -4.2, X1 = 2.7, Top = 11, Z = -47.5, Z1 = -41.5, Over = { X0 = -3.2, X1 = 1.9, Y0 = 10, Y1 = 11 } },
 	Tops = {
 		{ -24, -18, 13.3 },
 		{ -18, -17, 18.3 },
@@ -1470,12 +1476,15 @@ Floor.Passage = {
 	-- the corners beside the portal, closed by these walls (Meshy chat's review: a player who walked
 	-- off the model's back cliffs onto the wall's low end dropped in and could not jump out):
 	-- invisible bodies from the door's sides out to the model's walk boxes, as high as the wall there
-	-- and behind the buttresses and the back cliffs (their first walk boxes start by -53.32) as
-	-- high as the cliffs (24, 28: a jump onto them)
-	Fill = { X0 = 16.6, X1 = 24.42, TopW = 13.3, TopE = 12.3, TrenchZ = -53.32, BackTop = 24 },
-	-- under the floor seam along the Ember Caves' wall: the doorway and on beside it under the
-	-- buttresses' sides (the quarry's sand ends at -59.9, the wall's face at -59.97)
-	Threshold = { X = 17.2, Y0 = -1.5, Y1 = -0.5, Z0 = -60.2, Z1 = -59.85 },
+	-- and behind the buttresses and the back cliffs (their first walk boxes start by -53.32) up to
+	-- smoothSurround's walls (40: nobody stands on air over the trenches; integrator 2026-11-18)
+	Fill = { X0 = 16.6, X1 = 24.42, TopW = 13.3, TopE = 12.3, TrenchZ = -53.32, BackTop = 40 },
+	-- (integrator 2026-11-18: with the curtain gone, the model's jagged back edge, 127 triangles
+	-- facing the caves at z -58.9 .. -57.7 up to y 1.75, showed across the floor) a sand sill over
+	-- it from the Ember Caves' wall, walked over: a ramp down to the passage's sand (to -0.6 under
+	-- it) and one into the caves' doorway (x -9.98 .. 9.98, down to their floor at 0); it covers the
+	-- floor seam along the wall's foot too (the quarry's sand ends at -59.9, the wall at -59.97)
+	Sill = { X = 17.2, Top = 1.9, Z1 = -57.6, Run = 4.2, Low = -0.6, InX = 9.98, InRun = 2.6, InLow = -0.2 },
 }
 
 local function depthsPassage(model: Model, origin: CFrame)
@@ -1519,12 +1528,15 @@ local function depthsPassage(model: Model, origin: CFrame)
 			box("Wall", Vector3.new(a, bottom, k.Wall.Z0), Vector3.new(b, top, k.Wall.Z1), C.StoneDark)
 		end
 	end
-	-- the door's frame: its head over the slivers (7.75 high, as the town's shop doors), a post
-	-- either side
-	local f, door = k.Frame, k.Door[1]
-	box("Frame", Vector3.new(f.X0, door[3], f.Z), Vector3.new(f.X1, f.Top, k.Wall.Z0), C.Stone)
-	box("Frame", Vector3.new(f.X0, k.Ground, f.Z), Vector3.new(door[1], door[3], k.Wall.Z0), C.Stone)
-	box("Frame", Vector3.new(door[2], k.Ground, f.Z), Vector3.new(f.X1, door[3], k.Wall.Z0), C.Stone)
+	-- the door's frame: its head over the slivers (as high as the door's steps), a post either side
+	-- on into the model's door, and a head over the model's door ceiling
+	local f, low, high = k.Frame, k.Door[1], k.Door[2]
+	box("Frame", Vector3.new(f.X0, low[3], f.Z), Vector3.new(high[1], f.Top, k.Wall.Z0), C.Stone)
+	box("Frame", Vector3.new(high[1], high[3], f.Z), Vector3.new(f.X1, f.Top, k.Wall.Z0), C.Stone)
+	box("Frame", Vector3.new(f.X0, k.Ground, f.Z), Vector3.new(low[1], low[3], f.Z1), C.Stone)
+	box("Frame", Vector3.new(low[2], k.Ground, f.Z), Vector3.new(f.X1, high[3], f.Z1), C.Stone)
+	local o = f.Over
+	box("Frame", Vector3.new(o.X0, o.Y0, k.Wall.Z1), Vector3.new(o.X1, o.Y1, f.Z1), C.Stone)
 	-- the ceiling from the lintel to the wall; its sides from inside the buttresses to the wall over
 	-- the pillars' outer blocks (Style.pillar's blocks alternate in width: slits between them, the
 	-- buttresses and the corners showed the sky), up to the cap, the lintel and the ceiling
@@ -1562,11 +1574,25 @@ local function depthsPassage(model: Model, origin: CFrame)
 		local back = Vector3.new(side * (k.Buttress.X + 1), k.Ground, k.EmberWall)
 		box("Fill", back, Vector3.new(edge, fill.BackTop, fill.TrenchZ), C.StoneDark, body)
 	end
-	-- (with the curtain gone) a strip of sand under the Ember Caves' wall's foot: the caves' floor
-	-- and the quarry's sand leave a 0.1 seam along it that showed the void
-	local t = k.Threshold
-	local sand = box("Threshold", Vector3.new(-t.X, t.Y0, t.Z0), Vector3.new(t.X, t.Y1, t.Z1), Floor.FillSand, TINY)
+	-- the sand sill over the model's back edge, its ramps (a wedge's high side is its +Z)
+	local sill = k.Sill
+	local sand = box("Sill", Vector3.new(-sill.X, k.Ground, k.EmberWall), Vector3.new(sill.X, sill.Top, sill.Z1), Floor.FillSand)
 	sand.Material = Enum.Material.Sand
+	local rise = sill.Top - sill.Low
+	local ramps: { { CF: CFrame, Size: Vector3 } } = {
+		{
+			CF = origin * CFrame.new(0, sill.Low + rise / 2, sill.Z1 + sill.Run / 2) * CFrame.Angles(0, math.pi, 0),
+			Size = Vector3.new(sill.X * 2, rise, sill.Run),
+		},
+		{
+			CF = origin * CFrame.new(0, (sill.InLow + sill.Top) / 2, k.EmberWall - sill.InRun / 2),
+			Size = Vector3.new(sill.InX * 2, sill.Top - sill.InLow, sill.InRun),
+		},
+	}
+	for _, r in ramps do
+		local w = Geo.wedge(m, r.CF, r.Size, Floor.FillSand, Enum.Material.Sand, SOLID)
+		w.Name = "SillRamp"
+	end
 end
 
 function Floor.build(parent: Instance, origin: CFrame, opts: { Cutaway: boolean? }?): Model
