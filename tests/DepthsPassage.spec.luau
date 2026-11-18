@@ -55,6 +55,13 @@ return function(T, Loader)
 					T.le(-60.08, mn.Z, "nothing in the Ember Caves: " .. d.Name)
 				end
 				T.le(mx.Z, if d.Name == "Frame" then k.Frame.Z1 + 1e-3 else -44.0, "nothing in the model's facade: " .. d.Name)
+				-- (a post never through the wall: its side would share the wall's door side's plane)
+				if d.Name == "Frame" then
+					T.falsy(mn.Z < k.Wall.Z0 - 1e-3 and mx.Z > k.Wall.Z1 + 1e-3, "a frame part through the wall")
+				end
+				if d.Name == "Sill" or d.Name == "SillRamp" then
+					T.truthy(d:HasTag("NoStuds"), "smooth sand, no studs")
+				end
 				if d.Name == "Fill" then
 					fills += 1
 					T.eq(d.Transparency, 1, "a corner's fill is never seen")
@@ -78,7 +85,15 @@ return function(T, Loader)
 					end
 				end
 			end
-			T.eq(fills, 4, "a fill in either corner and either trench")
+			-- (two corner fills at the wall's height, the back's fills strip by strip at 40)
+			local corners = 0
+			for _, b in fillBoxes do
+				if b[2].Y < 20 then
+					corners += 1
+				end
+			end
+			T.eq(corners, 2, "a fill in either corner")
+			T.le(4, fills, "and the back's behind either buttress and trench")
 			T.eq(ramps, 2, "the sill's two ramps")
 			local function inside(list: { { any } }, p: any): boolean
 				for _, b in list do
@@ -251,6 +266,19 @@ return function(T, Loader)
 			-- (as high as smoothSurround's walls: nobody stands on air over a trench)
 			T.le(tallest + 7.5, k.Fill.BackTop, "over the tallest cliff beside it and a jump")
 			T.eq(k.Fill.BackTop, Floor.Smooth.Top, "as high as smoothSurround's walls")
+			-- and never over his walk boxes (an invisible wall before a cliff top's visible edge)
+			for _, b in fillBoxes do
+				local mn, mx = b[1], b[2]
+				if mx.Y > 20 then
+					for i = 1, #data.Boxes, 5 do
+						local x0, z0, x1, z1 = data.Boxes[i], data.Boxes[i + 1], data.Boxes[i + 2], data.Boxes[i + 3]
+						local over = mn.X < x1 - 0.01 and mx.X > x0 + 0.01 and mn.Z < z1 - 0.01 and mx.Z > z0 + 0.01
+						if over then
+							error(string.format("a back fill over a walk box at x %.2f .. %.2f, z %.2f .. %.2f", x0, x1, z0, z1), 0)
+						end
+					end
+				end
+			end
 			for _, side in { -1, 1 } do
 				T.truthy(inside(fillBoxes, V3.new(side * 20, k.Fill.BackTop - 0.5, -59)), "behind the buttress up to the cliffs")
 			end

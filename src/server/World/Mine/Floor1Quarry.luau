@@ -1482,7 +1482,8 @@ Floor.Passage = {
 	-- (integrator 2026-11-18: with the curtain gone, the model's jagged back edge, 127 triangles
 	-- facing the caves at z -58.9 .. -57.7 up to y 1.75, showed across the floor) a sand sill over
 	-- it from the Ember Caves' wall, walked over: a ramp down to the passage's sand (to -0.6 under
-	-- it) and one into the caves' doorway (x -9.98 .. 9.98, down to their floor at 0); it covers the
+	-- it, 30.8 degrees) and one into the caves' doorway (x -9.98 .. 9.98, down to their floor at 0,
+	-- 38.9 degrees); it covers the
 	-- floor seam along the wall's foot too (the quarry's sand ends at -59.9, the wall at -59.97)
 	Sill = { X = 17.2, Top = 1.9, Z1 = -57.6, Run = 4.2, Low = -0.6, InX = 9.98, InRun = 2.6, InLow = -0.2 },
 }
@@ -1533,8 +1534,12 @@ local function depthsPassage(model: Model, origin: CFrame)
 	local f, low, high = k.Frame, k.Door[1], k.Door[2]
 	box("Frame", Vector3.new(f.X0, low[3], f.Z), Vector3.new(high[1], f.Top, k.Wall.Z0), C.Stone)
 	box("Frame", Vector3.new(high[1], high[3], f.Z), Vector3.new(f.X1, f.Top, k.Wall.Z0), C.Stone)
-	box("Frame", Vector3.new(f.X0, k.Ground, f.Z), Vector3.new(low[1], low[3], f.Z1), C.Stone)
-	box("Frame", Vector3.new(low[2], k.Ground, f.Z), Vector3.new(f.X1, high[3], f.Z1), C.Stone)
+	-- (each post in two, in front of the wall and behind it: run through it, its side shared the
+	-- plane of the wall's door side in another colour)
+	for _, z in { { f.Z, k.Wall.Z0 }, { k.Wall.Z1, f.Z1 } } do
+		box("Frame", Vector3.new(f.X0, k.Ground, z[1]), Vector3.new(low[1], low[3], z[2]), C.Stone)
+		box("Frame", Vector3.new(low[2], k.Ground, z[1]), Vector3.new(f.X1, high[3], z[2]), C.Stone)
+	end
 	local o = f.Over
 	box("Frame", Vector3.new(o.X0, o.Y0, k.Wall.Z1), Vector3.new(o.X1, o.Y1, f.Z1), C.Stone)
 	-- the ceiling from the lintel to the wall; its sides from inside the buttresses to the wall over
@@ -1563,21 +1568,61 @@ local function depthsPassage(model: Model, origin: CFrame)
 	-- walls) filled up to the wall's top there, so from the fill a player walks over the wall's low
 	-- end back into the quarry; the strips behind the buttresses and the trenches behind his back
 	-- cliffs out to his model's edges (they drained into the tunnel behind the buttresses before)
-	-- filled up to the cliffs' tops: nobody drops into one and stays
+	-- filled up to smoothSurround's walls: nobody drops into one and stays. A trench's fill stops at
+	-- the first walk box from the back in its strip (integrator 2026-11-18: over his cliff tops it
+	-- was an invisible wall before their visible edge); strips of the same depth make one part
 	local fill = k.Fill
 	local lo, hi = Diorama.footprint(Floor.Index)
+	local walk = Diorama.data(Floor.Index).Boxes
 	local body = { CanTouch = false, CanQuery = false, CanCollide = true, CastShadow = false, Transparency = 1 }
 	for _, side in { -1, 1 } do
 		local top = if side < 0 then fill.TopW else fill.TopE
-		local edge = if side < 0 then lo.X else hi.X
+		local far = if side < 0 then -lo.X else hi.X
 		box("Fill", Vector3.new(side * fill.X0, k.Ground, k.EmberWall), Vector3.new(side * fill.X1, top, k.Wall.Z0), C.StoneDark, body)
-		local back = Vector3.new(side * (k.Buttress.X + 1), k.Ground, k.EmberWall)
-		box("Fill", back, Vector3.new(edge, fill.BackTop, fill.TrenchZ), C.StoneDark, body)
+		-- (in |x| on this side) the strips between the walk boxes' edges, each as deep as its first box
+		local near = k.Buttress.X + 1
+		local cuts = { near, far }
+		for i = 1, #walk, 5 do
+			for _, x in { walk[i] * side, walk[i + 2] * side } do
+				if x > near and x < far and not table.find(cuts, x) then
+					table.insert(cuts, x)
+				end
+			end
+		end
+		table.sort(cuts)
+		local runFrom, runZ = nil :: number?, nil :: number?
+		local function close(to: number)
+			if runFrom and runZ and runZ > k.EmberWall + 0.01 then
+				box(
+					"Fill",
+					Vector3.new(side * runFrom, k.Ground, k.EmberWall),
+					Vector3.new(side * to, fill.BackTop, runZ),
+					C.StoneDark,
+					body
+				)
+			end
+		end
+		for j = 1, #cuts - 1 do
+			local a, b = cuts[j], cuts[j + 1]
+			local z1 = fill.TrenchZ
+			for i = 1, #walk, 5 do
+				local x0, x1 = math.min(walk[i] * side, walk[i + 2] * side), math.max(walk[i] * side, walk[i + 2] * side)
+				if x0 < b - 1e-6 and x1 > a + 1e-6 then
+					z1 = math.min(z1, walk[i + 1])
+				end
+			end
+			if runZ == nil or math.abs(z1 - runZ) > 1e-6 then
+				close(a)
+				runFrom, runZ = a, z1
+			end
+		end
+		close(far)
 	end
 	-- the sand sill over the model's back edge, its ramps (a wedge's high side is its +Z)
 	local sill = k.Sill
 	local sand = box("Sill", Vector3.new(-sill.X, k.Ground, k.EmberWall), Vector3.new(sill.X, sill.Top, sill.Z1), Floor.FillSand)
 	sand.Material = Enum.Material.Sand
+	sand:AddTag("NoStuds") -- (smooth sand, as smoothSurround's Under)
 	local rise = sill.Top - sill.Low
 	local ramps: { { CF: CFrame, Size: Vector3 } } = {
 		{
@@ -1592,6 +1637,7 @@ local function depthsPassage(model: Model, origin: CFrame)
 	for _, r in ramps do
 		local w = Geo.wedge(m, r.CF, r.Size, Floor.FillSand, Enum.Material.Sand, SOLID)
 		w.Name = "SillRamp"
+		w:AddTag("NoStuds")
 	end
 end
 
